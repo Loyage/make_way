@@ -18,9 +18,11 @@ function buildReferencePlan(city) {
       }
     }
     assert.ok(prev.has(route.goal), `${city.level.id}: disconnected terrain`);
-    let n = prev.get(route.goal);
-    while (n !== route.home) { if (!city.roads.has(n)) assert.equal(city.edit(n), '', `${city.level.id}: budget exceeded`); n=prev.get(n); }
+    let n = route.goal;
+    while (n !== route.home) { const before=prev.get(n);assert.equal(city.connect(before,n), '', `${city.level.id}: budget exceeded`);n=before; }
   }
+  // Dense shared routes can opt into signals instead of default yielding.
+  for(const n of city.signals.keys()) city.setSignal(n,true);
 }
 for (const level of LEVELS) {
   test(`${level.name}: valid independent terrain and dynamic route counts`, () => {
@@ -37,7 +39,23 @@ for (const level of LEVELS) {
   test(`${level.name}: a legal reference plan wins within budget and time`, () => {
     const city = new City(level.id);buildReferencePlan(city);
     assert.ok(city.paths.every(Boolean));city.toggle();
-    for(let i=0;i<(level.duration+1)*20;i++)city.step(.05);
+    for(let i=0;i<(level.duration+1)*20;i++) {
+      city.step(.05);
+      for(const car of city.cars) if(car.next!==null && car.next!==car.cell) assert.ok(city.links(car.cell).includes(car.next),'vehicle crossed an unconnected edge');
+      for(const n of city.roads) {
+        const load=city.load(n);
+        assert.ok(load.used<=load.capacity, `${level.id}: capacity exceeded at ${n}`);
+        if (!city.signals.has(n)) {
+          const slots = new Map();
+          for (const car of city.occupants(n)) for (const r of city.reservations(car)) {
+            if (r.cell !== n) continue;
+            const id = `${r.heading}/${r.lane}/${r.slot}`;
+            assert.ok(!slots.has(id) || slots.get(id) === car, `${level.id}: overlapping slot at ${n}`);
+            slots.set(id, car);
+          }
+        }
+      }
+    }
     assert.equal(city.state,'won',`${city.delivered}/${level.target}, roads ${level.budget-city.remaining}, deliveries ${city.byRoute}`);
     assert.ok(city.byRoute.every(n=>n>0));assert.ok(city.remaining>=0);
   });
