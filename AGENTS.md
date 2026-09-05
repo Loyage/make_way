@@ -1,0 +1,102 @@
+# AGENTS.md
+
+## 项目概览
+
+这是一个零依赖、无构建步骤的原生 HTML / CSS / JavaScript 交通规划游戏。游戏可直接打开 `index.html` 离线运行，也可由 `server.js` 通过 HTTP 提供静态资源。
+
+- 运行时要求：现代浏览器；启动服务器和单元测试需要 Node.js 18+
+- 可选浏览器冒烟测试：Node.js 22+、Chromium 和本机 Chrome DevTools Protocol（CDP）端点
+- 不要引入包管理器、打包器、前端框架或外部 CDN，除非任务明确要求
+- 界面和玩家可见提示使用简体中文
+
+## 代码结构
+
+- `index.html`：页面结构、控件、对话框和脚本加载顺序
+- `style.css`：桌面端和移动端响应式样式
+- `levels.js`：16 × 12 网格上的不可变关卡数据
+- `core.js`：与 DOM 无关的地图、道路、寻路、容量、信号灯和车辆模拟
+- `game.js`：Canvas 绘制、输入事件、界面状态与 `localStorage` 设计存档
+- `server.js`：零依赖、只读、资源白名单式 HTTP 服务
+- `tests/*.test.js`：Node 内置测试运行器执行的逻辑、关卡和服务器测试
+- `tests/browser-smoke.cjs`：通过 CDP 执行的可选浏览器集成测试
+- `deploy/`：systemd 用户服务安装脚本及 NixOS 网络配置示例
+
+## 架构约束
+
+1. `levels.js` 必须先于 `core.js` 加载，`core.js` 必须先于 `game.js` 加载。保持 `index.html` 底部脚本顺序不变。
+2. `levels.js` 和 `core.js` 同时支持浏览器全局变量与 CommonJS：浏览器分别使用 `TrafficLevels`、`TrafficCore`，Node 测试使用 `module.exports`。修改模块边界时须兼容两种环境。
+3. 模拟逻辑应留在 `core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `game.js`。
+4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。
+5. 关卡定义会被递归冻结。每个 `City` 实例必须拥有独立的可变状态，不得修改或在实例间共享可变关卡数据。
+6. 道路连接由 `City.edges` 显式表示。相邻道路格不会自动连接；建筑出口和桥梁岸边也必须显式连接。任何建设、剪断、拆除或存档修改都应维护该规则并调用/触发路径刷新。
+7. 模拟必须保持确定性。测试通常以 `city.step(0.05)` 推进；不要把核心规则绑定到墙钟时间、动画帧率或随机数。
+8. 车辆的当前格、下一格、车道/前后位置和路口冲突区都可能是占用或预约。改动通行规则时，同时检查容量、拆除保护、出口预约、信号相位与自动避让。
+9. `server.js` 只暴露 `PUBLIC_FILES` 中的游戏资源和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
+10. HTTP 服务启动时会把资源读入内存。部署后更新前端文件需要重启服务。
+
+## 编码约定
+
+- 使用现有的普通 JavaScript 与 `'use strict'` 风格，不引入 TypeScript 或转译步骤。
+- 遵循邻近代码格式；本项目大量使用短辅助函数、分号和单引号。保持改动聚焦，不要顺手格式化整份文件。
+- 玩家可见文本、ARIA 标签和帮助文档要与实际规则保持一致。修改玩法时同步检查 `index.html`、`README.md` 和相关测试。
+- 修改 HTML 元素 `id` 时，同步搜索并更新 `game.js`、CSS 选择器和浏览器冒烟测试。
+- Canvas 绘制应按 CSS 尺寸和设备像素比工作，并继续支持鼠标、触摸与键盘操作。
+- 设计存档仅保存规划数据，不保存车辆、成绩或计时。修改序列化格式时保留严格校验、原子加载和必要的旧格式迁移。
+- 不要提交运行时产物、日志、覆盖率目录、浏览器配置目录或其他已被 `.gitignore` 排除的文件。
+
+## 开发与验证
+
+无需安装依赖。常用检查：
+
+```sh
+node --check levels.js
+node --check core.js
+node --check game.js
+node --check server.js
+node --test tests/*.test.js
+```
+
+根据改动范围至少运行相关测试；修改核心模拟、关卡或公共行为时运行完整 Node 测试集。新增行为应在最接近的测试文件中加入回归测试：
+
+- 地图、状态、存档和基础模拟：`tests/core.test.js`
+- 道路连接与剪断：`tests/connections.test.js`
+- 容量、车道、信号灯和交通冲突：`tests/traffic.test.js`
+- 关卡数据与可通关性：`tests/levels.test.js`
+- HTTP、安全头和资源白名单：`tests/server.test.js`
+
+关卡测试中的参考规划器用于证明每关在预算和时限内可通关。调整地形、预算、发车间隔、目标或交通规则后，必须重新运行完整测试，不要仅为通过测试而放宽关键不变量。
+
+### 可选浏览器测试
+
+先启动服务：
+
+```sh
+node server.js
+```
+
+再在另一个终端启动 Chromium（可执行文件名依系统环境而定）：
+
+```sh
+chromium --headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser
+node tests/browser-smoke.cjs
+```
+
+可通过 `GAME_URL` 和 `CDP_URL` 覆盖默认地址。CDP 调试端口只能监听本机，测试后关闭浏览器。涉及 DOM、Canvas、触摸、响应式布局、对话框、存档或 CSP 的改动应尽量运行该测试。
+
+## 本地运行与部署注意事项
+
+- 离线检查：直接在浏览器打开 `index.html`
+- HTTP 检查：运行 `node server.js`，默认监听 `[::]:8180`；健康检查为 `curl --noproxy '*' http://127.0.0.1:8180/healthz`
+- 可用 `HOST`、`PORT` 临时覆盖监听地址和端口
+- 不要在未经用户确认时运行 `deploy/install-service.sh`、修改 systemd 状态、开放防火墙或执行 NixOS 重建
+- 此环境使用 Nix 管理软件和系统配置；需要工具时使用 Nix，禁止擅自使用 `apt`、`yum`、`brew` 或全局 npm 安装
+- NixOS 配置仓库的变更按其自身说明通过 `just switch` 应用；不要覆盖用户现有配置
+
+## 提交前检查清单
+
+- 工作区可能包含用户尚未提交的修改；先查看 `git status`，不要覆盖、还原或顺带提交无关变更
+- 核心层仍可在无 DOM 的 Node 环境加载
+- 页面仍可在无网络、无第三方资源时运行
+- 新增静态资源已加入服务器白名单和测试
+- 玩家可见规则、README、帮助文本和测试保持一致
+- 已执行适合改动范围的语法检查和测试，并如实报告未执行的可选浏览器测试
