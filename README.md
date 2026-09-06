@@ -1,4 +1,4 @@
-# 慢行小城 · Little City
+# 慢行小城 · Make Way
 
 原生 HTML / CSS / JavaScript 交通规划小游戏。6 个循序渐进且可自由选择的关卡，无构建步骤、无第三方依赖、无外部字体或图片请求。
 

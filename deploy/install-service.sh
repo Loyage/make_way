@@ -13,7 +13,7 @@ escape_unit() {
 mkdir -p "$CONFIG"
 cat > "$CONFIG/traffic-game.service" <<EOF
 [Unit]
-Description=Little City traffic planning game
+Description=Make Way traffic planning game
 After=network.target
 
 [Service]

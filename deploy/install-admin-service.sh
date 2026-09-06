@@ -20,7 +20,7 @@ PASSWORD="${PASSWORD:-admin}"
 mkdir -p "$CONFIG"
 cat > "$CONFIG/traffic-game-admin.service" <<EOF
 [Unit]
-Description=Little City traffic game admin panel
+Description=Make Way traffic game admin panel
 After=network.target
 
 [Service]
