@@ -20,7 +20,7 @@ test('defaults to the first lesson in planning mode with no connections', () => 
 });
 test('construction honors terrain, buildings, bridges, and refunds', () => {
   const city = new City();
-  for (const n of [key(7,1),key(1,1),ROUTES[0].home]) assert.ok(city.edit(n));
+  for (const n of [key(7,1),key(1,1),ROUTES[0].homes[0].cell]) assert.ok(city.edit(n));
   assert.equal(city.remaining,BUDGET);
   const riverCity=new City('rush-hour');
   assert.ok(riverCity.edit(key(7,1)));assert.ok(riverCity.edit(key(7,2),true));assert.ok(riverCity.roads.has(key(7,2)));

@@ -5,24 +5,66 @@ const {City,LEVELS,key}=require('../core.js');
 const {buildReferencePlan,completeCrossing,line}=require('./reference-plan.cjs');
 function run(c){c.toggle();for(let i=0;i<=c.level.duration*20;i++)c.step(.05);}
 
+test('multi-home / multi-goal routes annotate each node and prefer the nearest reachable goal',()=>{
+  const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();
+  c.setRoutes([{
+    name:'双住宅 → 双目的地', color:'#638d69', light:'#dae6cb',
+    homes:[{cell:key(1,3),rate:1,passengers:30},{cell:key(1,5),rate:2,passengers:60}],
+    goals:[{cell:key(7,3),label:'工坊'},{cell:key(7,5),label:'市场'}]
+  }]);
+  assert.equal(c.homes.length,2);assert.equal(c.goals.length,2);
+  assert.equal(c.generated.length,2);assert.equal(c.byRoute.length,1);assert.equal(c.byGoal.length,2);
+  assert.equal(c.homes[0].passengers,30);assert.equal(c.homes[1].rate,2);
+  assert.equal(c.goals[0].label,'工坊');assert.equal(c.goals[1].label,'市场');
+  line(c,1,3,7,3,0);line(c,1,5,7,5,0);line(c,7,3,7,5,0);
+  assert.deepEqual(c.homeGoal,[0,1],'each home prefers its own nearest reachable goal');
+  assert.ok(c.routeConnected(0));
+});
+
+test('a full goal (input cap reached) is skipped for later home->goal assignment',()=>{
+  const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();
+  c.setRoutes([{
+    name:'多目的地', color:'#638d69', light:'#dae6cb',
+    homes:[{cell:key(1,3),rate:1,passengers:100}],
+    goals:[{cell:key(5,1),label:'工坊',input:10},{cell:key(9,3),label:'市场'}]
+  }]);
+  line(c,1,3,5,3,0);line(c,5,3,5,1,0);line(c,5,3,9,3,0);
+  assert.equal(c.homeGoal[0],0);
+  c.goalAssigned[0]=10;c.refreshPaths();
+  assert.equal(c.homeGoal[0],1,'full goal must not be selected for new spawns');
+});
+
+test('input caps spread demand across destinations even when spawn outpaces delivery',()=>{
+  const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();
+  c.setRoutes([{
+    name:'多目的地', color:'#638d69', light:'#dae6cb',
+    homes:[{cell:key(1,3),rate:10,passengers:60}],
+    goals:[{cell:key(5,1),label:'工坊',input:20},{cell:key(9,3),label:'市场'}]
+  }]);
+  line(c,1,3,5,3,0);line(c,5,3,5,1,0);line(c,5,3,9,3,0);
+  c.level={...c.level,duration:60,target:60};
+  c.toggle();for(let i=0;i<1200;i++)c.step(.05);
+  assert.ok(c.goalAssigned[0]<=20,'first goal is capped at its input');
+  assert.ok(c.goalAssigned[1]>0,'overflow is assigned to the next reachable goal');
+});
+
 test('finite demand is visible before starting and respects each building rate',()=>{
   for(const level of LEVELS){
     const c=new City(level.id);c.edges.clear();c.refreshPaths();
-    for(const r of c.routes){assert.ok([1,4,6].includes(r.rate));assert.ok(Number.isInteger(r.passengers)&&r.passengers>0);assert.ok(r.passengers/r.rate<=level.duration);}
-    assert.ok(level.target<=c.routes.reduce((sum,r)=>sum+r.passengers,0));
-    assert.deepEqual(c.generated,c.routes.map(()=>0));
+    for(const h of c.homes){assert.ok([1,4,6].includes(h.rate));assert.ok(Number.isInteger(h.passengers)&&h.passengers>0);assert.ok(h.passengers/h.rate<=level.duration);}
+    assert.ok(level.target<=c.homes.reduce((sum,h)=>sum+h.passengers,0));
+    assert.deepEqual(c.generated,c.homes.map(()=>0));
     c.toggle();for(let i=0;i<200;i++)c.step(.05);
-    assert.deepEqual(c.generated,c.routes.map(r=>Math.min(r.passengers,10*r.rate)));
+    assert.deepEqual(c.generated,c.homes.map(h=>Math.min(h.passengers,10*h.rate)));
     const snapshot=[...c.generated];c.toggle();c.step(.05);assert.deepEqual(c.generated,snapshot);c.toggle();
     for(let i=0;i<3000;i++)c.step(.05);
-    assert.deepEqual(c.queues,c.routes.map(r=>r.passengers));
-    c.resetOperation();assert.deepEqual(c.generated,c.routes.map(()=>0));
+    assert.deepEqual(c.queues,c.homes.map(h=>h.passengers));
+    c.resetOperation();assert.deepEqual(c.generated,c.homes.map(()=>0));
   }
 });
 function straight(grade,rate,seconds=120) {
   const c=new City('neighborhood');c.trees.clear();
-  c.routes=[{...c.routes[0],home:key(1,5),goal:key(14,5),rate,passengers:rate*seconds}];
-  c.buildings=new Set(c.routes.flatMap(r=>[r.home,r.goal]));
+  c.setRoutes([{ name:'test', color:'#638d69', light:'#dae6cb', homes:[{cell:key(1,5),rate,passengers:rate*seconds}], goals:[{cell:key(14,5),label:'工坊'}] }]);
   c.level={...c.level,budget:100,duration:seconds,target:rate*seconds+1};
   c.resetOperation();line(c,1,5,14,5,grade);return c;
 }
@@ -38,10 +80,10 @@ test('saturated straight roads sustain about 2 / 5 / 6.67 people per second',()=
 });
 test('housing demand matches road grades, not merely the length of a detour',()=>{
   for(const [rate,grade] of [[1,0],[4,1],[6,2]]) {
-    const c=straight(grade,rate,65);c.routes[0].passengers=rate*55;run(c);
+    const c=straight(grade,rate,65);c.routes[0].homes[0].passengers=rate*55;c.rebuildRoutes();run(c);
     assert.equal(c.delivered,rate*55);
     if(grade>0) {
-      const lower=straight(grade-1,rate,65);lower.routes[0].passengers=rate*55;run(lower);
+      const lower=straight(grade-1,rate,65);lower.routes[0].homes[0].passengers=rate*55;lower.rebuildRoutes();run(lower);
       assert.ok(lower.delivered<rate*55);assert.ok(lower.queues[0]>0);
     }
   }

@@ -49,6 +49,21 @@
     }
     return null;
   }
+  // A route may list one or many origins (homes) and one or many destinations
+  // (goals). Each home carries its own output (rate / passengers); each goal may
+  // cap its input. Legacy single-home/single-goal routes are normalized here.
+  function routeHomes(r) {
+    if (Array.isArray(r.homes) && r.homes.length) return r.homes;
+    return [{ cell: r.home, rate: r.rate ?? 1, passengers: r.passengers ?? 0 }];
+  }
+  function routeGoals(r) {
+    if (Array.isArray(r.goals) && r.goals.length) return r.goals;
+    return [{ cell: r.goal, label: r.label }];
+  }
+  function normalizeRoute(r) {
+    const { home, goal, rate, passengers, label, ...rest } = r;
+    return { ...rest, homes: routeHomes(r), goals: routeGoals(r) };
+  }
   const ROAD_TYPES = Object.freeze([
     Object.freeze({ name: '支路', cost: 1, speed: 2.8, lanes: 1, capacity: 2, width: .30, color: '#b3bfa7' }),
     Object.freeze({ name: '干道', cost: 2, speed: 4, lanes: 2, capacity: 4, width: .54, color: '#8da79c' }),
@@ -83,7 +98,7 @@
     constructor(levelId = LEVELS[0].id) {
       this.level = LEVELS.find(level => level.id === levelId);
       if (!this.level) throw new RangeError(`Unknown level: ${levelId}`);
-      this.routes = this.level.routes;
+      this.routes = this.level.routes.map(normalizeRoute);
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
       this.roads = new Set(this.bridges);
@@ -92,21 +107,14 @@
       this.roadGrades = new Map();
       this.signals = new Map();
       this.trees = new Set(this.level.trees);
-      this.buildings = new Set(this.routes.flatMap(r => [r.home, r.goal]));
-      this.queues = this.routes.map(() => 0);
-      this.queueTimes = this.routes.map(() => []);
-      this.spawnTimers = this.routes.map(r => 1 / r.rate);
       this.cars = [];
       this.elapsed = 0;
       this.delivered = 0;
-      this.byRoute = this.routes.map(() => 0);
       this.commuteTimes = [];
       this.arrivals = [];
       this.state = 'planning';
       this.nextId = 1;
-      this.paths = [];
-      this.generated = this.routes.map(() => 0);
-      this.refreshPaths();
+      this.rebuildRoutes();
       for (const [a,b,grade = 0] of this.level.initialEdges || []) {
         const error = this.connect(a,b,grade);
         if (error) throw new Error(`Invalid initial road: ${error}`);
@@ -152,8 +160,55 @@
       for (const n of this.roads) spent += this.roadType(n).cost - Number(this.bridges.has(n));
       return this.level.budget - spent;
     }
+    rebuildRoutes() {
+      const homes = [], goals = [];
+      this.routes.forEach((r, ri) => {
+        for (const h of routeHomes(r)) homes.push({ route: ri, cell: h.cell, rate: h.rate ?? 1, passengers: h.passengers ?? 0, color: r.color, light: r.light });
+        for (const g of routeGoals(r)) goals.push({ route: ri, cell: g.cell, label: g.label, input: g.input, color: r.color, light: r.light });
+      });
+      this.homes = homes;
+      this.goals = goals;
+      this.buildings = new Set([...homes.map(h => h.cell), ...goals.map(g => g.cell)]);
+      this.queues = homes.map(() => 0);
+      this.queueTimes = homes.map(() => []);
+      this.generated = homes.map(() => 0);
+      this.spawnTimers = homes.map(h => 1 / h.rate);
+      this.byRoute = this.routes.map(() => 0);
+      this.byGoal = goals.map(() => 0);
+      this.goalAssigned = goals.map(() => 0);
+      this.refreshPaths();
+    }
+    setRoutes(routes) {
+      this.routes = routes.map(normalizeRoute);
+      this.rebuildRoutes();
+    }
+    defaultGoalCell(ri) {
+      const g = this.goals.find(g => g.route === ri);
+      return g ? g.cell : null;
+    }
+    routeConnected(ri) {
+      return this.homes.every((h, hi) => h.route !== ri || this.paths[hi] != null);
+    }
+    bestGoalPath(hi) {
+      const home = this.homes[hi];
+      let goalIndex = null, path = null;
+      for (let gi = 0; gi < this.goals.length; gi++) {
+        const g = this.goals[gi];
+        if (g.route !== home.route) continue;
+        if (g.input != null && this.goalAssigned[gi] >= g.input) continue;
+        const p = findPath(this.roads, home.cell, g.cell, this.edges);
+        if (p && (!path || p.length < path.length)) { path = p; goalIndex = gi; }
+      }
+      return { goalIndex, path };
+    }
     refreshPaths() {
-      this.paths = this.routes.map(r => findPath(this.roads, r.home, r.goal, this.edges));
+      const paths = [], homeGoal = [];
+      for (let hi = 0; hi < this.homes.length; hi++) {
+        const result = this.bestGoalPath(hi);
+        paths[hi] = result.path; homeGoal[hi] = result.goalIndex;
+      }
+      this.paths = paths;
+      this.homeGoal = homeGoal;
       const junctions = new Set([...this.roads].filter(n => this.links(n).length >= 3));
       for (const n of this.signals.keys()) if (!junctions.has(n)) this.signals.delete(n);
       for (const n of junctions) if (!this.signals.has(n)) this.signals.set(n, { enabled: false, green: 2 });
@@ -274,18 +329,21 @@
       return '';
     }
     resetOperation() {
-      this.queues = this.routes.map(() => 0);
-      this.queueTimes = this.routes.map(() => []);
-      this.generated = this.routes.map(() => 0);
-      this.spawnTimers = this.routes.map(r => 1 / r.rate);
+      this.queues = this.homes.map(() => 0);
+      this.queueTimes = this.homes.map(() => []);
+      this.generated = this.homes.map(() => 0);
+      this.spawnTimers = this.homes.map(h => 1 / h.rate);
+      this.byRoute = this.routes.map(() => 0);
+      this.byGoal = this.goals.map(() => 0);
+      this.goalAssigned = this.goals.map(() => 0);
       this.cars = [];
       this.elapsed = 0;
       this.delivered = 0;
-      this.byRoute = this.routes.map(() => 0);
       this.commuteTimes = [];
       this.arrivals = [];
       this.state = 'planning';
       this.nextId = 1;
+      this.refreshPaths();
     }
     stop() {
       if (this.state !== 'running' && this.state !== 'paused') return false;
@@ -354,27 +412,31 @@
       if (this.state !== 'running' || !Number.isFinite(dt) || dt <= 0) return;
       dt = Math.min(dt, 0.1, this.level.duration - this.elapsed);
       this.elapsed += dt;
-      this.routes.forEach((r, i) => {
-        this.spawnTimers[i] -= dt;
-        if (this.spawnTimers[i] <= 1e-9 && this.generated[i] < r.passengers) {
-          this.generated[i]++;
-          this.queues[i]++;
-          this.queueTimes[i]?.push(this.elapsed);
-          this.spawnTimers[i] += 1 / r.rate;
+      for (let hi = 0; hi < this.homes.length; hi++) {
+        const home = this.homes[hi];
+        this.spawnTimers[hi] -= dt;
+        if (this.spawnTimers[hi] <= 1e-9 && this.generated[hi] < home.passengers) {
+          this.generated[hi]++;
+          this.queues[hi]++;
+          this.queueTimes[hi]?.push(this.elapsed);
+          this.spawnTimers[hi] += 1 / home.rate;
         }
-        const path = this.paths[i];
-        if (this.queues[i] && path) {
-          const heading = path[1] - path[0];
-          if (this.available(r.home, heading) && this.available(path[1], heading)) {
-            const commuteStarted = this.queueTimes[i]?.shift() ?? this.elapsed;
-            this.cars.push({ id: this.nextId++, route: i, commuteStarted, cell: r.home, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0 });
-            this.queues[i]--;
+        if (this.queues[hi]) {
+          const { goalIndex, path } = this.bestGoalPath(hi);
+          if (goalIndex !== null && path) {
+            const heading = path[1] - path[0];
+            if (this.available(home.cell, heading) && this.available(path[1], heading)) {
+              const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
+              this.cars.push({ id: this.nextId++, route: home.route, goalIndex, goal: this.goals[goalIndex].cell, commuteStarted, cell: home.cell, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0 });
+              this.goalAssigned[goalIndex]++;
+              this.queues[hi]--;
+            }
           }
         }
-      });
+      }
       const plans = new Map();
       for (const car of this.cars) if (!car.done && car.next === null) {
-        const goal = this.routes[car.route].goal, exit = car.cellMovement?.exitCell;
+        const goal = car.goal ?? this.defaultGoalCell(car.route), exit = car.cellMovement?.exitCell;
         // Once admitted, finish the committed turn even if other roads change.
         plans.set(car, exit === undefined ? findPath(this.roads, car.cell, goal, this.edges)
           : [car.cell, ...(findPath(this.roads, exit, goal, this.edges) || [exit])]);
@@ -428,10 +490,11 @@
           car.nextMovement = null;
           car.next = null;
           car.progress = 0;
-          if (car.cell === this.routes[car.route].goal) {
+          if (car.cell === car.goal) {
             car.done = true;
             this.delivered++;
             this.byRoute[car.route]++;
+            if (car.goalIndex != null) this.byGoal[car.goalIndex]++;
             const commuteTime = Math.max(0, this.elapsed - (car.commuteStarted ?? this.elapsed));
             this.commuteTimes.push(commuteTime);
             this.arrivals.push({ route: car.route, time: this.elapsed, commuteTime });

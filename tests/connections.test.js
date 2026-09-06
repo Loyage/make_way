@@ -2,7 +2,10 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {City,key,WIDTH}=require('../core.js');
 function plain(){const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();c.edges.clear();return c;}
-function cross(){const c=plain(),n=key(6,5);c.routes=[{home:key(3,5),goal:key(9,5)},{home:key(6,2),goal:key(6,8)}];c.buildings=new Set(c.routes.flatMap(r=>[r.home,r.goal]));c.queues=[0,0];c.spawnTimers=[100,100];c.byRoute=[0,0];for(let x=3;x<9;x++)c.connect(key(x,5),key(x+1,5));for(let y=2;y<8;y++)c.connect(key(6,y),key(6,y+1));return {c,n};}
+function cross(){const c=plain(),n=key(6,5);c.setRoutes([
+  {name:'a',color:'#638d69',light:'#dae6cb',homes:[{cell:key(3,5),rate:1,passengers:0}],goals:[{cell:key(9,5),label:'工坊'}]},
+  {name:'b',color:'#d19157',light:'#f2dfbf',homes:[{cell:key(6,2),rate:1,passengers:0}],goals:[{cell:key(6,8),label:'市场'}]}
+]);for(let x=3;x<9;x++)c.connect(key(x,5),key(x+1,5));for(let y=2;y<8;y++)c.connect(key(6,y),key(6,y+1));return {c,n};}
 function car(cell,route,id){const h=route?WIDTH:1;return {cell,route,id,next:null,heading:h,cellHeading:h,cellLane:0,cellSlot:1,progress:0,blocked:0};}
 test('neighboring surfaces stay disconnected until an explicit stroke joins them',()=>{
  const c=plain();for(let x=3;x<7;x++){c.connect(key(x,4),key(x+1,4));c.connect(key(x,5),key(x+1,5));}

@@ -61,7 +61,7 @@ async function main() {
     await go(2);
     assert.equal(await evaluate('document.querySelector("#grade-setting").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#load-setting").hidden'),false);
-    assert.ok((await text('demand-list')).includes('高层 · 本轮 330 人 · 6 人/s'));
+    assert.ok((await text('demand-list')).includes('输出 330 人 · 6 人/s'));
     const previousBudget=Number(await text('budget'));
     await select('road-grade','2');await drag(3,2,5,2);assert.equal(Number(await text('budget')),previousBudget-6);
     assert.ok((await text('grade-description')).includes('每方向 3 车道'));

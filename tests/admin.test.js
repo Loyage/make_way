@@ -38,6 +38,19 @@ test('validateLevels rejects structural problems', () => {
   const badEdge = JSON.parse(JSON.stringify(good));
   badEdge[0].initialEdges = (badEdge[0].initialEdges || []).concat([[0, 0, 0]]);
   assert.match(validateLevels(badEdge), /initialEdges/);
+  const dupHome = JSON.parse(JSON.stringify(good));
+  dupHome[0].routes[0].homes.push({ cell: dupHome[0].routes[0].homes[0].cell, rate: 4, passengers: 60 });
+  assert.match(validateLevels(dupHome), /重叠的住宅/);
+  const dupGoal = JSON.parse(JSON.stringify(good));
+  dupGoal[0].routes[0].goals.push({ cell: dupGoal[0].routes[0].goals[0].cell, label: '重复' });
+  assert.match(validateLevels(dupGoal), /重叠的目的地/);
+  const crossRoute = JSON.parse(JSON.stringify(good));
+  crossRoute[0].routes.push({
+    name: '占位', color: '#638d69', light: '#dae6cb',
+    homes: [{ cell: crossRoute[0].routes[0].goals[0].cell, rate: 1, passengers: 60 }],
+    goals: [{ cell: crossRoute[0].routes[0].homes[0].cell + 1, label: '终' }]
+  });
+  assert.match(validateLevels(crossRoute), /重叠/);
 });
 
 test('setLevels rebuilds active LEVELS and freezes definitions', () => {

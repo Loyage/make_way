@@ -7,8 +7,8 @@ const { buildReferencePlan } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
   test(`${level.name}: valid independent terrain and dynamic route counts`, () => {
     const city = new City(level.id);
-    const buildings = city.routes.flatMap(r => [r.home,r.goal]);
-    assert.equal(new Set(buildings).size,buildings.length);
+    const buildings = [...city.homes.map(h => h.cell), ...city.goals.map(g => g.cell)];
+    assert.equal(new Set(buildings).size, buildings.length);
     for (const n of [...level.water,...level.bridges,...level.trees,...buildings]) assert.ok(Number.isInteger(n)&&n>=0&&n<WIDTH*HEIGHT);
     for (const n of buildings) assert.ok(!city.water.has(n)&&!city.trees.has(n));
     for (const n of city.trees) assert.ok(!city.water.has(n));

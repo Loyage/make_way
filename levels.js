@@ -13,12 +13,16 @@
   ];
   // Measured straight-road throughput at step(0.05): about 2 / 5 / 6.67 people/s.
   // Demand runs for long enough that a low-grade road cannot hide its backlog.
+  // Each route now lists one or many origins (homes) and destinations (goals);
+  // every home carries its own output (rate/passengers) and every goal may cap its input.
+  const home = (x1, y1, rate, seconds) => ({ cell: key(x1, y1), rate, passengers: rate * seconds });
+  const goal = (x1, y1, label, input) => ({ cell: key(x1, y1), label, ...(input == null ? {} : { input }) });
+  function route(colorIndex, name, homes, goals) {
+    const [color, light, homeName, goalLabel] = colors[colorIndex];
+    return { name: name || `${homeName} → ${goalLabel}`, color, light, homes, goals };
+  }
   function routes(pairs, rates, seconds) {
-    return pairs.map(([home, goal], i) => {
-      const [color, light, name, label] = colors[i], rate = rates[i];
-      return { name: `${name} → ${label}`, color, light, home: key(...home), goal: key(...goal), label,
-        rate, passengers: rate * seconds };
-    });
+    return pairs.map(([a, b], i) => route(i, null, [home(...a, rates[i], seconds)], [goal(...b, colors[i][3])]));
   }
   const line = (x1,y1,x2,y2,grade=0) => {
     const out=[];let x=x1,y=y1;

@@ -6,9 +6,7 @@ const { City, ROAD_TYPES, WIDTH, key, movement, movementsConflict, VEHICLE_WIDTH
 function street() {
   const city = new City('neighborhood');
   city.water.clear(); city.trees.clear(); city.bridges.clear(); city.roads.clear();
-  city.routes = [{ home: key(1,5), goal: key(9,5) }];
-  city.buildings = new Set(city.routes.flatMap(r => [r.home,r.goal]));
-  city.queues=[0];city.spawnTimers=[100];city.byRoute=[0];
+  city.setRoutes([{ name: 'test', color: '#638d69', light: '#dae6cb', homes: [{ cell: key(1,5), rate: 1, passengers: 0 }], goals: [{ cell: key(9,5), label: '工坊' }] }]);
   for(let x=1;x<9;x++) assert.equal(city.connect(key(x,5),key(x+1,5)),'');
   return city;
 }
@@ -18,9 +16,10 @@ function car(cell, heading=1, lane=0, next=null, slot=1) {
 function cross() {
   const city=street(),n=key(5,5);
   for(let y=3;y<=7;y++)city.edit(key(5,y));
-  city.routes.push({home:key(5,2),goal:key(5,8)});
-  city.buildings=new Set(city.routes.flatMap(r=>[r.home,r.goal]));
-  city.queues.push(0);city.spawnTimers.push(100);city.byRoute.push(0);
+  city.setRoutes([
+    { name: 'a', color: '#638d69', light: '#dae6cb', homes: [{ cell: key(1,5), rate: 1, passengers: 0 }], goals: [{ cell: key(9,5), label: '工坊' }] },
+    { name: 'b', color: '#d19157', light: '#f2dfbf', homes: [{ cell: key(5,2), rate: 1, passengers: 0 }], goals: [{ cell: key(5,8), label: '市场' }] }
+  ]);
   for(let y=2;y<8;y++)city.connect(key(5,y),key(5,y+1));
   city.setSignal(n,true);
   return {city,n};
@@ -149,20 +148,20 @@ test('compatible opposing movements and four right turns can share a junction',(
 });
 test('right turns move on red, but yield to conflicting vehicles and full exits',()=>{
   const {city,n}=cross();
-  city.routes[0]={home:key(1,5),goal:key(5,8)};city.refreshPaths();
+  city.routes[0].goals[0].cell=key(5,8);city.rebuildRoutes();
   const c=car(n-1);city.cars=[c];city.elapsed=4.5;city.toggle();city.step(.05);
   assert.equal(c.next,n);assert.equal(c.nextMovement.turn,'right');
   assert.ok(city.edit(n+WIDTH,true),'committed exit must not be demolished');
-  const blocked=cross();blocked.city.routes[0]={home:key(1,5),goal:key(5,8)};blocked.city.refreshPaths();
+  const blocked=cross();blocked.city.routes[0].goals[0].cell=key(5,8);blocked.city.rebuildRoutes();
   const waiting=car(blocked.n-1),other=car(blocked.n,WIDTH);
   other.cellMovement=movement(WIDTH,WIDTH);blocked.city.cars=[waiting,other];
   blocked.city.toggle();blocked.city.step(.05);assert.equal(waiting.next,null);
-  const full=cross();full.city.routes[0]={home:key(1,5),goal:key(5,8)};full.city.refreshPaths();
+  const full=cross();full.city.routes[0].goals[0].cell=key(5,8);full.city.rebuildRoutes();
   const w=car(full.n-1);full.city.cars=[w,car(full.n+WIDTH,WIDTH,0,null,0),car(full.n+WIDTH,WIDTH)];
   full.city.toggle();full.city.step(.05);assert.equal(w.next,null);
 });
 test('right turns yield to newly eligible straight traffic regardless of creation order',()=>{
-  const {city,n}=cross();city.routes[0]={home:key(1,5),goal:key(5,8)};city.refreshPaths();
+  const {city,n}=cross();city.routes[0].goals[0].cell=key(5,8);city.rebuildRoutes();
   const right=car(n-1),straight=car(n-WIDTH,WIDTH);straight.route=1;
   city.cars=[right,straight];city.elapsed=4.5;city.toggle();city.step(.05);
   assert.equal(straight.next,n);assert.equal(right.next,null);

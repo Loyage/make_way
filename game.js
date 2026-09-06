@@ -45,7 +45,9 @@
     const demand = $('demand-list');demand.replaceChildren();
     for (const r of city.routes) {
       const row = document.createElement('li');
-      row.textContent = `${r.name}：${r.rate===6?'高层':r.rate===4?'大房子':'小房子'} · 本轮 ${r.passengers} 人 · ${r.rate} 人/s`;
+      const homes = r.homes.map(h => `住宅 (${point(h.cell).x + 1},${point(h.cell).y + 1}) 输出 ${h.passengers} 人 · ${h.rate} 人/s`);
+      const goals = r.goals.map(g => `目的地 (${point(g.cell).x + 1},${point(g.cell).y + 1}) · ${g.label}${g.input != null ? ` 输入 ${g.input} 人` : ''}`);
+      row.textContent = `${r.name}：${[...homes, ...goals].join('；')}`;
       demand.append(row);
     }
     $('grade-setting').hidden = !level.features.grade;
@@ -61,13 +63,13 @@
       button.setAttribute('aria-current', i === index ? 'true' : 'false');
     });
     $('connection-list').replaceChildren();
-    connectionRows = city.routes.map(route => {
+    connectionRows = city.routes.map((route, ri) => {
       const row = document.createElement('div'); row.className = 'connection-row';
       const name = document.createElement('span'), dot = document.createElement('i');
       dot.style.background = route.color; name.append(dot, route.name);
       const status = document.createElement('span'); status.textContent = '待连接';
       row.append(name, status); $('connection-list').append(row);
-      return { row, status };
+      return { row, status, routeIndex: ri };
     });
     updateDesignControls();
   }
@@ -189,11 +191,11 @@
       ctx.restore();
     }
   }
-  function drawBuilding(n, r, home, routeIndex) {
-    const {x,y}=point(n), s=cellSize, cx=(x+.5)*s, cy=(y+.5)*s;
+  function drawBuilding(b) {
+    const {x,y}=point(b.cell), s=cellSize, cx=(x+.5)*s, cy=(y+.5)*s, r=b;
     rounded(x*s+s*.1,y*s+s*.15,s*.8,s*.8,s*.16,'#8d9a7d22');
     rounded(x*s+s*.08,y*s+s*.07,s*.84,s*.84,s*.17,r.light);
-    if(home) {
+    if(b.isHome) {
       if (r.rate === 6) {
         rounded(cx-s*.22,cy-s*.36,s*.44,s*.64,s*.025,r.color);
         for(let floor=0;floor<4;floor++) for(let col=0;col<2;col++) rounded(cx-s*.14+col*s*.17,cy-s*.28+floor*s*.13,s*.09,s*.07,0,r.light);
@@ -209,11 +211,11 @@
       for(let j=0;j<3;j++) rounded(cx-s*.18+j*s*.13,cy-s*.005,s*.075,s*.11,s*.01,r.light);
       rounded(cx-s*.045,cy+s*.12,s*.09,s*.12,s*.01,r.light);
     }
-    label(home?`${r.passengers}人 · ${r.rate}/s`:r.label,cx,(y+1.1)*s,s*.22,r.color,'700');
-    if(home && city.queues[routeIndex]) {
+    label(b.isHome?`${r.passengers}人 · ${r.rate}/s`:(r.input!=null?`${r.label} · 输入 ${r.input}`:r.label),cx,(y+1.1)*s,s*.22,r.color,'700');
+    if(b.isHome && city.queues[b.index]) {
       const bx=(x+.86)*s,by=(y+.14)*s;
-      circle(bx,by,s*.19,city.queues[routeIndex]>7?'#bd7750':r.color);
-      label(String(city.queues[routeIndex]),bx,by,s*.2,'#fff','700');
+      circle(bx,by,s*.19,city.queues[b.index]>7?'#bd7750':r.color);
+      label(String(city.queues[b.index]),bx,by,s*.2,'#fff','700');
     }
   }
   function draw() {
@@ -275,7 +277,8 @@
       line(cx,cy,cx,cy+s*.31,'#a5b18d',s*.055);
       circle(cx-s*.1,cy,s*.19,'#a9c398');circle(cx+s*.1,cy+s*.015,s*.19,'#9ab88a');circle(cx,cy-s*.13,s*.19,'#b3cba1');
     }
-    city.routes.forEach((r,i)=>{drawBuilding(r.home,r,true,i);drawBuilding(r.goal,r,false,i);});
+    city.homes.forEach((h,i)=>drawBuilding({...h,isHome:true,index:i}));
+    city.goals.forEach((g,i)=>drawBuilding({...g,isHome:false}));
     // Road paint sits below vehicles, so it reads as part of the grid.
     for(const n of city.signals.keys()) drawSignalMarkings(n);
     for(const car of city.cars) {
@@ -319,9 +322,9 @@
     $('start').disabled=['won','lost'].includes(city.state);
     $('stop').disabled=!['running','paused'].includes(city.state);
     $('speed').textContent=speed+'×';
-    $('connection-count').textContent=city.paths.filter(Boolean).length+' / '+city.routes.length;
+    $('connection-count').textContent=city.routes.filter((r,i)=>city.routeConnected(i)).length+' / '+city.routes.length;
     connectionRows.forEach(({row,status},i)=>{
-      row.classList.toggle('connected',!!city.paths[i]);status.textContent=city.paths[i]?'已连接 ✓':'待连接';
+      row.classList.toggle('connected',city.routeConnected(i));status.textContent=city.routeConnected(i)?'已连接 ✓':'待连接';
     });
     updateInspector();
     if(['won','lost'].includes(city.state)&&!resultShown) showResult();

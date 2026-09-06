@@ -116,17 +116,43 @@ function validateLevels(list) {
     if (!Array.isArray(level.routes) || level.routes.length === 0) return `关卡「${level.id}」至少需要一条路线`;
     for (const route of level.routes) {
       if (!route || typeof route !== 'object') return `关卡「${level.id}」的路线必须是对象`;
-      if (!isCoord(route.home) || !isCoord(route.goal)) return `关卡「${level.id}」的路线起终点坐标越界`;
-      if (route.home === route.goal) return `关卡「${level.id}」的路线上 home 与 goal 相同`;
-      if (!Number.isFinite(route.rate) || route.rate <= 0) return `关卡「${level.id}」的路线 rate 无效`;
-      if (!Number.isFinite(route.passengers) || route.passengers <= 0) return `关卡「${level.id}」的路线 passengers 无效`;
-      if (typeof route.name !== 'string' || typeof route.label !== 'string') return `关卡「${level.id}」的路线缺少 name/label`;
+      if (typeof route.name !== 'string' || !route.name.trim()) return `关卡「${level.id}」的路线缺少 name`;
+      if (typeof route.color !== 'string' || typeof route.light !== 'string') return `关卡「${level.id}」的路线缺少 color/light`;
+      if (!Array.isArray(route.homes) || route.homes.length === 0) return `关卡「${level.id}」的路线至少需要一个住宅 (homes)`;
+      if (!Array.isArray(route.goals) || route.goals.length === 0) return `关卡「${level.id}」的路线至少需要一个目的地 (goals)`;
+      for (const h of route.homes) {
+        if (!h || typeof h !== 'object' || !isCoord(h.cell)) return `关卡「${level.id}」的路线 homes 坐标越界`;
+        if (!Number.isFinite(h.rate) || h.rate <= 0) return `关卡「${level.id}」的路线 homes.rate 无效`;
+        if (!Number.isFinite(h.passengers) || h.passengers <= 0) return `关卡「${level.id}」的路线 homes.passengers 无效`;
+      }
+      for (const g of route.goals) {
+        if (!g || typeof g !== 'object' || !isCoord(g.cell)) return `关卡「${level.id}」的路线 goals 坐标越界`;
+        if (typeof g.label !== 'string' || !g.label.trim()) return `关卡「${level.id}」的路线 goals.label 无效`;
+        if (g.input != null && (!Number.isFinite(g.input) || g.input <= 0)) return `关卡「${level.id}」的路线 goals.input 无效`;
+      }
+      if (route.homes.some(h => route.goals.some(g => h.cell === g.cell))) return `关卡「${level.id}」的路线住宅与目的地位于同一格`;
+      const homeCells = route.homes.map(h => h.cell);
+      const goalCells = route.goals.map(g => g.cell);
+      if (new Set(homeCells).size !== homeCells.length) return `关卡「${level.id}」的路线存在重叠的住宅`;
+      if (new Set(goalCells).size !== goalCells.length) return `关卡「${level.id}」的路线存在重叠的目的地`;
     }
-    // home/goal must not sit on water or trees
+    // Buildings of different routes must not share a cell (a cell hosts one building).
+    const buildingRoute = new Map();
+    for (let ri = 0; ri < level.routes.length; ri++) {
+      for (const h of level.routes[ri].homes) {
+        if (buildingRoute.has(h.cell)) return `关卡「${level.id}」的住宅 ${h.cell} 与其他路线建筑重叠`;
+        buildingRoute.set(h.cell, ri);
+      }
+      for (const g of level.routes[ri].goals) {
+        if (buildingRoute.has(g.cell)) return `关卡「${level.id}」的目的地 ${g.cell} 与其他路线建筑重叠`;
+        buildingRoute.set(g.cell, ri);
+      }
+    }
+    // homes/goals must not sit on water or trees
     const forbidden = new Set([...level.water, ...level.trees]);
     for (const route of level.routes) {
-      if (forbidden.has(route.home)) return `关卡「${level.id}」的住宅 ${route.home} 位于水面或树木上`;
-      if (forbidden.has(route.goal)) return `关卡「${level.id}」的目的地 ${route.goal} 位于水面或树木上`;
+      for (const h of route.homes) if (forbidden.has(h.cell)) return `关卡「${level.id}」的住宅 ${h.cell} 位于水面或树木上`;
+      for (const g of route.goals) if (forbidden.has(g.cell)) return `关卡「${level.id}」的目的地 ${g.cell} 位于水面或树木上`;
     }
     // initialEdges
     if (level.initialEdges !== undefined && level.initialEdges !== null) {

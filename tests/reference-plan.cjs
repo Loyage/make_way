@@ -35,21 +35,27 @@ function buildReferencePlan(city) {
     return;
   }
   // Minimize new road cost, then distance; connections always remain explicit.
+  // A route may hold several homes and goals, so connect every home to its
+  // nearest reachable goal (multi->multi still resolves to a concrete OD path).
   for (const route of city.routes) {
-    const costs = new Map([[route.home, 0]]), prev = new Map(), pending = new Set([route.home]);
-    while (pending.size) {
-      const n = [...pending].reduce((a,b) => costs.get(a) <= costs.get(b) ? a : b);
-      pending.delete(n);
-      if (n === route.goal) break;
-      for (const next of neighbors(n)) {
-        if (next !== route.goal && (city.buildings.has(next) || city.trees.has(next) || city.water.has(next) && !city.bridges.has(next))) continue;
-        const cost = costs.get(n) + (city.roads.has(next) || next === route.goal ? 0.1 : 1);
-        if (!costs.has(next) || cost < costs.get(next)) { costs.set(next,cost);prev.set(next,n);pending.add(next); }
+    const goals = new Set((route.goals || []).map(g => g.cell));
+    for (const h of route.homes) {
+      const costs = new Map([[h.cell, 0]]), prev = new Map(), pending = new Set([h.cell]);
+      let reached = null;
+      while (pending.size && reached === null) {
+        const n = [...pending].reduce((a,b) => costs.get(a) <= costs.get(b) ? a : b);
+        pending.delete(n);
+        if (goals.has(n)) { reached = n; break; }
+        for (const next of neighbors(n)) {
+          if (!goals.has(next) && (city.buildings.has(next) || city.trees.has(next) || city.water.has(next) && !city.bridges.has(next))) continue;
+          const cost = costs.get(n) + (city.roads.has(next) || goals.has(next) ? 0.1 : 1);
+          if (!costs.has(next) || cost < costs.get(next)) { costs.set(next,cost);prev.set(next,n);pending.add(next); }
+        }
       }
+      assert.ok(reached !== null, `${city.level.id}: disconnected terrain`);
+      let n = reached;
+      while (n !== h.cell) { const before = prev.get(n); assert.equal(city.connect(before, n), '', `${city.level.id}: budget exceeded`); n = before; }
     }
-    assert.ok(prev.has(route.goal), `${city.level.id}: disconnected terrain`);
-    let n = route.goal;
-    while (n !== route.home) { const before=prev.get(n);assert.equal(city.connect(before,n), '', `${city.level.id}: budget exceeded`);n=before; }
   }
 }
 module.exports = { buildReferencePlan, completeCrossing, line };

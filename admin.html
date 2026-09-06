@@ -77,7 +77,7 @@
 
           <details class="editor-section" open>
             <summary>路线与建筑</summary>
-            <p class="section-hint">每一条路线对应一组住宅（home）与目的地（goal）。在下方地图用「住宅 / 目的地」工具配合当前路线放置坐标。</p>
+            <p class="section-hint">每一条路线可包含多个住宅（home，各自输出速率/总人数）与多个目的地（goal，各自标签/可选输入上限）。在地图用「住宅 / 目的地」工具配合当前路线与当前住宅/目的地放置坐标；在下方列表增删并编辑各点。</p>
             <div id="route-list" class="route-list"></div>
             <button id="add-route" class="tool">＋ 添加路线</button>
           </details>
@@ -88,8 +88,8 @@
               <button data-tool="water" class="tool active">水面</button>
               <button data-tool="bridge" class="tool">桥梁</button>
               <button data-tool="tree" class="tool">树木</button>
-              <button data-tool="home" class="tool">住宅</button>
-              <button data-tool="goal" class="tool">目的地</button>
+              <button data-tool="home" id="tool-home" class="tool">住宅</button>
+              <button data-tool="goal" id="tool-goal" class="tool">目的地</button>
               <button data-tool="road" class="tool">初始道路</button>
               <button data-tool="erase" class="tool">擦除/断开</button>
             </div>

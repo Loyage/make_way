@@ -18,6 +18,8 @@
   let tool = 'water';
   let roadGrade = 0;
   let activeRoute = 0;      // which route the home/goal tools place
+  let activeHome = 0;       // which home the "home" tool places
+  let activeGoal = 0;       // which goal the "goal" tool places
   let hover = null, dragging = false, dragAnchor = null, lastCell = null;
   let dirty = false;
   let cellSize = 40;
@@ -25,6 +27,8 @@
   // ── Current level helpers ─────────────────────────────────────────────
   const current = () => (currentIndex === null ? null : levels[currentIndex]);
   const currentRoute = () => current()?.routes[activeRoute] || null;
+  const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
+  const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
   function markDirty() { dirty = true; const el = $('save-status'); el.textContent = '有未保存更改'; el.classList.add('dirty'); }
 
   // ── API ───────────────────────────────────────────────────────────────
@@ -65,6 +69,26 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('visible'), 2600);
   }
 
+  // ── Tool hint (keeps toolbar labels + status bar in sync with the active
+  //    home/goal of the active route) ─────────────────────────────────────
+  const TOOL_HINTS = {
+    water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木',
+    road: '初始道路（拖动连接相邻格）', erase: '擦除地形/断开道路'
+  };
+  function updateToolHint() {
+    const route = currentRoute();
+    const homeCount = route ? route.homes.length : 0;
+    const goalCount = route ? route.goals.length : 0;
+    $('tool-home').textContent = `住宅${homeCount ? ` ${activeHome + 1}/${homeCount}` : '（无，点击新增）'}`;
+    $('tool-goal').textContent = `目的地${goalCount ? ` ${activeGoal + 1}/${goalCount}` : '（无，点击新增）'}`;
+    if (tool === 'home' || tool === 'goal') {
+      const names = { home: `住宅 ${activeHome + 1}（路线 ${activeRoute + 1}，共 ${homeCount} 个）`, goal: `目的地 ${activeGoal + 1}（路线 ${activeRoute + 1}，共 ${goalCount} 个）` };
+      $('map-status').textContent = '当前工具：' + names[tool];
+    } else {
+      $('map-status').textContent = '当前工具：' + TOOL_HINTS[tool];
+    }
+  }
+
   // ── Rendering ─────────────────────────────────────────────────────────
   function renderLevelNav() {
     const nav = $('level-nav'); nav.replaceChildren();
@@ -102,34 +126,71 @@
   function renderRoutes() {
     const list = $('route-list'); list.replaceChildren();
     const level = current();
-    level.routes.forEach((route, i) => {
+    level.routes.forEach((route, ri) => {
+      if (!Array.isArray(route.homes)) route.homes = [];
+      if (!Array.isArray(route.goals)) route.goals = [];
       const card = document.createElement('div');
-      card.className = 'route-card' + (i === activeRoute ? ' selected' : '');
+      card.className = 'route-card' + (ri === activeRoute ? ' selected' : '');
       const head = document.createElement('div'); head.className = 'route-card-head';
       const dot = document.createElement('span'); dot.className = 'route-dot'; dot.style.background = route.color;
       const name = document.createElement('input'); name.value = route.name;
       name.onchange = () => { route.name = name.value; markDirty(); renderLevelNav(); };
       const select = document.createElement('button'); select.className = 'tool';
-      select.textContent = i === activeRoute ? '当前' : '设为当前';
-      select.onclick = () => { activeRoute = i; renderRoutes(); draw(); };
+      select.textContent = ri === activeRoute ? '当前' : '设为当前';
+      select.onclick = () => { activeRoute = ri; activeHome = 0; activeGoal = 0; renderRoutes(); draw(); };
       head.append(dot, name, select);
       card.append(head);
 
-      const grid = document.createElement('div'); grid.className = 'route-card-grid';
-      const mkLabel = (labelText, val, onchange) => {
+      const mkCoord = (labelText, val, onchange) => {
+        const l = document.createElement('label'); l.textContent = labelText;
+        const inp = document.createElement('input'); inp.type = 'text'; inp.value = val;
+        inp.onchange = () => { onchange(Number(inp.value)); markDirty(); draw(); };
+        l.append(inp); return l;
+      };
+      const mkText = (labelText, val, onchange) => {
         const l = document.createElement('label'); l.textContent = labelText;
         const inp = document.createElement('input'); inp.type = 'text'; inp.value = val;
         inp.onchange = () => { onchange(inp.value); markDirty(); };
         l.append(inp); return l;
       };
-      grid.append(
-        mkLabel('目的地标签 label', route.label, v => route.label = v),
-        mkLabel('客流速率 rate（人/秒）', route.rate, v => { route.rate = Number(v); }),
-        mkLabel('住宅坐标 home', route.home, v => { route.home = Number(v); markDirty(); draw(); }),
-        mkLabel('目的地坐标 goal', route.goal, v => { route.goal = Number(v); markDirty(); draw(); }),
-        mkLabel('本轮人数 passengers', route.passengers, v => { route.passengers = Number(v); })
-      );
-      card.append(grid);
+
+      const homesTitle = document.createElement('strong'); homesTitle.textContent = '住宅（输出）';
+      card.append(homesTitle);
+      route.homes.forEach((h, hi) => {
+        const row = document.createElement('div'); row.className = 'route-card-grid';
+        row.append(
+          mkCoord(`住宅${hi + 1} 坐标`, h.cell, v => { h.cell = v; }),
+          mkText('速率 rate（人/秒）', h.rate, v => { h.rate = Number(v); }),
+          mkText('总输出 passengers', h.passengers, v => { h.passengers = Number(v); })
+        );
+        const use = document.createElement('button'); use.className = 'tool'; use.textContent = hi === activeHome ? '当前' : '设为当前';
+        use.onclick = () => { activeRoute = ri; activeHome = hi; renderRoutes(); draw(); };
+        const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
+        del.onclick = () => { route.homes.splice(hi, 1); if (activeHome >= route.homes.length) activeHome = Math.max(0, route.homes.length - 1); markDirty(); renderRoutes(); draw(); };
+        row.append(use, del); card.append(row);
+      });
+      const addHome = document.createElement('button'); addHome.className = 'tool'; addHome.textContent = '＋ 住宅';
+      addHome.onclick = () => { route.homes.push({ cell: keyCoord(3, 3), rate: 1, passengers: 60 }); activeRoute = ri; activeHome = route.homes.length - 1; markDirty(); renderRoutes(); draw(); };
+      card.append(addHome);
+
+      const goalsTitle = document.createElement('strong'); goalsTitle.textContent = '目的地（输入）';
+      card.append(goalsTitle);
+      route.goals.forEach((g, gi) => {
+        const row = document.createElement('div'); row.className = 'route-card-grid';
+        row.append(
+          mkCoord(`目的地${gi + 1} 坐标`, g.cell, v => { g.cell = v; }),
+          mkText('标签 label', g.label, v => { g.label = v; }),
+          mkText('输入上限 input（留空为不限）', g.input ?? '', v => { g.input = v === '' ? undefined : Number(v); })
+        );
+        const use = document.createElement('button'); use.className = 'tool'; use.textContent = gi === activeGoal ? '当前' : '设为当前';
+        use.onclick = () => { activeRoute = ri; activeGoal = gi; renderRoutes(); draw(); };
+        const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
+        del.onclick = () => { route.goals.splice(gi, 1); if (activeGoal >= route.goals.length) activeGoal = Math.max(0, route.goals.length - 1); markDirty(); renderRoutes(); draw(); };
+        row.append(use, del); card.append(row);
+      });
+      const addGoal = document.createElement('button'); addGoal.className = 'tool'; addGoal.textContent = '＋ 目的地';
+      addGoal.onclick = () => { route.goals.push({ cell: keyCoord(11, 7), label: '目的地' }); activeRoute = ri; activeGoal = route.goals.length - 1; markDirty(); renderRoutes(); draw(); };
+      card.append(addGoal);
 
       const colorRow = document.createElement('div'); colorRow.className = 'color-row';
       colorRow.append(document.createTextNode('配色：'));
@@ -141,16 +202,17 @@
       });
       const remove = document.createElement('button'); remove.className = 'tool danger-btn'; remove.textContent = '删除路线';
       remove.style.marginLeft = 'auto';
-      remove.onclick = () => { level.routes.splice(i, 1); if (activeRoute >= level.routes.length) activeRoute = Math.max(0, level.routes.length - 1); markDirty(); renderRoutes(); draw(); };
+      remove.onclick = () => { level.routes.splice(ri, 1); if (activeRoute >= level.routes.length) activeRoute = Math.max(0, level.routes.length - 1); markDirty(); renderRoutes(); draw(); };
       colorRow.append(remove);
       card.append(colorRow);
       list.append(card);
     });
+    updateToolHint();
   }
   function renderAll() { renderLevelNav(); renderEditor(); }
 
   // ── Selection & CRUD ─────────────────────────────────────────────────
-  function selectLevel(i) { currentIndex = i; activeRoute = 0; renderAll(); }
+  function selectLevel(i) { currentIndex = i; activeRoute = 0; activeHome = 0; activeGoal = 0; renderAll(); }
   function newLevel() {
     const id = 'level-' + (levels.length + 1);
     levels.push({
@@ -158,24 +220,25 @@
       description: '', tip: '', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true },
       budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
-        home: keyCoord(2, 2), goal: keyCoord(12, 8), label: '目的地', rate: 1, passengers: 60
+        homes: [{ cell: keyCoord(2, 2), rate: 1, passengers: 60 }],
+        goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
       }], initialEdges: []
     });
-    currentIndex = levels.length - 1; activeRoute = 0; markDirty(); renderAll();
+    currentIndex = levels.length - 1; activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
   }
   function duplicateLevel() {
     const src = current(); if (!src) return;
     const copy = JSON.parse(JSON.stringify(src));
     copy.id = copy.id + '-copy'; copy.name = copy.name + '（副本）';
     levels.splice(currentIndex + 1, 0, copy);
-    currentIndex = currentIndex + 1; activeRoute = 0; markDirty(); renderAll();
+    currentIndex = currentIndex + 1; activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
   }
   function deleteLevel() {
     const level = current(); if (!level) return;
     if (!confirm(`确定删除关卡「${level.name}」？此操作不可撤销。`)) return;
     levels.splice(currentIndex, 1);
     currentIndex = levels.length ? Math.min(currentIndex, levels.length - 1) : null;
-    activeRoute = 0; markDirty(); renderAll();
+    activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
   }
 
   // ── Map editing ──────────────────────────────────────────────────────
@@ -188,8 +251,8 @@
   function applyTool(cell) {
     const level = current(); if (cell === null || !level) return;
     const remove = arr => { const i = arr.indexOf(cell); if (i >= 0) arr.splice(i, 1); };
-    if (tool === 'home') { currentRoute().home = cell; }
-    else if (tool === 'goal') { currentRoute().goal = cell; }
+    if (tool === 'home') { const c = currentRoute(); if (c.homes[activeHome]) c.homes[activeHome].cell = cell; else c.homes[activeHome] = { cell, rate: 1, passengers: 60 }; }
+    else if (tool === 'goal') { const c = currentRoute(); if (c.goals[activeGoal]) c.goals[activeGoal].cell = cell; else c.goals[activeGoal] = { cell, label: '目的地' }; }
     else if (tool === 'erase') {
       // Remove terrain and any edge touching this cell.
       remove(level.water); remove(level.trees); remove(level.bridges);
@@ -204,6 +267,16 @@
     level.water = [...new Set(level.water)];
     level.bridges = [...new Set(level.bridges)];
     level.trees = [...new Set(level.trees)];
+    if (tool === 'home' || tool === 'goal') {
+      // Warn on overlaps within the active route (homes vs goals, or same kind).
+      const route = currentRoute();
+      const homes = route.homes, goals = route.goals;
+      const homeCells = homes.map(h => h.cell), goalCells = goals.map(g => g.cell);
+      const all = [...homeCells, ...goalCells];
+      const duplicates = all.filter((c, i) => all.indexOf(c) !== i);
+      if (duplicates.includes(cell)) toast(`注意：此处已有其他住宅/目的地 (格 ${cell})，请分开放置`);
+    }
+    updateToolHint();
     markDirty(); draw();
   }
   function connectCells(a, b) {
@@ -248,9 +321,17 @@
     }
     // buildings
     level.routes.forEach((route) => {
-      drawBuilding(route.home, route.color, true);
-      drawBuilding(route.goal, route.color, false);
+      (route.homes || []).forEach(h => drawBuilding(h.cell, route.color, true));
+      (route.goals || []).forEach(g => drawBuilding(g.cell, route.color, false));
     });
+    // highlight the active home/goal of the active route
+    const route = currentRoute();
+    if (route) {
+      const ch = route.homes?.[activeHome];
+      const cg = route.goals?.[activeGoal];
+      if (ch) markActive(ch.cell, route.color);
+      if (cg) markActive(cg.cell, route.color);
+    }
     // bridges over water
     for (const n of level.bridges) { const { x, y } = point(n); ctx.fillStyle = '#708b9b'; ctx.fillRect((x + .15) * s, (y + .5) * s, s * .7, s * .3); }
     // hover highlight
@@ -274,6 +355,15 @@
       ctx.fillStyle = '#fffef9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('▣', cx, cy);
     }
+  }
+  function markActive(n, color) {
+    const s = cellSize; const { x, y } = point(n);
+    ctx.save();
+    ctx.strokeStyle = '#e0ac58';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect((x + .08) * s, (y + .08) * s, s * .84, s * .84);
+    ctx.restore();
   }
 
   // ── Event wiring ─────────────────────────────────────────────────────
@@ -299,8 +389,8 @@
   $('add-route').onclick = () => {
     const level = current(); if (!level) return;
     const c = COLORS[level.routes.length % COLORS.length];
-    level.routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, home: keyCoord(3, 3), goal: keyCoord(11, 7), label: '目的地', rate: 1, passengers: 60 });
-    activeRoute = level.routes.length - 1; markDirty(); renderRoutes(); draw();
+    level.routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), rate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
+    activeRoute = level.routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
   };
 
   // Bind field inputs to current level
@@ -320,9 +410,8 @@
     btn.onclick = () => {
       tool = btn.dataset.tool;
       document.querySelectorAll('.toolbar [data-tool]').forEach(b => b.classList.toggle('active', b === btn));
-      const names = { water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木', home: `住宅（路线 ${activeRoute + 1}）`, goal: `目的地（路线 ${activeRoute + 1}）`, road: '初始道路（拖动连接相邻格）', erase: '擦除地形/断开道路' };
-      $('map-status').textContent = '当前工具：' + names[tool];
       $('grade-control').style.visibility = tool === 'road' ? 'visible' : 'hidden';
+      updateToolHint();
     };
   });
   $('road-grade').onchange = () => { roadGrade = Number($('road-grade').value); };
