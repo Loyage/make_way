@@ -10,6 +10,8 @@ const PUBLIC_FILES = {
   '/style.css': 'text/css; charset=utf-8',
   '/levels.js': 'text/javascript; charset=utf-8',
   '/core.js': 'text/javascript; charset=utf-8',
+  '/game-results.js': 'text/javascript; charset=utf-8',
+  '/game-effects.js': 'text/javascript; charset=utf-8',
   '/game.js': 'text/javascript; charset=utf-8'
 };
 const SECURITY_HEADERS = {
@@ -21,7 +23,7 @@ const SECURITY_HEADERS = {
 };
 
 async function createGameServer() {
-  // Snapshot only these five files. Restart the service after updating the game.
+  // Snapshot only the public files above. Restart the service after updating the game.
   const assets = new Map(await Promise.all(Object.entries(PUBLIC_FILES).map(async ([url, type]) => {
     const body = await fs.readFile(path.join(__dirname, url.slice(1)));
     const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';

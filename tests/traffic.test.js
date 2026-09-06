@@ -41,7 +41,7 @@ test('insufficient budget and invalid grade cannot partly change the network',()
   assert.ok(city.edit(n,false,3));assert.ok(city.edit(n,false,-1));assert.ok(city.edit(n,false,NaN));
 });
 test('fixed bridges can be upgraded and refunded down to their free base, never removed',()=>{
-  const city=new City(),n=[...city.bridges][0];
+  const city=new City('rush-hour'),n=[...city.bridges][0];
   city.edit(n,false,2);assert.equal(city.remaining,city.level.budget-2);
   assert.ok(city.edit(n,true));assert.ok(city.roads.has(n));
   city.edit(n,false,0);assert.equal(city.remaining,city.level.budget);

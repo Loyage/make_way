@@ -1,12 +1,12 @@
 /* Shared, DOM-free simulation. Works offline in browsers and in Node tests. */
 (function (root) {
   'use strict';
-  const WIDTH = 16, HEIGHT = 12, BUDGET = 64, DURATION = 120, TARGET = 35;
+  const WIDTH = 16, HEIGHT = 12;
   const key = (x, y) => y * WIDTH + x;
   const point = n => ({ x: n % WIDTH, y: Math.floor(n / WIDTH) });
   const LEVELS = typeof module !== 'undefined' && module.exports ? require('./levels.js') : root.TrafficLevels;
-  // Legacy constants describe the original riverside scenario.
-  const ROUTES = LEVELS.find(level => level.id === 'riverside').routes;
+  // Default scenario and convenience exports follow the first lesson.
+  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0];
   function neighbors(n) {
     const { x, y } = point(n), out = [];
     if (x > 0) out.push(n - 1);
@@ -63,7 +63,7 @@
     return { x: p.x + .5 + d.x * along - d.y * side, y: p.y + .5 + d.y * along + d.x * side };
   }
   class City {
-    constructor(levelId = 'riverside') {
+    constructor(levelId = LEVELS[0].id) {
       this.level = LEVELS.find(level => level.id === levelId);
       if (!this.level) throw new RangeError(`Unknown level: ${levelId}`);
       this.routes = this.level.routes;
@@ -77,15 +77,23 @@
       this.trees = new Set(this.level.trees);
       this.buildings = new Set(this.routes.flatMap(r => [r.home, r.goal]));
       this.queues = this.routes.map(() => 0);
-      this.spawnTimers = this.routes.map((_, i) => i * 0.8);
+      this.queueTimes = this.routes.map(() => []);
+      this.spawnTimers = this.routes.map(r => 1 / r.rate);
       this.cars = [];
       this.elapsed = 0;
       this.delivered = 0;
       this.byRoute = this.routes.map(() => 0);
+      this.commuteTimes = [];
+      this.arrivals = [];
       this.state = 'planning';
       this.nextId = 1;
       this.paths = [];
+      this.generated = this.routes.map(() => 0);
       this.refreshPaths();
+      for (const [a,b,grade = 0] of this.level.initialEdges || []) {
+        const error = this.connect(a,b,grade);
+        if (error) throw new Error(`Invalid initial road: ${error}`);
+      }
     }
     links(n) { return [...(this.edges.get(n) || [])]; }
     addEdge(a,b) {
@@ -250,11 +258,15 @@
     }
     resetOperation() {
       this.queues = this.routes.map(() => 0);
-      this.spawnTimers = this.routes.map((_, i) => i * 0.8);
+      this.queueTimes = this.routes.map(() => []);
+      this.generated = this.routes.map(() => 0);
+      this.spawnTimers = this.routes.map(r => 1 / r.rate);
       this.cars = [];
       this.elapsed = 0;
       this.delivered = 0;
       this.byRoute = this.routes.map(() => 0);
+      this.commuteTimes = [];
+      this.arrivals = [];
       this.state = 'planning';
       this.nextId = 1;
     }
@@ -275,6 +287,8 @@
     loadDesign(design) {
       if (!design || ![1,2].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
       const candidate = new City(this.level.id), seenRoads = new Set(), seenSignals = new Set();
+      candidate.roads = new Set(candidate.bridges);candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
+      candidate.refreshPaths();
       for (const road of design.roads) {
         if (!road || !Number.isInteger(road.cell) || road.cell < 0 || road.cell >= WIDTH * HEIGHT
           || !Number.isInteger(road.grade) || !ROAD_TYPES[road.grade] || seenRoads.has(road.cell)) return '存档中的道路数据无效';
@@ -325,12 +339,18 @@
       this.elapsed += dt;
       this.routes.forEach((r, i) => {
         this.spawnTimers[i] -= dt;
-        if (this.spawnTimers[i] <= 0) { this.queues[i]++; this.spawnTimers[i] += this.level.spawnInterval; }
+        if (this.spawnTimers[i] <= 1e-9 && this.generated[i] < r.passengers) {
+          this.generated[i]++;
+          this.queues[i]++;
+          this.queueTimes[i]?.push(this.elapsed);
+          this.spawnTimers[i] += 1 / r.rate;
+        }
         const path = this.paths[i];
         if (this.queues[i] && path) {
           const heading = path[1] - path[0];
           if (this.available(r.home, heading) && this.available(path[1], heading)) {
-            this.cars.push({ id: this.nextId++, route: i, cell: r.home, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0 });
+            const commuteStarted = this.queueTimes[i]?.shift() ?? this.elapsed;
+            this.cars.push({ id: this.nextId++, route: i, commuteStarted, cell: r.home, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0 });
             this.queues[i]--;
           }
         }
@@ -381,7 +401,7 @@
         }
         const speeds = [car.cell, car.next].filter(n => this.roads.has(n)).map(n => this.roadType(n).speed);
         const yielding=[car.cell,car.next].some(n=>this.signals.has(n)&&!this.signals.get(n).enabled);
-        car.progress += dt * (speeds.length ? Math.min(...speeds) : ROAD_TYPES[0].speed) * (yielding ? .5 : 1) / (car.distance || 1);
+        car.progress += dt * (speeds.length ? Math.min(...speeds) : ROAD_TYPES[0].speed) * (yielding ? .35 : 1) / (car.distance || 1);
         if (car.progress >= 1) {
           car.cell = car.next;
           car.cellHeading = car.heading;
@@ -395,6 +415,9 @@
             car.done = true;
             this.delivered++;
             this.byRoute[car.route]++;
+            const commuteTime = Math.max(0, this.elapsed - (car.commuteStarted ?? this.elapsed));
+            this.commuteTimes.push(commuteTime);
+            this.arrivals.push({ route: car.route, time: this.elapsed, commuteTime });
           }
         }
       }

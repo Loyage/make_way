@@ -33,11 +33,11 @@ test('legacy v1 designs migrate adjacency and keep original signal choices',()=>
  const c=new City('neighborhood'),old={version:1,levelId:'neighborhood',roads:[3,4,5].map(x=>({cell:key(x,3),grade:0})),signals:[]};
  assert.equal(c.loadDesign(old),'');assert.ok(c.links(key(3,3)).includes(key(2,3)));assert.ok(c.links(key(4,3)).includes(key(5,3)));
 });
-test('yield intersections serialize even opposing movements and reduce speed by exactly half',()=>{
+test('yield intersections serialize opposing movements and strongly reward signals',()=>{
  const slow=cross(),fast=cross();fast.c.setSignal(fast.n,true);
  const a=car(slow.n-1,0,1),b=car(fast.n-1,0,1);slow.c.cars=[a];fast.c.cars=[b];
  slow.c.toggle();fast.c.toggle();slow.c.step(.05);fast.c.step(.05);
- assert.equal(a.next,slow.n);assert.equal(b.next,fast.n);assert.equal(a.progress*2,b.progress);
+ assert.equal(a.next,slow.n);assert.equal(b.next,fast.n);assert.ok(Math.abs(a.progress/0.35-b.progress)<1e-10);
  assert.equal(slow.c.available(slow.n,-1),false);assert.equal(slow.c.load(slow.n).capacity,1);
 });
 test('yield order follows arrival time, not route direction or car creation time',()=>{

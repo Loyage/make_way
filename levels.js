@@ -11,65 +11,94 @@
     ['#578fa4', '#d3e7ed', '海风住宅', '车站'],
     ['#bf768b', '#efd9e1', '玫瑰住宅', '花园']
   ];
-  function routes(pairs) {
+  // Measured straight-road throughput at step(0.05): about 2 / 5 / 6.67 people/s.
+  // Demand runs for long enough that a low-grade road cannot hide its backlog.
+  function routes(pairs, rates, seconds) {
     return pairs.map(([home, goal], i) => {
-      const [color, light, name, label] = colors[i];
-      return { name: `${name} → ${label}`, color, light, home: key(...home), goal: key(...goal), label };
+      const [color, light, name, label] = colors[i], rate = rates[i];
+      return { name: `${name} → ${label}`, color, light, home: key(...home), goal: key(...goal), label,
+        rate, passengers: rate * seconds };
     });
   }
+  const line = (x1,y1,x2,y2,grade=0) => {
+    const out=[];let x=x1,y=y1;
+    while(x!==x2 || y!==y2) {
+      const a=key(x,y);if(x!==x2)x+=Math.sign(x2-x);else y+=Math.sign(y2-y);
+      out.push([a,key(x,y),grade]);
+    }
+    return out;
+  };
+  const features = (grade, load, cut, inspect, signals) => ({ grade, load, cut, inspect, signals });
   const LEVELS = [
     {
-      id: 'neighborhood', name: '晨光街区', english: 'FIRST CONNECTION', difficulty: '入门',
+      id: 'neighborhood', name: '晨光街区', english: 'FIRST CONNECTION', difficulty: '教学一',
       title: '从家门口的第一条路开始。',
-      description: '没有河流阻隔，先学会连接两组建筑。短而直接的道路，就是好规划。',
-      tip: '从住宅出发，沿空地画到同色目的地旁边。',
-      budget: 36, duration: 90, target: 22, spawnInterval: 3.8,
+      description: '先只使用支路。拖动连接两组同色建筑，学习道路只按笔迹方向相连。',
+      tip: '从住宅开始拖动，直到同色目的地；单击不会修路。',
+      lesson: '基础连接', features: features(false, false, false, false, false),
+      budget: 36, duration: 90, target: 100,
       water: [], bridges: [],
       trees: cells([[1,1],[2,1],[7,1],[8,1],[7,5],[8,5],[1,9],[14,10],[13,10]]),
-      routes: routes([[[2,3],[11,3]], [[12,8],[4,8]]])
+      routes: routes([[[2,3],[11,3]], [[12,8],[4,8]]], [1,1], 60)
     },
     {
-      id: 'riverside', name: '河畔新城', english: 'RIVERSIDE', difficulty: '初阶',
-      title: '两岸之间，畅行无阻。',
-      description: '跨过河流，把两岸的生活连接起来。两座桥可以帮助你分散车流。',
-      tip: '先连通一组，再借助两座桥慢慢扩展。',
-      budget: 64, duration: 120, target: 35, spawnInterval: 3.2,
-      water: river([7,8]), bridges: cells([[7,3],[8,3],[7,8],[8,8]]),
-      trees: cells([[1,5],[2,5],[4,1],[5,5],[5,6],[10,1],[11,1],[14,5],[14,6],[10,10],[11,10],[1,10]]),
-      routes: routes([[[2,2],[12,3]], [[13,9],[3,8]], [[3,10],[12,6]]])
+      id: 'demolition-school', name: '街区改造', english: 'REBUILD THE ROAD', difficulty: '教学二',
+      title: '拆掉绕路，把预算还给捷径。',
+      description: '旧支路绕了大半个街区，预算已经用完。拆除绕行段返还预算，再沿住宅和工坊之间修一条直路。',
+      tip: '选择拆除工具（2）拖过旧路，或按住右键拆路；再切回修建（1），从住宅拖到工坊。',
+      lesson: '拆除与重建', features: features(false, false, false, false, false),
+      budget: 27, duration: 60, target: 54,
+      water: [], bridges: [], trees: [],
+      routes: routes([[[2,2],[2,8]]], [1], 55),
+      initialEdges: [...line(2,2,13,2),...line(13,2,13,8),...line(13,8,2,8)]
     },
     {
-      id: 'woodland', name: '林间环城', english: 'WOODLAND LOOP', difficulty: '进阶',
-      title: '为生活让路，也为绿意留白。',
-      description: '中央绿地不能建设。四组出行围绕树林展开，共享道路能节省额度，也可能带来排队。',
-      tip: '沿树林外围组织交通，避免一味穿越城市中心。',
-      budget: 46, duration: 110, target: 60, spawnInterval: 3,
+      id: 'avenue-school', name: '高层出行', english: 'ROAD GRADES', difficulty: '教学三',
+      title: '房子越大，道路越要跟上。',
+      description: '小房子每秒 1 人、大房子 4 人、高层 6 人。三条支路已经接通：小房子可用支路，大房子适合干道，高层需要快速路或有效分流。',
+      tip: '选择道路等级，涂过已有道路只支付差价。查看负荷与排队；只升级中间几格，出入口仍会成为瓶颈。',
+      lesson: '客流与道路等级', features: features(true, true, false, false, false),
+      budget: 60, duration: 65, target: 580,
+      water: [], bridges: [], trees: [],
+      routes: routes([[[2,2],[13,2]],[[2,5],[13,5]],[[2,8],[13,8]]], [1,4,6], 55),
+      initialEdges: [...line(2,2,13,2),...line(2,5,13,5),...line(2,8,13,8)]
+    },
+    {
+      id: 'woodland', name: '林间环城', english: 'FEED THE RING', difficulty: '教学四',
+      title: '让支线汇入已建好的快速环路。',
+      description: '树林外围已铺好完整快速环路。四组建筑都还没有接通，把客流引到环路上，不必重建主路。汇入口默认减速礼让。',
+      tip: '用短支线把同色建筑接入环路，接到快速路时选择快速路等级以免降级；用路况检查汇入口，剪刀可断开多余连接。',
+      lesson: '环路集散', features: features(true, true, true, true, true),
+      budget: 108, duration: 120, target: 200,
       water: [], bridges: [],
       trees: cells([[6,4],[7,4],[8,4],[9,4],[6,5],[7,5],[8,5],[9,5],[6,6],[7,6],[8,6],[9,6],[6,7],[7,7],[8,7],[9,7],[1,1],[14,10]]),
-      routes: routes([[[2,2],[12,2]], [[13,9],[3,9]], [[2,7],[12,5]], [[13,7],[4,4]]])
+      routes: routes([[[2,2],[12,2]], [[13,9],[3,9]], [[2,7],[12,5]], [[13,7],[4,4]]], [1,1,1,1], 60),
+      initialEdges: [...line(3,3,11,3,2),...line(11,3,11,8,2),...line(11,8,3,8,2),...line(3,8,3,3,2)]
     },
     {
-      id: 'islands', name: '双河群岛', english: 'TWIN RIVERS', difficulty: '挑战',
-      title: '三片城区，四座桥，一张路网。',
-      description: '两条河把城市分成三片区域，桥梁错位分布。规划跨河走廊，让四组出行各得其所。',
-      tip: '上方桥梁错开一格；下方两座桥可以连成直达通道。',
-      budget: 48, duration: 100, target: 75, spawnInterval: 2.7,
-      water: river([5,10]), bridges: cells([[5,3],[5,8],[10,4],[10,8]]),
-      trees: cells([[1,5],[2,5],[7,1],[8,1],[7,6],[8,6],[13,1],[14,6],[6,10],[12,10]]),
-      routes: routes([[[2,2],[13,3]], [[13,9],[2,8]], [[7,9],[13,6]], [[8,2],[2,6]]])
+      id: 'signal-school', name: '交叉调度', english: 'COORDINATE JUNCTIONS', difficulty: '教学五',
+      title: '补齐交叉路网，把灯放在真正繁忙的路口。',
+      description: '两条横向干道已铺好，纵向通道仍有缺口。四股车流交错，其中一股需要转弯；补路后检查多个路口，用红绿灯改善自动避让的瓶颈。',
+      tip: '补齐两条纵向通道，接通所有同色建筑；先运行观察，再停止运营调整信号。不是每个路口都需要相同绿灯时长。',
+      lesson: '交叉与信号灯', features: features(true, true, true, true, true),
+      budget: 110, duration: 95, target: 220,
+      water: [], bridges: [],
+      trees: cells([[2,2],[13,2],[2,9],[13,9],[7,5],[8,5],[7,6],[8,6]]),
+      routes: routes([[[1,4],[14,4]], [[14,7],[1,7]], [[5,1],[5,10]], [[10,10],[12,1]]], [1,1,1,1], 70),
+      initialEdges: [...line(1,4,14,4,1),...line(14,7,1,7,1),...line(5,1,5,3,1),...line(10,10,10,8,1)]
     },
     {
-      id: 'rush-hour', name: '都会早高峰', english: 'RUSH HOUR', difficulty: '专家',
+      id: 'rush-hour', name: '都会早高峰', english: 'RUSH HOUR', difficulty: '综合挑战',
       title: '当整座城市同时出发。',
-      description: '五组出行，每两秒产生一辆新车。用有限道路构建多条通道，迎接密集的早高峰。',
-      tip: '东西两岸都需要纵向道路，别让所有车辆挤在同一座桥上。',
-      budget: 52, duration: 100, target: 110, spawnInterval: 2,
+      description: '所有工具均已开放。用道路等级、分流、剪断与信号灯构建一张高效路网。',
+      tip: '东西两岸都需要纵向道路，别让所有车辆挤在同一座桥上。高层出口要有足够车道，桥梁也可升级。',
+      lesson: '综合规划', features: features(true, true, true, true, true),
+      budget: 150, duration: 100, target: 660,
       water: river([7,8]), bridges: cells([[7,2],[8,2],[7,6],[8,6],[7,9],[8,9]]),
       trees: cells([[4,1],[5,1],[11,1],[1,5],[5,5],[10,4],[14,5],[5,10],[10,10]]),
-      routes: routes([[[2,2],[13,2]], [[13,9],[2,9]], [[3,10],[12,6]], [[12,4],[3,4]], [[2,6],[13,7]]])
+      routes: routes([[[2,2],[13,2]], [[13,9],[2,9]], [[3,10],[12,6]], [[12,4],[3,4]], [[2,6],[13,7]]], [6,4,4,1,1], 55)
     }
   ];
-  // Keep scenario data immutable; each City owns its mutable roads and demand.
   function freeze(value) {
     if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
     return value;

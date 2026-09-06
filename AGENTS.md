@@ -88,9 +88,21 @@ node tests/browser-smoke.cjs
 - 离线检查：直接在浏览器打开 `index.html`
 - HTTP 检查：运行 `node server.js`，默认监听 `[::]:8180`；健康检查为 `curl --noproxy '*' http://127.0.0.1:8180/healthz`
 - 可用 `HOST`、`PORT` 临时覆盖监听地址和端口
-- 不要在未经用户确认时运行 `deploy/install-service.sh`、修改 systemd 状态、开放防火墙或执行 NixOS 重建
+- 更新项目代码后应自动重启已有的 `traffic-game.service`；但运行 `deploy/install-service.sh`、修改其他 systemd 状态、开放防火墙或执行 NixOS 重建仍须先征得用户确认
 - 此环境使用 Nix 管理软件和系统配置；需要工具时使用 Nix，禁止擅自使用 `apt`、`yum`、`brew` 或全局 npm 安装
 - NixOS 配置仓库的变更按其自身说明通过 `just switch` 应用；不要覆盖用户现有配置
+
+### 更新代码后的服务刷新
+
+`server.js` 会在启动时把静态资源读入内存，因此部署目录中的项目代码更新并验证通过后，Agent 应主动刷新已安装的用户服务，无需再次征求用户确认：
+
+1. 执行 `systemctl --user restart traffic-game.service`。
+2. 执行 `systemctl --user --no-pager status traffic-game.service`，确认服务处于 `active (running)`。
+3. 执行 `curl --fail --noproxy '*' http://127.0.0.1:8180/healthz`，确认健康检查成功。
+4. 如重启失败，应检查日志和端口占用并处理可明确归属于本项目的遗留进程，然后再次重启并验证；不要终止来源不明的进程。
+5. 如果改动了 `deploy/install-service.sh` 中的 unit 配置，应先征得用户确认再运行 `bash deploy/install-service.sh`，而不是只重启旧 unit。
+
+只有用户明确要求不要部署或当前环境未安装该服务时，才跳过自动重启，并在结果中说明原因。
 
 ## 提交前检查清单
 
