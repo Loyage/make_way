@@ -4,9 +4,26 @@
   const WIDTH = 16, HEIGHT = 12;
   const key = (x, y) => y * WIDTH + x;
   const point = n => ({ x: n % WIDTH, y: Math.floor(n / WIDTH) });
-  const LEVELS = typeof module !== 'undefined' && module.exports ? require('./levels.js') : root.TrafficLevels;
+  let LEVELS = typeof module !== 'undefined' && module.exports ? require('./levels.js') : root.TrafficLevels;
   // Default scenario and convenience exports follow the first lesson.
   const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0];
+  function deepFreeze(value) {
+    if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
+    return value;
+  }
+  // Replace the active scenario list at runtime (e.g. from a levels.json
+  // administrator override). Validates shape and ids, freezes like levels.js.
+  function setLevels(list) {
+    if (!Array.isArray(list) || list.length === 0) return '关卡数据必须是非空数组';
+    const seen = new Set();
+    for (const level of list) {
+      if (!level || typeof level !== 'object' || typeof level.id !== 'string' || !level.id) return '每个关卡都需要唯一的字符串 id';
+      if (seen.has(level.id)) return `关卡 id 重复：${level.id}`;
+      seen.add(level.id);
+    }
+    LEVELS = list.map(level => deepFreeze(level));
+    return '';
+  }
   function neighbors(n) {
     const { x, y } = point(n), out = [];
     if (x > 0) out.push(n - 1);
@@ -426,7 +443,7 @@
       else if (this.elapsed >= this.level.duration) this.state = 'lost';
     }
   }
-  const api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, movement, movementsConflict, vehiclePosition, LEVELS, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  const api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, movement, movementsConflict, vehiclePosition, LEVELS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

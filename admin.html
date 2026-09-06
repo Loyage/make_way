@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ec">
+  <title>慢行小城 · 管理员面板</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div id="login" class="login-overlay">
+    <div id="login-form" class="login-card">
+      <div class="brand-icon">⌂</div>
+      <h1>管理员面板</h1>
+      <p id="login-description">输入管理员密码以继续。面板需要密码才能进入。</p>
+      <input id="login-password" type="password" placeholder="管理员密码" autocomplete="current-password">
+      <p id="login-error" class="login-error" role="alert"></p>
+      <button id="login-submit" type="button" class="primary">进入面板</button>
+    </div>
+  </div>
+
+  <div id="panel" class="panel" hidden>
+    <header class="header">
+      <div class="brand"><span class="brand-icon">⌂</span><span>慢行小城<small>管理员面板 · ADMIN</small></span></div>
+      <div class="header-actions">
+        <span id="save-status" class="local-tag"><i></i> 未保存</span>
+        <button id="logout" class="tool">退出登录</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <nav class="level-sidebar" aria-label="关卡列表">
+        <div class="sidebar-head">
+          <span>关卡列表</span>
+          <button id="new-level" class="tool">＋ 新建关卡</button>
+        </div>
+        <div id="level-nav" class="level-nav"></div>
+        <div class="sidebar-actions">
+          <button id="save" class="primary">保存到 levels.json</button>
+          <button id="reload" class="tool">重新载入磁盘</button>
+        </div>
+      </nav>
+
+      <section class="editor">
+        <div class="editor-head">
+          <div class="eyebrow" id="editor-eyebrow">关卡编辑器</div>
+          <h1 id="editor-title">未选择关卡</h1>
+          <p id="editor-subtitle">从左侧选择或新建一个关卡开始编辑。</p>
+        </div>
+
+        <div id="editor-body" class="editor-body" hidden>
+          <details class="editor-section" open>
+            <summary>基础信息</summary>
+            <div class="field-grid">
+              <label>关卡 id（英文，唯一）<input id="f-id" type="text"></label>
+              <label>中文名<input id="f-name" type="text"></label>
+              <label>英文名<input id="f-english" type="text"></label>
+              <label>难度标签<input id="f-difficulty" type="text"></label>
+              <label>课时名（lesson）<input id="f-lesson" type="text"></label>
+              <label>标题<input id="f-title" type="text" class="wide"></label>
+              <label class="wide">描述<textarea id="f-description" rows="2"></textarea></label>
+              <label class="wide">提示<textarea id="f-tip" rows="2"></textarea></label>
+            </div>
+            <div class="field-grid nums">
+              <label>预算（点）<input id="f-budget" type="number" min="1" step="1"></label>
+              <label>时长（秒）<input id="f-duration" type="number" min="1" step="1"></label>
+              <label>目标（辆）<input id="f-target" type="number" min="1" step="1"></label>
+            </div>
+            <div class="feature-grid">
+              <label><input id="f-grade" type="checkbox"> 道路等级</label>
+              <label><input id="f-load" type="checkbox"> 道路负荷</label>
+              <label><input id="f-cut" type="checkbox"> 剪断工具</label>
+              <label><input id="f-inspect" type="checkbox"> 路况/信号</label>
+              <label><input id="f-signals" type="checkbox"> 红绿灯</label>
+            </div>
+          </details>
+
+          <details class="editor-section" open>
+            <summary>路线与建筑</summary>
+            <p class="section-hint">每一条路线对应一组住宅（home）与目的地（goal）。在下方地图用「住宅 / 目的地」工具配合当前路线放置坐标。</p>
+            <div id="route-list" class="route-list"></div>
+            <button id="add-route" class="tool">＋ 添加路线</button>
+          </details>
+
+          <details class="editor-section" open>
+            <summary>地图编辑</summary>
+            <div class="toolbar" role="group" aria-label="地图工具">
+              <button data-tool="water" class="tool active">水面</button>
+              <button data-tool="bridge" class="tool">桥梁</button>
+              <button data-tool="tree" class="tool">树木</button>
+              <button data-tool="home" class="tool">住宅</button>
+              <button data-tool="goal" class="tool">目的地</button>
+              <button data-tool="road" class="tool">初始道路</button>
+              <button data-tool="erase" class="tool">擦除/断开</button>
+            </div>
+            <div class="map-controls">
+              <label id="grade-control">道路等级
+                <select id="road-grade">
+                  <option value="0">支路 · 1 点/格</option>
+                  <option value="1">干道 · 2 点/格</option>
+                  <option value="2">快速路 · 3 点/格</option>
+                </select>
+              </label>
+              <span id="map-status" class="map-status">当前工具：水面（点击/拖拽着色）</span>
+            </div>
+            <div class="canvas-wrap"><canvas id="map" tabindex="0" aria-label="关卡地图编辑器"></canvas></div>
+            <div class="legend">
+              <span><i class="sw water"></i>水面</span>
+              <span><i class="sw bridge"></i>桥梁</span>
+              <span><i class="sw tree"></i>树木</span>
+              <span><i class="sw home"></i>住宅</span>
+              <span><i class="sw goal"></i>目的地</span>
+              <span><i class="sw road"></i>初始道路</span>
+            </div>
+          </details>
+
+          <div class="editor-section danger">
+            <button id="duplicate" class="tool">复制本关卡</button>
+            <button id="delete-level" class="tool danger-btn">删除本关卡</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="admin.js"></script>
+</body>
+</html>

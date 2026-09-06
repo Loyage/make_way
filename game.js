@@ -1,9 +1,10 @@
 (() => {
   'use strict';
-  const { City, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, LEVELS, WIDTH, HEIGHT, key, point, neighbors } = TrafficCore;
+  const { City, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, WIDTH, HEIGHT, key, point, neighbors } = TrafficCore;
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
-  let city = new City(LEVELS[0].id), tool = 'road', speed = 1, hover = null, dragging = false;
+  const levels = () => TrafficCore.LEVELS;
+  let city = new City(levels()[0].id), tool = 'road', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
   let lastCell = null, dragErase = false, cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
@@ -16,18 +17,21 @@
     catch { return null; }
   }
   function updateDesignControls() { $('load-design').disabled = storedDesign() === null; }
-  const levelButtons = LEVELS.map((level, i) => {
-    const button = document.createElement('button');
-    button.className = 'level-card';
-    const number = document.createElement('span'); number.className = 'level-number'; number.textContent = String(i + 1).padStart(2, '0');
-    const name = document.createElement('strong'); name.textContent = level.name;
-    const detail = document.createElement('small'); detail.textContent = `${level.difficulty} · ${level.lesson}`;
-    button.append(number, name, detail); button.onclick = () => requestLevel(level.id);
-    $('level-list').append(button);
-    return button;
-  });
+  let levelButtons = [];
+  function buildLevelButtons() {
+    levelButtons = levels().map((level, i) => {
+      const button = document.createElement('button');
+      button.className = 'level-card';
+      const number = document.createElement('span'); number.className = 'level-number'; number.textContent = String(i + 1).padStart(2, '0');
+      const name = document.createElement('strong'); name.textContent = level.name;
+      const detail = document.createElement('small'); detail.textContent = `${level.difficulty} · ${level.lesson}`;
+      button.append(number, name, detail); button.onclick = () => requestLevel(level.id);
+      $('level-list').append(button);
+      return button;
+    });
+  }
   function configureLevel() {
-    const level = city.level, index = LEVELS.indexOf(level);
+    const level = city.level, index = levels().indexOf(level);
     const number = String(index + 1).padStart(2, '0');
     $('level-eyebrow').textContent = `城市实验室 / ${number} · ${level.name}`;
     $('chapter-number').textContent = number;
@@ -74,7 +78,7 @@
     }
     if (city.state === 'running') city.toggle();
     pendingLevel = id;
-    $('level-confirm-title').textContent = `前往「${LEVELS.find(level => level.id === id).name}」？`;
+    $('level-confirm-title').textContent = `前往「${levels().find(level => level.id === id).name}」？`;
     updateUI(); $('level-dialog').showModal();
   }
   function toast(text) {
@@ -333,7 +337,7 @@
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
     $('result-stats').replaceChildren(summary,meta,distribution);
-    $('next-level').hidden = !won || LEVELS.indexOf(city.level) === LEVELS.length - 1;
+    $('next-level').hidden = !won || levels().indexOf(city.level) === levels().length - 1;
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('result-dialog').showModal();
   }
@@ -426,7 +430,7 @@
   $('play-again').onclick=()=>reset();$('view-city').onclick=()=> $('result-dialog').close();
   $('cancel-level').onclick=()=>{$('level-dialog').close();pendingLevel=null;};
   $('confirm-level').onclick=()=>{if(pendingLevel)reset(pendingLevel);};
-  $('next-level').onclick=()=>{const next=LEVELS[LEVELS.indexOf(city.level)+1];if(next)reset(next.id);};
+  $('next-level').onclick=()=>{const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);};
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
@@ -462,5 +466,20 @@
     updateUI();draw();requestAnimationFrame(frame);
   }
   new ResizeObserver(resize).observe(canvas);
-  configureLevel();updateGrade();resize();updateUI();requestAnimationFrame(frame);
+  // Load an optional administrator-authored level set (levels.json) before
+  // first render; fall back to the built-in levels.js when absent or invalid.
+  async function bootstrap() {
+    try {
+      const response = await fetch('levels.json', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        const message = TrafficCore.setLevels(data);
+        if (message) console.warn('忽略 levels.json：' + message);
+        else city = new City(TrafficCore.LEVELS[0].id);
+      }
+    } catch { /* offline copy or built-in levels; keep defaults */ }
+    buildLevelButtons();
+    configureLevel();updateGrade();resize();updateUI();requestAnimationFrame(frame);
+  }
+  bootstrap();
 })();

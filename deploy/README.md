@@ -26,6 +26,24 @@ bash deploy/install-service.sh
 
 需要已安装 Node.js 18+。这台机器通过 Nix 管理 Node.js；如果更换项目路径或 Node 的可执行路径，重新运行安装脚本。
 
+## 1.1 管理员面板服务
+
+管理员面板是**独立、需要密码**的服务，端口 **8080**，默认绑定所有网卡（`[::]:8080`），用于创建关卡、编辑地图与 `levels.json` 数据库。它不与游戏服务（8180）共用端口。
+
+```sh
+ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
+```
+
+它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码，默认 `admin`。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入 `levels.json`；除此之外的安全隔离与游戏服务一致。
+
+面板保存关卡后写入项目根目录 `levels.json`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
+
+```sh
+systemctl --user restart traffic-game.service
+```
+
+面板对外可达，**唯一防线是密码**。务必设置强密码；若要限制为仅本机访问，把 unit 里的 `ADMIN_HOST=::` 改为 `127.0.0.1` 或运行 `ADMIN_HOST=127.0.0.1 node admin-server.js`。
+
 ## 2. 稍后应用 NixOS 网络与开机配置
 
 准备好的 `traffic-game-network.nix` 包含：

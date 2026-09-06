@@ -32,6 +32,34 @@ bash deploy/install-service.sh
 
 详见 **[部署与网络说明](deploy/README.md)**。服务只开放游戏静态资源，不公开项目目录。各玩家在自己的浏览器内独立运行游戏，不共享道路、车辆或关卡状态；不是多人同步联机。
 
+## 管理员面板
+
+项目附带一个**需要密码**的管理员面板，用于创建关卡、编辑地图与数据库（关卡列表），并以 `levels.json` 持久化。面板绑定所有网卡的 **8080** 端口，凭密码进入，未登录无法读写。
+
+直接启动：
+
+```sh
+ADMIN_PASSWORD=你的密码 node admin-server.js
+```
+
+然后访问 <http://127.0.0.1:8080>。默认密码为 `admin`，强烈建议通过 `ADMIN_PASSWORD` 环境变量（或项目根目录 `.env`）覆盖。面板加密校验密码，未登录无法读写；对外访问请务必设置强密码。
+
+安装为持久用户服务（会读取 `ADMIN_PASSWORD` 或 `.env` 中的密码）：
+
+```sh
+bash deploy/install-admin-service.sh
+```
+
+面板支持：新建 / 复制 / 删除关卡，编辑元数据、预算、时长、目标与功能开关，增删路线（住宅 / 目的地 / 速率 / 人数 / 配色），以及在地图上绘制水面、桥梁、树木、建筑和初始道路。保存会写入项目根目录的 `levels.json`。
+
+**重要**：游戏服务在启动时把静态资源读入内存，因此修改 `levels.json` 后需重启游戏服务才能生效：
+
+```sh
+systemctl --user restart traffic-game.service
+```
+
+`levels.json` 缺省时游戏使用内置的 `levels.js`；存在且合法时游戏自动优先加载它。该文件已被 `.gitignore` 忽略，属于本地数据。
+
 ## 六课渐进式小城
 
 | 关卡 | 教学主题 | 出行组数 | 建设预算（点） | 时限 | 运输目标 |
@@ -132,6 +160,8 @@ game-results.js             结算页通勤满意度统计
 game-effects.js             到达正向反馈粒子效果
 game.js                     Canvas 绘图、输入与界面编排
 server.js                   零依赖只读 HTTP 服务
+admin-server.js              管理员面板服务（需密码）
+admin.html / admin.css / admin.js  管理员面板界面
 tests/*.test.js             自动化测试
 tests/browser-smoke.cjs      可选浏览器集成测试
 deploy/install-service.sh   用户服务安装脚本

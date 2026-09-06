@@ -9,6 +9,7 @@ const PUBLIC_FILES = {
   '/index.html': 'text/html; charset=utf-8',
   '/style.css': 'text/css; charset=utf-8',
   '/levels.js': 'text/javascript; charset=utf-8',
+  '/levels.json': 'application/json; charset=utf-8',
   '/core.js': 'text/javascript; charset=utf-8',
   '/game-results.js': 'text/javascript; charset=utf-8',
   '/game-effects.js': 'text/javascript; charset=utf-8',
@@ -25,7 +26,9 @@ const SECURITY_HEADERS = {
 async function createGameServer() {
   // Snapshot only the public files above. Restart the service after updating the game.
   const assets = new Map(await Promise.all(Object.entries(PUBLIC_FILES).map(async ([url, type]) => {
-    const body = await fs.readFile(path.join(__dirname, url.slice(1)));
+    let body;
+    try { body = await fs.readFile(path.join(__dirname, url.slice(1))); }
+    catch (error) { if (url === '/levels.json' && error.code === 'ENOENT') return [url, null]; throw error; }
     const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
     return [url, { body, type, etag }];
   })));
@@ -52,6 +55,7 @@ async function createGameServer() {
     if (pathname === '/') pathname = '/index.html';
     const asset = assets.get(pathname);
     if (!asset) { finish(404, 'Not found\n'); return; }
+    if (asset === null) { finish(404, 'Not found\n'); return; }
     const headers = { 'Content-Type': asset.type, ETag: asset.etag, 'Cache-Control': 'no-cache' };
     if (req.headers['if-none-match']?.split(',').some(tag => tag.trim() === asset.etag || tag.trim() === '*')) {
       res.writeHead(304, { ...SECURITY_HEADERS, ...headers }); res.end(); return;

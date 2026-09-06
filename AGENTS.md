@@ -17,6 +17,9 @@
 - `core.js`：与 DOM 无关的地图、道路、寻路、容量、信号灯和车辆模拟
 - `game.js`：Canvas 绘制、输入事件、界面状态与 `localStorage` 设计存档
 - `server.js`：零依赖、只读、资源白名单式 HTTP 服务
+- `admin-server.js`：管理员面板服务（需密码、默认绑定所有网卡、读写 levels.json）
+- `admin.html` / `admin.css` / `admin.js`：管理员面板界面，风格与游戏一致
+- `levels.json`：管理员编辑生成的可选关卡数据库（被 .gitignore 忽略）
 - `tests/*.test.js`：Node 内置测试运行器执行的逻辑、关卡和服务器测试
 - `tests/browser-smoke.cjs`：通过 CDP 执行的可选浏览器集成测试
 - `deploy/`：systemd 用户服务安装脚本及 NixOS 网络配置示例
@@ -33,6 +36,7 @@
 8. 车辆的当前格、下一格、车道/前后位置和路口冲突区都可能是占用或预约。改动通行规则时，同时检查容量、拆除保护、出口预约、信号相位与自动避让。
 9. `server.js` 只暴露 `PUBLIC_FILES` 中的游戏资源和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
 10. HTTP 服务启动时会把资源读入内存。部署后更新前端文件需要重启服务。
+11. 管理员面板（`admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入的 `levels.json` 是可选覆盖层，`core.js` 通过 `setLevels()` 在运行时加载，缺省时回落到内置 `levels.js`。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
 
 ## 编码约定
 
@@ -53,6 +57,7 @@ node --check levels.js
 node --check core.js
 node --check game.js
 node --check server.js
+node --check admin-server.js
 node --test tests/*.test.js
 ```
 
@@ -63,6 +68,7 @@ node --test tests/*.test.js
 - 容量、车道、信号灯和交通冲突：`tests/traffic.test.js`
 - 关卡数据与可通关性：`tests/levels.test.js`
 - HTTP、安全头和资源白名单：`tests/server.test.js`
+- 管理员面板验证、登录门禁与 levels.json：`tests/admin.test.js`
 
 关卡测试中的参考规划器用于证明每关在预算和时限内可通关。调整地形、预算、发车间隔、目标或交通规则后，必须重新运行完整测试，不要仅为通过测试而放宽关键不变量。
 
