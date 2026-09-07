@@ -123,7 +123,7 @@ systemctl --user stop traffic-game.service
 
 ## 安全与运行范围
 
-- 仅提供 `index.html`、`style.css`、`levels.js`、`core.js`、`game.js` 和 `/healthz`。
+- 仅提供 `index.html`、`style.css`、`built-in-levels.json`、可选的 `levels.json`、前端 JavaScript 和 `/healthz`。
 - 没有目录浏览，不提供源码仓库中的部署脚本、测试、服务器文件或家庭目录文件。
 - 仅接受 GET / HEAD，带安全响应头、请求超时、连接数与内存上限。
 - 每位玩家的模拟都在自己的浏览器执行；服务器没有账户、Cookie、共享对局或成绩写入接口。

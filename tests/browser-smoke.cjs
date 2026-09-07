@@ -2,7 +2,7 @@
  * and Chromium exposing a local DevTools endpoint on port 9333. */
 'use strict';
 const assert = require('node:assert/strict');
-const LEVELS = require('../levels.js');
+const LEVELS = require('../built-in-levels.json');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
@@ -35,9 +35,11 @@ async function main() {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
-    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),6);
+    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),7);
     for(let i=0;i<LEVELS.length;i++){
-      await go(i);assert.equal(await text('map-name'),LEVELS[i].name);
+      await click(`.level-card:nth-child(${i+1})`);
+      assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
+      assert.equal(await text('map-name'),LEVELS[i].name);
       const initial=new (require('../core.js').City)(LEVELS[i].id);
       assert.equal(await text('budget'),String(initial.remaining));
       assert.equal(await evaluate('document.querySelectorAll("#demand-list li").length'),LEVELS[i].routes.length);
@@ -52,7 +54,9 @@ async function main() {
     await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
     await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'33');
 
-    await go(1);
+    await click('.level-card:nth-child(2)');
+    assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');
+    await click('#confirm-level');
     assert.equal(await text('budget'),'0');
     await click('#erase-tool');await drag(13,4,13,6);
     assert.ok(Number(await text('budget'))>0);
@@ -97,7 +101,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 6 progressive lessons, feature gates, road grades, bottom inspector, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 7 progressive levels, feature gates, road grades, bottom inspector, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

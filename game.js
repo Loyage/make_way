@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const levels = () => TrafficCore.LEVELS;
-  let city = new City(levels()[0].id), tool = 'road', speed = 1, hover = null, dragging = false;
+  let city = null, tool = 'road', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
   let lastCell = null, dragErase = false, cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
@@ -75,7 +75,9 @@
   }
   function requestLevel(id) {
     if (id === city.level.id) return;
-    if (city.state === 'planning' && city.remaining === city.level.budget || ['won', 'lost'].includes(city.state)) {
+    const defaultDesign = new City(city.level.id).serializeDesign();
+    const designChanged = JSON.stringify(city.serializeDesign()) !== JSON.stringify(defaultDesign);
+    if (!designChanged) {
       reset(id); return;
     }
     if (city.state === 'running') city.toggle();
@@ -469,20 +471,28 @@
     updateUI();draw();requestAnimationFrame(frame);
   }
   new ResizeObserver(resize).observe(canvas);
-  // Load an optional administrator-authored level set (levels.json) before
-  // first render; fall back to the built-in levels.js when absent or invalid.
+  // Load versioned defaults first, then prefer a valid administrator override.
   async function bootstrap() {
     try {
-      const response = await fetch('levels.json', { cache: 'no-store' });
-      if (response.ok) {
-        const data = await response.json();
-        const message = TrafficCore.setLevels(data);
-        if (message) console.warn('忽略 levels.json：' + message);
-        else city = new City(TrafficCore.LEVELS[0].id);
-      }
-    } catch { /* offline copy or built-in levels; keep defaults */ }
-    buildLevelButtons();
-    configureLevel();updateGrade();resize();updateUI();requestAnimationFrame(frame);
+      const builtInResponse = await fetch('built-in-levels.json', { cache: 'no-store' });
+      if (!builtInResponse.ok) throw new Error(`默认关卡请求失败（${builtInResponse.status}）`);
+      const builtInMessage = TrafficCore.setLevels(await builtInResponse.json());
+      if (builtInMessage) throw new Error(`默认关卡数据无效：${builtInMessage}`);
+      try {
+        const overrideResponse = await fetch('levels.json', { cache: 'no-store' });
+        if (overrideResponse.ok) {
+          const overrideMessage = TrafficCore.setLevels(await overrideResponse.json());
+          if (overrideMessage) console.warn('忽略 levels.json：' + overrideMessage);
+        } else if (overrideResponse.status !== 404) console.warn(`忽略 levels.json：请求失败（${overrideResponse.status}）`);
+      } catch (error) { console.warn('忽略 levels.json：' + error.message); }
+      city = new City(TrafficCore.LEVELS[0].id);
+      buildLevelButtons();
+      configureLevel();updateGrade();resize();updateUI();requestAnimationFrame(frame);
+    } catch (error) {
+      console.error(error);
+      $('toast').textContent = '关卡数据加载失败，请确认游戏服务正常运行后刷新页面。';
+      $('toast').classList.add('visible');
+    }
   }
   bootstrap();
 })();

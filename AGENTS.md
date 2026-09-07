@@ -2,7 +2,7 @@
 
 ## 项目概览
 
-这是一个零依赖、无构建步骤的原生 HTML / CSS / JavaScript 交通规划游戏。游戏可直接打开 `index.html` 离线运行，也可由 `server.js` 通过 HTTP 提供静态资源。
+这是一个零依赖、无构建步骤的原生 HTML / CSS / JavaScript 交通规划游戏。关卡通过独立 JSON 文件加载，游戏必须由 `server.js` 通过 HTTP 提供静态资源，不能直接通过 `file://` 打开。
 
 - 运行时要求：现代浏览器；启动服务器和单元测试需要 Node.js 18+
 - 可选浏览器冒烟测试：Node.js 22+、Chromium 和本机 Chrome DevTools Protocol（CDP）端点
@@ -13,7 +13,7 @@
 
 - `index.html`：页面结构、控件、对话框和脚本加载顺序
 - `style.css`：桌面端和移动端响应式样式
-- `levels.js`：16 × 12 网格上的不可变关卡数据
+- `built-in-levels.json`：16 × 12 网格上的默认关卡数据
 - `core.js`：与 DOM 无关的地图、道路、寻路、容量、信号灯和车辆模拟
 - `game.js`：Canvas 绘制、输入事件、界面状态与 `localStorage` 设计存档
 - `server.js`：零依赖、只读、资源白名单式 HTTP 服务
@@ -26,8 +26,8 @@
 
 ## 架构约束
 
-1. `levels.js` 必须先于 `core.js` 加载，`core.js` 必须先于 `game.js` 加载。保持 `index.html` 底部脚本顺序不变。
-2. `levels.js` 和 `core.js` 同时支持浏览器全局变量与 CommonJS：浏览器分别使用 `TrafficLevels`、`TrafficCore`，Node 测试使用 `module.exports`。修改模块边界时须兼容两种环境。
+1. `core.js` 必须先于 `game.js` 加载。`game.js` 启动时先读取 `built-in-levels.json`，再尝试读取可选的 `levels.json` 覆盖层，然后才能创建 `City`。保持 `index.html` 底部脚本顺序不变。
+2. `core.js` 同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore`，Node 测试使用 `module.exports`。Node 端从 `built-in-levels.json` 读取默认数据；修改模块边界时须兼容两种环境。
 3. 模拟逻辑应留在 `core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `game.js`。
 4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。
 5. 关卡定义会被递归冻结。每个 `City` 实例必须拥有独立的可变状态，不得修改或在实例间共享可变关卡数据。
@@ -36,7 +36,7 @@
 8. 车辆的当前格、下一格、车道/前后位置和路口冲突区都可能是占用或预约。改动通行规则时，同时检查容量、拆除保护、出口预约、信号相位与自动避让。
 9. `server.js` 只暴露 `PUBLIC_FILES` 中的游戏资源和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
 10. HTTP 服务启动时会把资源读入内存。部署后更新前端文件需要重启服务。
-11. 管理员面板（`admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入的 `levels.json` 是可选覆盖层，`core.js` 通过 `setLevels()` 在运行时加载，缺省时回落到内置 `levels.js`。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
+11. 管理员面板（`admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入的 `levels.json` 是可选覆盖层，`game.js` 通过 `setLevels()` 在运行时加载，缺省时回落到 `built-in-levels.json`。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
 
 ## 编码约定
 
@@ -53,7 +53,7 @@
 无需安装依赖。常用检查：
 
 ```sh
-node --check levels.js
+node -e "JSON.parse(require('node:fs').readFileSync('built-in-levels.json'))"
 node --check core.js
 node --check game.js
 node --check server.js
@@ -91,8 +91,7 @@ node tests/browser-smoke.cjs
 
 ## 本地运行与部署注意事项
 
-- 离线检查：直接在浏览器打开 `index.html`
-- HTTP 检查：运行 `node server.js`，默认监听 `[::]:8180`；健康检查为 `curl --noproxy '*' http://127.0.0.1:8180/healthz`
+- 本机检查：运行 `node server.js`，默认监听 `[::]:8180`；健康检查为 `curl --noproxy '*' http://127.0.0.1:8180/healthz`
 - 可用 `HOST`、`PORT` 临时覆盖监听地址和端口
 - 更新项目代码后应自动重启已有的 `traffic-game.service`；但运行 `deploy/install-service.sh`、修改其他 systemd 状态、开放防火墙或执行 NixOS 重建仍须先征得用户确认
 - 此环境使用 Nix 管理软件和系统配置；需要工具时使用 Nix，禁止擅自使用 `apt`、`yum`、`brew` 或全局 npm 安装

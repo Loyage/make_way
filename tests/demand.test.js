@@ -116,7 +116,7 @@ test('woodland starts with a complete high-grade ring and only needs feeders',()
 });
 test('crossing lesson requires completion and coordinates multiple junctions and turns',()=>{
   const c=new City('signal-school');assert.equal(c.paths.filter(Boolean).length,2);
-  completeCrossing(c);assert.equal(c.signals.size,4);assert.ok(c.paths.every(Boolean));
-  const path=c.paths[3];assert.ok(path.some((n,i)=>i>1&&n-path[i-1]!==path[i-1]-path[i-2]));
+  completeCrossing(c);assert.equal(c.signals.size,6);assert.ok(c.paths.every(Boolean));
+  const path=c.paths[4];assert.ok(path.some((n,i)=>i>1&&n-path[i-1]!==path[i-1]-path[i-2]));
   c.setSignal(key(5,4),true,4);run(c);assert.equal(c.state,'lost','one lamp must not solve the whole map');
 });

@@ -9,7 +9,7 @@ function line(city,x1,y1,x2,y2,grade=0) {
   }
 }
 function completeCrossing(city) {
-  line(city,5,3,5,10,1);line(city,10,8,10,1,1);line(city,10,1,12,1,1);
+  line(city,5,3,5,10,1);line(city,6,1,6,10,1);line(city,10,8,10,1,1);line(city,10,1,12,1,1);
 }
 function buildReferencePlan(city) {
   if(city.level.id==='demolition-school') {
@@ -28,9 +28,12 @@ function buildReferencePlan(city) {
     for(const n of city.signals.keys()) assert.equal(city.setSignal(n,true,4),'');
     return;
   }
+  if(city.level.id==='multi-route-school') {
+    line(city,2,3,13,3);line(city,2,8,13,8);return;
+  }
   if(city.level.id==='rush-hour') {
     // Keep the two heaviest flows away from junctions; share the middle bridge.
-    for(const p of [[2,2,13,2],[13,9,2,9],[3,10,1,10],[1,10,1,8],[1,8,4,8],[4,8,4,6],[2,6,12,6],[12,4,11,4],[11,4,11,6],[6,6,6,4],[6,4,3,4],[9,6,9,7],[9,7,13,7]]) line(city,...p,2);
+    for(const p of [[2,2,13,2],[13,9,2,9],[14,10,12,10],[3,10,1,10],[1,10,1,8],[1,8,4,8],[4,8,4,6],[2,6,12,6],[12,4,11,4],[11,4,11,6],[6,6,6,4],[6,4,3,4],[9,6,9,7],[9,7,13,7]]) line(city,...p,2);
     for(const n of city.signals.keys()) assert.equal(city.setSignal(n,true,4),'');
     return;
   }

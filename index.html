@@ -11,11 +11,11 @@
   <div class="app">
     <header class="header">
       <a class="brand" href="./" aria-label="慢行小城首页"><span class="brand-icon">↗</span><span>慢行小城<small>MAKE WAY · EVERY JOURNEY MATTERS</small></span></a>
-      <div class="header-actions"><span class="local-tag"><i></i> 离线也能玩</span><button id="help" class="icon-button" aria-label="玩法说明">?</button></div>
+      <div class="header-actions"><span class="local-tag"><i></i> 本地服务运行</span><button id="help" class="icon-button" aria-label="玩法说明">?</button></div>
     </header>
     <main>
       <section class="intro"><div><div class="eyebrow" id="level-eyebrow">城市实验室 / 01 · 晨光街区</div><h1>让每一次出发，<br class="mobile-break">都有路可走<span>。</span></h1><p>画一条路，连接生活。用有限的道路，让小城顺畅运转。</p></div><div class="chapter"><span id="chapter-number">01</span><small id="chapter-name">FIRST CONNECTION<br>轻量交通规划</small></div></section>
-      <nav class="level-selector" aria-label="选择关卡"><div class="level-selector-heading"><span>城市地图集</span><small>8 座小城 · 功能逐步解锁 · 切换会重置本局</small></div><div id="level-list" class="level-list"></div></nav>
+      <nav class="level-selector" aria-label="选择关卡"><div class="level-selector-heading"><span>城市地图集</span><small>7 座小城 · 功能逐步解锁 · 切换会重置本局</small></div><div id="level-list" class="level-list"></div></nav>
       <section class="stats" aria-label="城市状态">
         <div class="stat"><span class="stat-label">成功抵达 <small id="target-label">目标 22</small></span><div><strong id="delivered">0</strong><span class="unit" id="target-unit">/ 22 辆</span></div><div class="progress"><i id="progress"></i></div></div>
         <div class="stat"><span class="stat-label">建设预算 <small>按等级计费</small></span><div><strong id="budget">36</strong><span class="unit">点</span></div><span class="stat-note">降级 / 拆除按原价返还</span></div>
@@ -48,6 +48,6 @@
   <dialog id="stop-dialog"><h2>停止运营并重新规划？</h2><p>当前道路、道路等级和信号设置会保留；车辆、成绩、排队和计时会被清空。</p><div class="dialog-actions"><button id="cancel-stop" class="tool">继续调整</button><button id="confirm-stop" class="primary">停止并规划</button></div></dialog>
   <dialog id="load-dialog"><h2>读取已保存的设计？</h2><p>当前道路和运营进度会被保存的设计替换，并回到规划状态。</p><div class="dialog-actions"><button id="cancel-load" class="tool">取消</button><button id="confirm-load" class="primary">读取设计</button></div></dialog>
   <dialog id="result-dialog"><div class="result-icon" id="result-icon">↗</div><div class="eyebrow">CITY REPORT</div><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats" id="result-stats"></div><button id="next-level" class="primary">下一座小城 ↗</button><button id="play-again" class="tool">再规划一次</button><button id="view-city" class="reset">查看我的城市</button></dialog>
-  <script src="levels.js"></script><script src="core.js"></script><script src="game-results.js"></script><script src="game-effects.js"></script><script src="game.js"></script>
+  <script src="core.js"></script><script src="game-results.js"></script><script src="game-effects.js"></script><script src="game.js"></script>
 </body>
 </html>

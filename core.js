@@ -1,18 +1,20 @@
-/* Shared, DOM-free simulation. Works offline in browsers and in Node tests. */
+/* Shared, DOM-free simulation. Browser callers load level JSON before creating a City. */
 (function (root) {
   'use strict';
   const WIDTH = 16, HEIGHT = 12;
   const key = (x, y) => y * WIDTH + x;
   const point = n => ({ x: n % WIDTH, y: Math.floor(n / WIDTH) });
-  let LEVELS = typeof module !== 'undefined' && module.exports ? require('./levels.js') : root.TrafficLevels;
-  // Default scenario and convenience exports follow the first lesson.
-  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0];
   function deepFreeze(value) {
     if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
     return value;
   }
-  // Replace the active scenario list at runtime (e.g. from a levels.json
-  // administrator override). Validates shape and ids, freezes like levels.js.
+  let LEVELS = typeof module !== 'undefined' && module.exports
+    ? require('./built-in-levels.json').map(deepFreeze)
+    : [];
+  let api = null;
+  // Default scenario and convenience exports are retained for Node consumers.
+  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, target: 0, routes: [] };
+  // Replace the active scenario list at runtime after reading a JSON data file.
   function setLevels(list) {
     if (!Array.isArray(list) || list.length === 0) return '关卡数据必须是非空数组';
     const seen = new Set();
@@ -22,6 +24,7 @@
       seen.add(level.id);
     }
     LEVELS = list.map(level => deepFreeze(level));
+    if (api) api.LEVELS = LEVELS;
     return '';
   }
   function neighbors(n) {
@@ -506,7 +509,7 @@
       else if (this.elapsed >= this.level.duration) this.state = 'lost';
     }
   }
-  const api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, movement, movementsConflict, vehiclePosition, LEVELS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH, movement, movementsConflict, vehiclePosition, LEVELS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -12,6 +12,7 @@ const { WIDTH, HEIGHT, key, neighbors, ROAD_TYPES, setLevels } = require('./core
 const HOST = process.env.ADMIN_HOST || '::';
 const PORT = Number(process.env.ADMIN_PORT || process.env.PORT || 8080);
 const LEVELS_PATH = path.join(__dirname, 'levels.json');
+const BUILT_IN_LEVELS_PATH = path.join(__dirname, 'built-in-levels.json');
 // Listening beyond loopback exposes this panel to the network. The admin
 // password (and a future TLS layer) is then the only barrier; keep it strong.
 const isLoopback = host => host === '127.0.0.1' || host === 'localhost' || host === '::1';
@@ -64,7 +65,7 @@ function timingSafeEqual(a, b) {
 
 // ── levels.json storage ─────────────────────────────────────────────────────
 function defaultLevels() {
-  return JSON.parse(JSON.stringify(require('./levels.js')));
+  return JSON.parse(fs.readFileSync(BUILT_IN_LEVELS_PATH, 'utf8'));
 }
 function readLevels() {
   try { return JSON.parse(fs.readFileSync(LEVELS_PATH, 'utf8')); }

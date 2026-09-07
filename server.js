@@ -8,7 +8,7 @@ const { createHash } = require('node:crypto');
 const PUBLIC_FILES = {
   '/index.html': 'text/html; charset=utf-8',
   '/style.css': 'text/css; charset=utf-8',
-  '/levels.js': 'text/javascript; charset=utf-8',
+  '/built-in-levels.json': 'application/json; charset=utf-8',
   '/levels.json': 'application/json; charset=utf-8',
   '/core.js': 'text/javascript; charset=utf-8',
   '/game-results.js': 'text/javascript; charset=utf-8',
@@ -19,7 +19,7 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
 };
 
