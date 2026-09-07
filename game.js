@@ -6,7 +6,7 @@
   const levels = () => TrafficCore.LEVELS;
   let city = null, tool = 'road', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
-  let lastCell = null, dragErase = false, cellSize = 40, lastFrame = 0, accumulator = 0;
+  let lastCell = null, dragErase = false, dragRetract = false, cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, roadGrade = 0, inspectedCell = null;
   let pendingDesign = null;
@@ -94,7 +94,7 @@
     if (value === 'cut' && !city.level.features.cut || value === 'inspect' && !city.level.features.inspect) {
       toast(`完成前面的教学关卡后解锁${value === 'cut' ? '剪刀' : '路况与信号'}`); return;
     }
-    tool = value;keyboardAnchor=null;dragging=false;lastCell=null;
+    tool = value;keyboardAnchor=null;dragging=false;lastCell=null;dragRetract=false;
     for (const name of ['road', 'erase', 'inspect', 'cut']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
@@ -298,7 +298,7 @@
     }
     const selected=keyboardMode?keyboardCell:hover;
     if(selected!==null) {
-      const {x,y}=point(selected),erase=dragging?dragErase:tool==='erase';
+      const {x,y}=point(selected),erase=dragging?(dragErase||Boolean(dragRetract)):tool==='erase';
       rounded(x*s+1,y*s+1,s-2,s-2,s*.1,erase?'#d18d4f22':'#317a5719',erase?'#c68b56':'#6d936b');
       if(tool==='cut'&&!erase)label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
       if(tool !== 'inspect'&&tool !== 'cut'&&!city.buildings.has(selected)&&!city.roads.has(selected))label(erase?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,erase?'#bd8253':'#82a277');
@@ -348,7 +348,7 @@
   }
   function reset(levelId = city.level.id) {
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;
+    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragRetract=false;
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     $('road-grade').value='0';updateGrade();
@@ -373,8 +373,16 @@
         else {y+=Math.sign(target.y-y);iy++;}
         const next=key(x,y);
         inspectedCell=next;
-        message=dragErase ? applyTool(next,true) : tool==='cut' ? city.cut(lastCell,next) : city.connect(lastCell,next,roadGrade);
-        if(message) {dragging=false;lastCell=null;toast(message);updateUI();draw();return;}
+        if (dragRetract) {
+          const followsRoad=city.roads.has(next)&&city.links(lastCell).includes(next);
+          if (followsRoad) {
+            message=city.edit(lastCell,true,roadGrade);
+            if (!message) dragRetract='active';
+          } else if (dragRetract==='active') message='请沿已有道路从端点往回拖动';
+          else dragRetract=false;
+        }
+        if (!message && !dragRetract) message=dragErase ? applyTool(next,true) : tool==='cut' ? city.cut(lastCell,next) : city.connect(lastCell,next,roadGrade);
+        if(message) {dragging=false;lastCell=null;dragRetract=false;toast(message);updateUI();draw();return;}
         lastCell=next;
       }
     } else {inspectedCell=n;if(dragErase)message=applyTool(n,true);}
@@ -384,10 +392,13 @@
   canvas.addEventListener('pointerdown',e=>{
     if(e.button!==0&&e.button!==2)return;
     e.preventDefault();canvas.focus({preventScroll:true});keyboardAnchor=null;keyboardMode=false;dragging=true;dragErase=e.button===2||tool==='erase';lastCell=null;
-    canvas.setPointerCapture(e.pointerId);hover=eventCell(e);paint(hover);
+    canvas.setPointerCapture(e.pointerId);hover=eventCell(e);
+    const roadNeighbors=hover===null?[]:city.links(hover).filter(n=>city.roads.has(n));
+    dragRetract=tool==='road'&&!dragErase&&city.roads.has(hover)&&!city.bridges.has(hover)&&roadNeighbors.length<=1?'candidate':false;
+    paint(hover);
   });
   canvas.addEventListener('pointermove',e=>{keyboardMode=false;hover=eventCell(e);if(dragging)paint(hover);});
-  const endDrag=()=>{dragging=false;lastCell=null;};
+  const endDrag=()=>{dragging=false;lastCell=null;dragRetract=false;};
   canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
   canvas.addEventListener('pointerleave',()=>{hover=null;});
   $('road-tool').onclick=()=>setTool('road');$('erase-tool').onclick=()=>setTool('erase');
