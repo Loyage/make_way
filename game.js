@@ -20,6 +20,7 @@
   function updateDesignControls() { $('load-design').disabled = storedDesign() === null; }
   let levelButtons = [];
   function buildLevelButtons() {
+    $('level-summary').textContent = `${levels().length} 座小城 · 功能逐步解锁 · 切换会重置本局`;
     levelButtons = levels().map((level, i) => {
       const button = document.createElement('button');
       button.className = 'level-card';

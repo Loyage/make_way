@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createGameServer } = require('../server.js');
+const BUILT_IN_LEVELS = require('../built-in-levels.json');
 
 async function setup(t) {
   const server = await createGameServer();
@@ -25,6 +26,17 @@ test('serves only game assets with appropriate MIME types and security headers',
     const res=await request(port,url);assert.equal(res.status,200);assert.ok(res.headers['content-type'].startsWith(type));
     assert.equal(res.headers['x-content-type-options'],'nosniff');assert.ok(res.headers['content-security-policy']);assert.ok(res.body.length>100);
   }
+});
+test('index contains no embedded level metadata', async t => {
+  const port=await setup(t);
+  const html=(await request(port,'/')).body;
+  for (const level of BUILT_IN_LEVELS) {
+    for (const value of [level.name,level.english,level.title,level.description,level.tip]) {
+      assert.equal(html.includes(value),false,`${level.id} metadata must come from JSON`);
+    }
+  }
+  assert.match(html,/id="level-summary"><\/small>/);
+  assert.match(html,/id="mission-title"><\/h2>/);
 });
 test('health, HEAD and conditional caching work', async t => {
   const port=await setup(t);
