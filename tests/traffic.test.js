@@ -39,11 +39,12 @@ test('insufficient budget and invalid grade cannot partly change the network',()
   const before=city.remaining;assert.ok(city.edit(n,false,2));assert.equal(city.remaining,before);assert.equal(city.roadType(n),ROAD_TYPES[0]);
   assert.ok(city.edit(n,false,3));assert.ok(city.edit(n,false,-1));assert.ok(city.edit(n,false,NaN));
 });
-test('fixed bridges can be upgraded and refunded down to their free base, never removed',()=>{
+test('bridges are buildable terrain and may remain empty',()=>{
   const city=new City('rush-hour'),n=[...city.bridges][0];
-  city.edit(n,false,2);assert.equal(city.remaining,city.level.budget-2);
-  assert.ok(city.edit(n,true));assert.ok(city.roads.has(n));
-  city.edit(n,false,0);assert.equal(city.remaining,city.level.budget);
+  assert.equal(city.roads.has(n),false);
+  assert.equal(city.edit(n,false,2),'');assert.equal(city.remaining,city.level.budget-3);
+  assert.equal(city.edit(n,true),'');assert.equal(city.roads.has(n),false);
+  assert.equal(city.remaining,city.level.budget);
 });
 test('capacity counts occupants and incoming reservations per direction, excludes self',()=>{
   const city=street(),n=key(4,5);city.edit(n,false,2);

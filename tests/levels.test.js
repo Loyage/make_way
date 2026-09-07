@@ -13,7 +13,7 @@ for (const level of LEVELS) {
     for (const n of buildings) assert.ok(!city.water.has(n)&&!city.trees.has(n));
     for (const n of city.trees) assert.ok(!city.water.has(n));
     for (const n of city.bridges) assert.ok(city.water.has(n));
-    assert.equal(city.queues.length,city.homes.length);assert.equal(city.remaining,level.budget-[...city.roads].reduce((sum,n)=>sum+(city.bridges.has(n)?0:1)+(city.roadGrades.get(n)||0),0));
+    assert.equal(city.queues.length,city.homes.length);assert.equal(city.remaining,level.budget-[...city.roads].reduce((sum,n)=>sum+1+(city.roadGrades.get(n)||0),0));
     const other = new City(level.id);city.queues[0]++;assert.equal(other.queues[0],0);
   });
   test(`${level.name}: a legal reference plan wins within budget and time`, () => {

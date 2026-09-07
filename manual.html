@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ec">
+  <title>操作手册 · 慢行小城</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <a class="brand" href="./" aria-label="返回慢行小城"><span class="brand-icon">↗</span><span>慢行小城<small>MAKE WAY · OPERATION MANUAL</small></span></a>
+      <div class="header-actions"><a class="manual-link" href="./">返回游戏</a></div>
+    </header>
+    <main class="manual-main">
+      <section class="manual-hero">
+        <div class="eyebrow">CITY PLANNER'S HANDBOOK</div>
+        <h1>统一操作手册</h1>
+        <p>地图操作统一分为<strong>选择、拖拽、剪刀</strong>三种模式。先在地图下方切换模式，再对网格操作。选区和区域面板只在选择模式显示。所有道路连接都由拖过的相邻格明确建立；两块路面只是相邻，并不代表已经连通。</p>
+      </section>
+      <nav class="manual-nav" aria-label="手册目录">
+        <a href="#select">选择模式</a><a href="#selection-cases">选择情况表</a><a href="#drag">拖拽模式</a><a href="#drag-cases">拖拽情况表</a><a href="#cut">剪刀模式</a><a href="#buildings">建筑规则</a><a href="#operation">运营限制</a><a href="#keyboard">键盘操作</a>
+      </nav>
+
+      <section id="select" class="manual-section">
+        <div class="eyebrow">MODE 01</div><h2>选择模式</h2>
+        <p>点击「选择」或按 <kbd>1</kbd> 进入。选择模式只负责选区和执行下方按钮，不会因为点击或拖选地图而直接建设、拆除或剪断道路。</p>
+        <div class="manual-grid">
+          <article class="manual-card"><h3>选择一个格子</h3><p>在任意格点击后，蓝色边框标出该格。下方显示坐标和内容类型。再次点击别处会替换原选择。</p></article>
+          <article class="manual-card"><h3>选择矩形区域</h3><p>从任意格按住并拖到另一格。起点和终点构成完整矩形，反向、向上或向左拖动同样有效；松手后保留选区。</p></article>
+          <article class="manual-card"><h3>多格区域信息</h3><p>显示宽 × 高、总格数、道路格数和内部道路总价。总价按当前道路等级计入；桥梁上的道路与普通道路价格相同。</p></article>
+          <article class="manual-card"><h3>运营中的车流</h3><p>运营或暂停时，区域信息显示正在区域内占用或驶入的车辆数，以及选区内住宅的等待车辆数。</p></article>
+        </div>
+      </section>
+
+      <section id="selection-cases" class="manual-section">
+        <h2>选中内容与可用操作</h2>
+        <table class="case-table">
+          <thead><tr><th>选择内容</th><th>显示的信息</th><th>解锁的操作</th><th>限制</th></tr></thead>
+          <tbody>
+            <tr><td>单格道路</td><td>坐标、等级、速度、每方向车道与容量、每格价格；解锁路况后显示实时容量或路口负荷。</td><td>使用分开的「↑ 升级」「↓ 降级」「⌫ 拆除」按钮；若为三岔或十字路口，还可开关红绿灯并调整绿灯时长。</td><td>车辆占用或出口被预约时不能拆除、不能降级；升级通常可以进行。</td></tr>
+            <tr><td>单格住宅</td><td>总人口、每秒输出流量、已经产生的人数和当前等待人数。</td><td>只查看信息。</td><td>建筑本身不能拆除、升级或安装信号灯。</td></tr>
+            <tr><td>单格接收建筑</td><td>输入容量（未设上限时显示“不限”）、已接收人数和已分配人数。</td><td>只查看信息。</td><td>建筑本身不能拆除、升级或安装信号灯。</td></tr>
+            <tr><td>单格空地或空桥</td><td>坐标和地形类型。</td><td>建设一格支路。</td><td>单格建设只铺路面，不会凭空连接相邻道路；请用拖拽模式建立连接。</td></tr>
+            <tr><td>普通水面或绿地</td><td>坐标和地形类型。</td><td>无。</td><td>水面只有桥梁格可建设道路；树木绿地不可建设。</td></tr>
+            <tr><td>多格区域</td><td>宽 × 高、格数、道路格数、内部总价；运营时附带区域车流。</td><td>使用分开的按钮批量升级一级、降级一级或拆除。</td><td>非道路格和空桥自动忽略。任一目标道路受车辆保护或预算不足时，整批操作不生效。</td></tr>
+          </tbody>
+        </table>
+        <p class="manual-note"><strong>批量操作是原子的：</strong>整片区域要么全部成功，要么保持原样。这样不会因为中途遇到一辆车、桥梁或预算不足而留下半片改造结果。</p>
+      </section>
+
+      <section id="drag" class="manual-section">
+        <div class="eyebrow">MODE 02</div><h2>拖拽模式：统一建设、改造与拆除</h2>
+        <p>点击「拖拽」或按 <kbd>2</kbd> 进入。从起点按住，依次经过上下左右相邻格。快速斜拖时，系统会补成四向相邻的阶梯路线。拖动期间彩色线框只是预览；松手时才把整条规划一次性应用到地图。</p>
+        <h3>怎样判定拆除</h3>
+        <p>只有满足以下条件，拖拽才进入橙色的拆除状态：</p>
+        <ol>
+          <li>起点是道路端点（包括桥面道路）；“端点”指它至多只有一条连接，建筑出口连接也计入；</li>
+          <li>第一步沿着一条已经存在的连接移动；</li>
+          <li>第一步进入的既有道路与起点等级一致。</li>
+        </ol>
+        <p>从只有一个出口的建筑开始、第一步沿已有连接进入道路时也会进入拆除状态。建筑没有道路等级，因此拆除时以第一格道路的等级为准。进入拆除状态后，必须继续沿同等级的既有连接前进；不能隔空拆除，也不能跨等级拆除。</p>
+        <h3>其他情况一律建设</h3>
+        <p>不满足拆除判定的拖动一律是绿色建设状态。建设既会铺设空地，也会为经过的相邻格建立连接；经过已有道路时，会把路面刷新为本次起点等级。因此可用一笔连续拖拽统一改造一条线路。</p>
+        <ul>
+          <li>从已有道路开始：沿用起点道路等级。</li>
+          <li>从空地或空桥开始：建设支路。</li>
+          <li>从建筑开始并拖向空地：固定使用支路，因为建筑本身没有等级。</li>
+          <li>从已有桥面道路开始：沿用该道路等级；桥梁结构始终保留，但桥面道路可以拆除，岸边连接仍需明确拖过。</li>
+        </ul>
+        <h3>松手前反向取消</h3>
+        <p>沿刚才经过的路线原路回拖一格，会撤回预览中的最后一段。可以连续退回到起点，再换方向重新规划。由于地图在松手前尚未正式改变，取消不会先扣预算再退款，也不会触发车辆重新寻路。</p>
+      </section>
+
+      <section id="drag-cases" class="manual-section">
+        <h2>拖拽起点与第一步情况表</h2>
+        <table class="case-table">
+          <thead><tr><th>起点</th><th>第一步</th><th>结果</th><th>采用等级</th></tr></thead>
+          <tbody>
+            <tr><td>道路端点</td><td>沿已有连接进入同级道路</td><td>拆除经过的全部道路，包括松手处的最后一格。</td><td>起点等级</td></tr>
+            <tr><td>道路端点</td><td>进入空地、未连接道路或不同级道路</td><td>建设；建立连接并把经过道路刷新为起点等级。</td><td>起点等级</td></tr>
+            <tr><td>道路中段或路口</td><td>任意合法相邻格</td><td>建设或改造，不会因为向内拖而误拆主路。</td><td>起点等级</td></tr>
+            <tr><td>单出口建筑</td><td>沿已有连接进入道路</td><td>拆除；经过的道路逐格删除，建筑保留。</td><td>第一格道路等级</td></tr>
+            <tr><td>建筑</td><td>进入空地或未连接路面</td><td>建设，并建立建筑出口连接。</td><td>固定支路</td></tr>
+            <tr><td>空地或空桥</td><td>进入任意可建设相邻格</td><td>建设。</td><td>支路</td></tr>
+            <tr><td>已有桥面道路</td><td>任意相邻格</td><td>与普通道路相同：可建设、刷新等级或从端点拆除。</td><td>桥面道路当前等级</td></tr>
+            <tr><td>任意起点</td><td>只按下并在原格松开</td><td>不改变地图。</td><td>—</td></tr>
+            <tr><td>建设预览</td><td>立即沿原路反向</td><td>逐段取消本次预览；不会拆除原来道路。</td><td>—</td></tr>
+            <tr><td>拆除预览</td><td>偏离既有同级连接</td><td>拒绝该一步并提示；已预览路径仍保留，可原路退回或继续合法方向。</td><td>—</td></tr>
+          </tbody>
+        </table>
+        <p class="manual-note"><strong>一次性提交：</strong>松手时若预算不足、地形不可建设、车辆占用或连接受预约保护，整次拖拽不生效，不会留下只完成一半的道路。</p>
+      </section>
+
+      <section id="cut" class="manual-section">
+        <div class="eyebrow">MODE 03</div><h2>剪刀模式</h2>
+        <p>点击「剪刀」或按 <kbd>3</kbd> 进入。沿道路或建筑出口之间的既有连接拖动，松手后一次性剪断所经连接。</p>
+        <ul>
+          <li>剪刀只删除“连接关系”，不会删除道路格，不改变等级，也不返还预算。</li>
+          <li>剪断后两块路面即使仍紧挨着，也不能互相通行；切换到拖拽模式沿断口拖过即可重新连接。</li>
+          <li>剪刀经过没有连接的相邻格时没有效果。</li>
+          <li>车辆正在穿越或已经预约某段连接时，整次剪切会被拒绝。</li>
+          <li>剪刀同样支持松手前沿原路线回拖，撤销预览中的最后一段。</li>
+        </ul>
+      </section>
+
+      <section id="buildings" class="manual-section">
+        <h2>建筑为什么也算道路起点</h2>
+        <p>在连接系统中，住宅和接收建筑都是路径端点。可以直接从建筑按住拖出，不必先在旁边铺一格路面；第一步会同时创建建筑出口连接。</p>
+        <div class="manual-grid">
+          <article class="manual-card"><h3>建筑 → 空地</h3><p>按支路开始建设。即使默认等级选择了干道或快速路，建筑仍没有可继承等级，所以第一条道路固定为支路；之后可用选择模式批量升级。</p></article>
+          <article class="manual-card"><h3>建筑 → 已连道路</h3><p>如果建筑只有一个出口，且第一步沿该出口进入道路，则判定为从道路端点向内拆除。多出口建筑不是端点。建筑永远保留，只删除经过的道路格。</p></article>
+          <article class="manual-card"><h3>建筑旁有路但未连接</h3><p>视觉相邻不等于连接。此时从建筑拖到路面属于建设，会明确补上出口，并把经过的道路刷新为支路。</p></article>
+          <article class="manual-card"><h3>建筑信息</h3><p>选择住宅可看总人口与输出速率；选择目的地可看输入容量。运营中还会显示产生、等待、接收和分配数量。</p></article>
+        </div>
+      </section>
+
+      <section id="operation" class="manual-section">
+        <h2>运营中修改与保护规则</h2>
+        <ul>
+          <li>运营中、暂停中都可以选择区域、建设、升级和调灯。</li>
+          <li>车辆当前占用、即将驶入或作为路口出口预约的道路不能拆除或降级。</li>
+          <li>正在通过或已预约的连接不能剪断；有车的相邻路口也可能暂时禁止改变分支。</li>
+          <li>安全升级通常允许立即进行。道路变化成功提交后，尚未承诺转向的车辆会重新寻找最短路线。</li>
+          <li>调整自动避让与红绿灯时，需要等待路口清空；已经获准进入的车辆不会因变灯突然停在路口中。</li>
+          <li>游戏已经胜利或失败后不能再修改地图；可查看城市或重新规划。</li>
+        </ul>
+      </section>
+
+      <section id="keyboard" class="manual-section">
+        <h2>键盘与触摸</h2>
+        <table class="case-table">
+          <tbody>
+            <tr><th><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></th><td>切换选择 / 拖拽 / 剪刀模式。</td></tr>
+            <tr><th>方向键</th><td>画布获得焦点后移动格子光标。</td></tr>
+            <tr><th>空格</th><td>选择模式选择当前格；拖拽或剪刀模式设置起点，再用方向键逐格操作，再按空格结束。</td></tr>
+            <tr><th><kbd>Esc</kbd></th><td>结束键盘延伸。</td></tr>
+            <tr><th><kbd>P</kbd></th><td>开始运营、暂停或继续。</td></tr>
+            <tr><th>触摸</th><td>单指按住并移动。选择模式形成矩形；拖拽和剪刀模式形成路径。松手提交。</td></tr>
+          </tbody>
+        </table>
+        <a class="manual-back" href="./">← 返回游戏</a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -50,18 +50,18 @@ async function main() {
     }
 
     await go(0);
-    assert.equal(await evaluate('document.querySelector("#grade-setting").hidden'),true);
-    assert.equal(await evaluate('document.querySelector("#inspect-tool").hidden'),true);
-    await drag(3,3,3,3);assert.equal(await text('budget'),'36');
-    await drag(2,3,5,3);assert.equal(await text('budget'),'33');
-    await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road connected to a building should not retract from its road cell');
-    await drag(2,3,3,3);assert.equal(await text('budget'),'34','a road connected to a building should retract from the building');
-    await drag(2,3,3,3);assert.equal(await text('budget'),'33','dragging outward from the building should rebuild the road');
+    assert.equal(await evaluate('document.querySelector("#road-grade")'),null);
+    assert.ok(await evaluate('document.querySelector("#select-tool")!==null'));
+    await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
+    await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');
+    await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road between a building and road is not an endpoint');
+    await drag(2,3,3,3);assert.equal(await text('budget'),'34','a single-exit building acts as the endpoint and retracts');
+    await drag(2,3,3,3);assert.equal(await text('budget'),'33','a building should rebuild toward empty land as a local road');
     await dragThrough([[5,3],[6,3],[5,3],[4,3]]);
-    assert.equal(await text('budget'),'34','returning from an extension should seamlessly continue into endpoint retraction');
-    await drag(4,3,5,3);assert.equal(await text('budget'),'33','dragging outward from a bare endpoint should still extend the road');
-    await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
-    await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'33');
+    assert.equal(await text('budget'),'33','returning to the origin cancels the extension without changing drag intent');
+    await drag(4,3,5,3);assert.equal(await text('budget'),'35','endpoint retraction must remove the final dragged road too');
+    await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'33');
+    await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'35');
 
     await click('.level-card:nth-child(2)');
     assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');
@@ -73,24 +73,25 @@ async function main() {
     await click('#save-design');await click('#road-tool');
 
     await go(2);
-    assert.equal(await evaluate('document.querySelector("#grade-setting").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#load-setting").hidden'),false);
     assert.ok((await text('demand-list')).includes('输出 330 人 · 6 人/s'));
     const previousBudget=Number(await text('budget'));
-    await select('road-grade','2');await drag(3,2,5,2);assert.equal(Number(await text('budget')),previousBudget-6);
-    assert.ok((await text('grade-description')).includes('每方向 3 车道'));
+    await click('#road-tool');await drag(3,2,5,2);assert.ok(Number(await text('budget'))<previousBudget);
+    await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');
+    assert.ok((await text('road-detail')).includes('3 × 1'));
+    await drag(3,2,3,2);assert.ok((await text('road-detail')).includes('每方向'));
 
     await go(3);
-    await select('road-grade','2');await drag(3,2,3,3);
-    await click('#road-tool');await drag(3,3,3,3);
+    await click('#road-tool');await drag(3,2,3,3);
+    await click('#select-tool');await drag(3,3,3,3);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
     await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
 
     await go(4);
-    await select('road-grade','1');await drag(5,3,5,10);
-    assert.equal(await evaluate('document.querySelector("#inspect-tool").hidden'),false);
+    await click('#road-tool');await drag(5,3,5,10);
+    assert.equal(await evaluate('document.querySelector("#select-tool").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),true);
-    await click('#inspect-tool');await drag(5,4,5,4);
+    await click('#select-tool');await drag(5,4,5,4);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
     assert.ok((await text('signal-phase')).includes('35%'));
     await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
@@ -111,7 +112,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 7 progressive levels, endpoint retract, direct road actions, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 7 progressive levels, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

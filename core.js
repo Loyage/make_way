@@ -104,9 +104,8 @@
       this.routes = this.level.routes.map(normalizeRoute);
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
-      this.roads = new Set(this.bridges);
+      this.roads = new Set();
       this.edges = new Map();
-      for (const n of this.bridges) for (const v of neighbors(n)) if (this.bridges.has(v)) this.addEdge(n,v);
       this.roadGrades = new Map();
       this.signals = new Map();
       this.trees = new Set(this.level.trees);
@@ -160,7 +159,7 @@
     roadType(n) { return ROAD_TYPES[this.roadGrades.get(n) || 0]; }
     get remaining() {
       let spent = 0;
-      for (const n of this.roads) spent += this.roadType(n).cost - Number(this.bridges.has(n));
+      for (const n of this.roads) spent += this.roadType(n).cost;
       return this.level.budget - spent;
     }
     rebuildRoutes() {
@@ -305,10 +304,33 @@
       const dy = u*u*(c1.y-start.y)+2*u*t*(c2.y-c1.y)+t*t*(end.y-c2.y);
       return { x, y, angle: Math.atan2(dy, dx) };
     }
+    transact(actions) {
+      if (!Array.isArray(actions)) return '规划操作无效';
+      const snapshot = {
+        roads: new Set(this.roads),
+        edges: new Map([...this.edges].map(([n, links]) => [n, new Set(links)])),
+        grades: new Map(this.roadGrades),
+        signals: new Map([...this.signals].map(([n, signal]) => [n, { ...signal }]))
+      };
+      for (const action of actions) {
+        let message = '规划操作无效';
+        if (action?.type === 'connect') message = this.connect(action.a, action.b, action.grade);
+        else if (action?.type === 'cut') message = this.cut(action.a, action.b);
+        else if (action?.type === 'edit') message = this.edit(action.cell, action.erase, action.grade);
+        if (!message) continue;
+        this.roads = snapshot.roads;
+        this.edges = snapshot.edges;
+        this.roadGrades = snapshot.grades;
+        this.signals = snapshot.signals;
+        this.refreshPaths();
+        return message;
+      }
+      return '';
+    }
     edit(n, erase = false, grade = 0) {
-      if (!Number.isInteger(n) || n < 0 || n >= WIDTH * HEIGHT || this.state === 'won' || this.state === 'lost') return '';
+      if (!Number.isInteger(n) || n < 0 || n >= WIDTH * HEIGHT) return '';
+      if (this.state === 'won' || this.state === 'lost') return '本局已结束';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
-      if (this.bridges.has(n) && erase) return '桥梁是固定道路，不能拆除，但可以升级';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
       if (erase) {
         if (!this.roads.has(n)) return '';
@@ -320,7 +342,7 @@
       } else {
         const exists = this.roads.has(n), oldGrade = this.roadGrades.get(n) || 0;
         if (exists && oldGrade === grade) return '';
-        if (!exists && this.water.has(n)) return '河流上不能修路，请连接现有桥梁';
+        if (!exists && this.water.has(n) && !this.bridges.has(n)) return '河流上不能修路，请经过桥梁';
         if (this.trees.has(n)) return '保留这片绿地吧，试着绕行';
         if (exists && grade < oldGrade && (this.occupants(n).length || this.exitLocked(n))) return '这里有车辆，请等车辆通过后再降级';
         const difference = ROAD_TYPES[grade].cost - (exists ? ROAD_TYPES[oldGrade].cost : 0);
@@ -365,7 +387,7 @@
     loadDesign(design) {
       if (!design || ![1,2].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
       const candidate = new City(this.level.id), seenRoads = new Set(), seenSignals = new Set();
-      candidate.roads = new Set(candidate.bridges);candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
+      candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
       candidate.refreshPaths();
       for (const road of design.roads) {
         if (!road || !Number.isInteger(road.cell) || road.cell < 0 || road.cell >= WIDTH * HEIGHT

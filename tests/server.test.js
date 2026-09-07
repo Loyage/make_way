@@ -22,7 +22,7 @@ function request(port, url, method='GET', headers={}) {
 }
 test('serves only game assets with appropriate MIME types and security headers', async t => {
   const port=await setup(t);
-  for(const [url,type] of [['/','text/html'],['/index.html','text/html'],['/style.css','text/css'],['/built-in-levels.json','application/json'],['/core.js','text/javascript'],['/game-results.js','text/javascript'],['/game-effects.js','text/javascript'],['/game.js?v=2','text/javascript']]) {
+  for(const [url,type] of [['/','text/html'],['/index.html','text/html'],['/manual.html','text/html'],['/style.css','text/css'],['/built-in-levels.json','application/json'],['/core.js','text/javascript'],['/game-results.js','text/javascript'],['/game-effects.js','text/javascript'],['/game.js?v=2','text/javascript']]) {
     const res=await request(port,url);assert.equal(res.status,200);assert.ok(res.headers['content-type'].startsWith(type));
     assert.equal(res.headers['x-content-type-options'],'nosniff');assert.ok(res.headers['content-security-policy']);assert.ok(res.body.length>100);
   }
@@ -37,6 +37,9 @@ test('index contains no embedded level metadata', async t => {
   }
   assert.match(html,/id="level-summary"><\/small>/);
   assert.match(html,/id="mission-title"><\/h2>/);
+  const manual=(await request(port,'/manual.html')).body;
+  assert.match(manual,/统一操作手册/);
+  assert.match(manual,/拖拽起点与第一步情况表/);
 });
 test('health, HEAD and conditional caching work', async t => {
   const port=await setup(t);

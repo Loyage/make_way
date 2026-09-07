@@ -7,6 +7,7 @@ const { createHash } = require('node:crypto');
 
 const PUBLIC_FILES = {
   '/index.html': 'text/html; charset=utf-8',
+  '/manual.html': 'text/html; charset=utf-8',
   '/style.css': 'text/css; charset=utf-8',
   '/built-in-levels.json': 'application/json; charset=utf-8',
   '/levels.json': 'application/json; charset=utf-8',

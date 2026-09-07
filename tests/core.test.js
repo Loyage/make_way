@@ -22,8 +22,10 @@ test('construction honors terrain, buildings, bridges, and refunds', () => {
   const city = new City();
   for (const n of [key(7,1),key(1,1),ROUTES[0].homes[0].cell]) assert.ok(city.edit(n));
   assert.equal(city.remaining,BUDGET);
-  const riverCity=new City('rush-hour');
-  assert.ok(riverCity.edit(key(7,1)));assert.ok(riverCity.edit(key(7,2),true));assert.ok(riverCity.roads.has(key(7,2)));
+  const riverCity=new City('rush-hour'),bridge=key(7,2);
+  assert.equal(riverCity.roads.has(bridge),false);assert.ok(riverCity.edit(key(7,1)));
+  assert.equal(riverCity.edit(bridge),'');assert.ok(riverCity.roads.has(bridge));
+  assert.equal(riverCity.edit(bridge,true),'');assert.equal(riverCity.roads.has(bridge),false);
   city.edit(key(0,0));assert.equal(city.remaining,BUDGET-1);
   city.edit(key(0,0));assert.equal(city.remaining,BUDGET-1);
   city.edit(key(0,0),true);assert.equal(city.remaining,BUDGET);
@@ -32,6 +34,14 @@ test('cannot exceed road budget', () => {
   const city = new City();
   for(let n=0;n<WIDTH*HEIGHT;n++) city.edit(n);
   assert.equal(city.remaining,0);assert.equal(city.roads.size,BUDGET);
+});
+test('multi-step map transactions commit or roll back atomically', () => {
+  const city=new City(),before=city.serializeDesign();
+  const blocked=key(7,1),a=key(0,0),b=key(1,0);
+  assert.ok(city.transact([{type:'connect',a,b,grade:0},{type:'edit',cell:blocked,erase:false,grade:0}]));
+  assert.deepEqual(city.serializeDesign(),before);
+  assert.equal(city.transact([{type:'connect',a,b,grade:1},{type:'edit',cell:a,erase:false,grade:2}]),'');
+  assert.ok(city.edges.get(a).has(b));assert.equal(city.roadGrades.get(a),2);assert.equal(city.roadGrades.get(b),1);
 });
 test('BFS finds shortest four-way route and never traverses unrelated buildings', () => {
   const roads = new Set([key(1,0),key(2,0)]);
