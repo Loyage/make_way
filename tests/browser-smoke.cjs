@@ -51,6 +51,8 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#inspect-tool").hidden'),true);
     await drag(3,3,3,3);assert.equal(await text('budget'),'36');
     await drag(2,3,5,3);assert.equal(await text('budget'),'33');
+    await drag(5,3,4,3);assert.equal(await text('budget'),'34','dragging backward from a road endpoint should refund its cell');
+    await drag(4,3,5,3);assert.equal(await text('budget'),'33','dragging outward from an endpoint should still extend the road');
     await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
     await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'33');
 
@@ -102,7 +104,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 7 progressive levels, direct road actions, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 7 progressive levels, endpoint retract, direct road actions, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
