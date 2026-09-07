@@ -6,9 +6,10 @@
   const levels = () => TrafficCore.LEVELS;
   let city = null, tool = 'road', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
-  let lastCell = null, dragErase = false, cellSize = 40, lastFrame = 0, accumulator = 0;
+  let lastCell = null, dragGrade = 0, dragPath = [], dragChanges = [];
+  let cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
-  let connectionRows = [], pendingLevel = null, roadGrade = 0, inspectedCell = null;
+  let connectionRows = [], pendingLevel = null, roadGrade = 0, inspectedCell = null, inspectorGradeCell = null;
   let pendingDesign = null;
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
@@ -95,49 +96,44 @@
       toast(`完成前面的教学关卡后解锁${value === 'cut' ? '剪刀' : '路况与信号'}`); return;
     }
     tool = value;keyboardAnchor=null;dragging=false;lastCell=null;
-    for (const name of ['road', 'erase', 'inspect', 'cut']) {
+    for (const name of ['road', 'inspect', 'cut']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
     }
   }
   function updateInspector() {
-    const n = inspectedCell;
-    if (!city.level.features.inspect) {
-      $('road-detail').textContent = `本关专注于「${city.level.lesson}」，路况与信号将在后续教学解锁。`;
+    const n = inspectedCell, selected = n !== null && city.roads.has(n);
+    $('selected-road-grade').disabled = !selected || !city.level.features.grade || ['won', 'lost'].includes(city.state);
+    $('apply-road-grade').disabled = $('selected-road-grade').disabled;
+    $('remove-road').disabled = !selected || city.bridges.has(n) || ['won', 'lost'].includes(city.state);
+    if (!selected) {
+      inspectorGradeCell = null;
+      $('road-detail').textContent = '点击一条道路进行升级、设置红绿灯或拆除。';
       $('road-load').textContent = ''; $('signal-phase').textContent = '';
       $('signal-enabled').disabled = true; $('signal-enabled').checked = false; $('signal-cycle').disabled = true;
       return;
     }
-    if (n === null || !city.roads.has(n)) {
-      $('road-detail').textContent = '选择「路况 / 信号」，点击道路查看。';
-      $('road-load').textContent = ''; $('signal-phase').textContent = '';
-      $('signal-enabled').disabled = true; $('signal-enabled').checked = false;
-      $('signal-cycle').disabled = true;
-      return;
-    }
     const p = point(n), type = city.roadType(n), load = city.load(n), signal = city.signals.get(n);
-    $('road-detail').textContent = `(${p.x + 1}, ${p.y + 1}) ${type.name}${city.bridges.has(n) ? ' · 桥梁' : ''} · ${type.speed} 格/秒`;
-    $('road-load').textContent = signal
+    $('road-detail').textContent = `(${p.x + 1}, ${p.y + 1}) ${type.name}${city.bridges.has(n) ? ' · 桥梁（不可拆除）' : ''} · ${type.speed} 格/秒`;
+    $('road-load').textContent = city.level.features.load ? (signal
       ? (signal.enabled ? `冲突区预约 ${load.used} / 4 区 · 占用/驶入 ${load.total} 辆` : `逐车通行 · 路口占用 ${load.total} / 1 辆`)
-      : `每方向 ${type.lanes} 车道 × 前后 2 辆 · 最忙方向 ${load.used} / ${load.capacity} 辆`;
+      : `每方向 ${type.lanes} 车道 × 前后 2 辆 · 最忙方向 ${load.used} / ${load.capacity} 辆`) : '';
+    if (inspectorGradeCell !== n) {
+      $('selected-road-grade').value = String(city.roadGrades.get(n) || 0);
+      inspectorGradeCell = n;
+    }
     const phase = city.signalPhase(n), names = { off: '自动避让 · 35% 速度 · 先到先行', 'horizontal-straight': '横向直行绿灯', 'horizontal-left': '横向左转绿灯', 'vertical-straight': '纵向直行绿灯', 'vertical-left': '纵向左转绿灯', clearance: '直行 / 左转全红清空' };
-    $('signal-phase').textContent = signal ? `${names[phase.stage]}${phase.axis === 'off' ? '' : ` · ${phase.remaining.toFixed(1)} 秒；放行不额外减速，右转须让行`}` : '非路口，无需红绿灯';
+    $('signal-phase').textContent = !city.level.features.inspect ? `本关专注于「${city.level.lesson}」，路况与信号将在后续教学解锁。` : signal ? `${names[phase.stage]}${phase.axis === 'off' ? '' : ` · ${phase.remaining.toFixed(1)} 秒；放行不额外减速，右转须让行`}` : '非路口，无需红绿灯';
     $('signal-enabled').disabled = !signal || !city.level.features.signals || ['won', 'lost'].includes(city.state);
     $('signal-cycle').disabled = $('signal-enabled').disabled;
     $('signal-enabled').checked = Boolean(signal?.enabled);
-    // Do not replace a focused native select's value while the user is choosing.
-    if (signal && !city.level.features.signals) $('signal-phase').textContent += ' · 红绿灯将在下一课解锁';
+    if (signal && city.level.features.inspect && !city.level.features.signals) $('signal-phase').textContent += ' · 红绿灯将在下一课解锁';
     if (document.activeElement !== $('signal-cycle')) $('signal-cycle').value = String(signal?.green || 2);
   }
   function updateGrade() {
     roadGrade = Number($('road-grade').value);
     const type = ROAD_TYPES[roadGrade];
     $('grade-description').textContent = `${type.name}：${type.speed} 格/秒 · 每方向 ${type.lanes} 车道 × 2 辆 · 每格 ${type.cost} 点`;
-  }
-  function applyTool(n, erase = false) {
-    inspectedCell = n;
-    if (!erase) return '';
-    return city.edit(n, true, roadGrade);
   }
   function resize() {
     const width = canvas.getBoundingClientRect().width;
@@ -298,10 +294,10 @@
     }
     const selected=keyboardMode?keyboardCell:hover;
     if(selected!==null) {
-      const {x,y}=point(selected),erase=dragging?dragErase:tool==='erase';
-      rounded(x*s+1,y*s+1,s-2,s-2,s*.1,erase?'#d18d4f22':'#317a5719',erase?'#c68b56':'#6d936b');
-      if(tool==='cut'&&!erase)label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
-      if(tool !== 'inspect'&&tool !== 'cut'&&!city.buildings.has(selected)&&!city.roads.has(selected))label(erase?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,erase?'#bd8253':'#82a277');
+      const {x,y}=point(selected);
+      rounded(x*s+1,y*s+1,s-2,s-2,s*.1,'#317a5719','#6d936b');
+      if(tool==='cut')label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
+      if(tool !== 'inspect'&&tool !== 'cut'&&!city.buildings.has(selected)&&!city.roads.has(selected))label('+',(x+.5)*s,(y+.5)*s,s*.42,'#82a277');
     }
     if(city.state==='paused') {
       rounded(w/2-52,14,104,27,14,'#fffef9e8');label('Ⅱ  规划暂停中',w/2,28,11,'#63715b');
@@ -358,11 +354,28 @@
     const rect=canvas.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/rect.width*WIDTH),y=Math.floor((event.clientY-rect.top)/rect.height*HEIGHT);
     return x>=0&&x<WIDTH&&y>=0&&y<HEIGHT?key(x,y):null;
   }
+  function roadChange(a, b) {
+    return {
+      a, b, edgeExisted: city.edges.get(a)?.has(b) || false,
+      cells: [a, b].filter(n => !city.buildings.has(n)).map(n => ({ n, existed: city.roads.has(n), grade: city.roadGrades.get(n) || 0 }))
+    };
+  }
+  function undoRoadChange(change) {
+    let message = '';
+    if (!change.edgeExisted && city.edges.get(change.a)?.has(change.b)) message = city.cut(change.a, change.b);
+    if (message) return message;
+    for (const cell of [...change.cells].reverse()) {
+      if (!cell.existed && city.roads.has(cell.n)) message = city.edit(cell.n, true, 0);
+      else if (cell.existed && city.roads.has(cell.n) && (city.roadGrades.get(cell.n) || 0) !== cell.grade) message = city.edit(cell.n, false, cell.grade);
+      if (message) return message;
+    }
+    return '';
+  }
   function paint(n) {
-    if(n===null) {lastCell=null;return;}
+    if(n===null) return;
     let message='';
-    if (tool === 'inspect' && !dragErase) {
-      inspectedCell = n; updateUI(); draw(); return;
+    if (tool === 'inspect') {
+      inspectedCell = city.roads.has(n) ? n : null; updateUI(); draw(); return;
     }
     if(lastCell!==null) {
       // Fill skipped cells along a four-connected staircase, even on fast drags.
@@ -372,25 +385,38 @@
         if(x!==target.x&&(y===target.y||(ix+.5)/(dx||1)<=(iy+.5)/(dy||1))) {x+=Math.sign(target.x-x);ix++;}
         else {y+=Math.sign(target.y-y);iy++;}
         const next=key(x,y);
-        inspectedCell=next;
-        message=dragErase ? applyTool(next,true) : tool==='cut' ? city.cut(lastCell,next) : city.connect(lastCell,next,roadGrade);
+        if (tool === 'road' && dragPath.length > 1 && next === dragPath[dragPath.length - 2]) {
+          message = undoRoadChange(dragChanges[dragChanges.length - 1]);
+          if (!message) { dragPath.pop(); dragChanges.pop(); lastCell = next; }
+        } else {
+          const change = tool === 'road' ? roadChange(lastCell, next) : null;
+          message = tool==='cut' ? city.cut(lastCell,next) : city.connect(lastCell,next,dragGrade);
+          if (!message) {
+            lastCell=next;
+            if (tool === 'road') { dragPath.push(next); dragChanges.push(change); }
+          }
+        }
+        inspectedCell=city.roads.has(next)?next:null;
         if(message) {dragging=false;lastCell=null;toast(message);updateUI();draw();return;}
-        lastCell=next;
       }
-    } else {inspectedCell=n;if(dragErase)message=applyTool(n,true);}
-    lastCell=n;toast(message);updateUI();draw();
+    } else {
+      inspectedCell=city.roads.has(n)?n:null;lastCell=n;dragPath=[n];
+    }
+    toast(message);updateUI();draw();
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
   canvas.addEventListener('pointerdown',e=>{
-    if(e.button!==0&&e.button!==2)return;
-    e.preventDefault();canvas.focus({preventScroll:true});keyboardAnchor=null;keyboardMode=false;dragging=true;dragErase=e.button===2||tool==='erase';lastCell=null;
-    canvas.setPointerCapture(e.pointerId);hover=eventCell(e);paint(hover);
+    if(e.button!==0)return;
+    e.preventDefault();canvas.focus({preventScroll:true});keyboardAnchor=null;keyboardMode=false;dragging=true;lastCell=null;dragPath=[];dragChanges=[];
+    canvas.setPointerCapture(e.pointerId);hover=eventCell(e);
+    dragGrade=hover!==null&&city.roads.has(hover)?city.roadGrades.get(hover)||0:roadGrade;
+    paint(hover);
   });
   canvas.addEventListener('pointermove',e=>{keyboardMode=false;hover=eventCell(e);if(dragging)paint(hover);});
-  const endDrag=()=>{dragging=false;lastCell=null;};
+  const endDrag=()=>{dragging=false;lastCell=null;dragPath=[];dragChanges=[];updateUI();draw();};
   canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
   canvas.addEventListener('pointerleave',()=>{hover=null;});
-  $('road-tool').onclick=()=>setTool('road');$('erase-tool').onclick=()=>setTool('erase');
+  $('road-tool').onclick=()=>setTool('road');
   $('inspect-tool').onclick=()=>setTool('inspect');
   $('cut-tool').onclick=()=>setTool('cut');
   $('road-grade').onchange=()=>{
@@ -402,6 +428,18 @@
     toast(city.setSignal(inspectedCell,$('signal-enabled').checked,Number($('signal-cycle').value)));updateUI();
   };
   $('signal-enabled').onchange=changeSignal;$('signal-cycle').onchange=changeSignal;
+  $('apply-road-grade').onclick=()=>{
+    if (inspectedCell === null || !city.roads.has(inspectedCell)) return;
+    const grade = Number($('selected-road-grade').value), message = city.edit(inspectedCell, false, grade);
+    if (message) inspectorGradeCell=null;
+    toast(message || `已调整为${ROAD_TYPES[grade].name}`);updateUI();draw();
+  };
+  $('remove-road').onclick=()=>{
+    if (inspectedCell === null || !city.roads.has(inspectedCell)) return;
+    const message=city.edit(inspectedCell,true,0);
+    if (!message) inspectedCell=null;
+    toast(message || '道路已拆除，建设预算已返还');updateUI();draw();
+  };
   $('save-design').onclick=()=>{
     try {
       localStorage.setItem(STORAGE_PREFIX+city.level.id,JSON.stringify(city.serializeDesign()));
@@ -439,7 +477,7 @@
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-    if(e.key==='1')setTool('road');if(e.key==='2')setTool('erase');if(e.key==='3')setTool('inspect');if(e.key==='4')setTool('cut');
+    if(e.key==='1')setTool('road');if(e.key==='3')setTool('inspect');if(e.key==='4')setTool('cut');
     if(e.key==='Escape')keyboardAnchor=null;
     if(e.key.toLowerCase()==='p'){city.toggle();updateUI();e.preventDefault();}
     if(document.activeElement!==canvas)return;
@@ -456,7 +494,10 @@
     if(e.code==='Space'){
       e.preventDefault();if(e.repeat)return;keyboardMode=true;
       if(tool==='road'||tool==='cut') {keyboardAnchor=keyboardAnchor===null?keyboardCell:null;toast(keyboardAnchor===null?'本段结束':'用方向键延伸，空格或 Esc 结束');}
-      else toast(applyTool(keyboardCell,tool==='erase'));
+      else {
+        inspectedCell=city.roads.has(keyboardCell)?keyboardCell:null;
+        toast(inspectedCell===null?'这里没有道路':'已选择道路，请使用下方道路操作区');
+      }
       updateUI();
     }
   });

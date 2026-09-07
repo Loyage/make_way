@@ -26,6 +26,10 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .road-inspector h3 { margin-bottom: 8px; }
 .road-inspector p { font-size: 11px; line-height: 1.8; margin: 5px 0; }
 .road-inspector label { margin: 4px 0 10px; flex-wrap: wrap; }
+.road-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.road-actions label { margin: 0; }
+.road-actions .tool { border-color: var(--line); background: var(--paper); }
+.road-actions .danger-button { color: #a95749; border-color: #d9b7ae; }
 .road-inspector.locked { display: block; color: var(--muted); }
 .signal-controls { border-left: 1px solid var(--line); padding-left: 24px; }
 .road-inspector.locked .signal-controls { display: none; }

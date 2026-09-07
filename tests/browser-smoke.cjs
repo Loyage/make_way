@@ -58,7 +58,8 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');
     await click('#confirm-level');
     assert.equal(await text('budget'),'0');
-    await click('#erase-tool');await drag(13,4,13,6);
+    assert.equal(await evaluate('document.querySelector("#erase-tool")'),null);
+    await drag(13,4,13,4);await click('#remove-road');
     assert.ok(Number(await text('budget'))>0);
     await click('#save-design');await click('#road-tool');
 
@@ -72,7 +73,7 @@ async function main() {
 
     await go(3);
     await select('road-grade','2');await drag(3,2,3,3);
-    await click('#inspect-tool');await drag(3,3,3,3);
+    await click('#road-tool');await drag(3,3,3,3);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
     await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
 
@@ -101,7 +102,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 7 progressive levels, feature gates, road grades, bottom inspector, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 7 progressive levels, direct road actions, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
