@@ -6,7 +6,7 @@
   const levels = () => TrafficCore.LEVELS;
   let city = null, tool = 'road', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
-  let lastCell = null, dragGrade = 0, dragPath = [], dragChanges = [], dragRetract = false, retractLinks = [];
+  let lastCell = null, dragGrade = 0, dragPath = [], dragChanges = [], dragRetract = false, dragRetractOrigin = false, retractLinks = [];
   let cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, roadGrade = 0, inspectedCell = null, inspectorGradeCell = null;
@@ -96,7 +96,7 @@
     if (value === 'cut' && !city.level.features.cut || value === 'inspect' && !city.level.features.inspect) {
       toast(`完成前面的教学关卡后解锁${value === 'cut' ? '剪刀' : '路况与信号'}`); return;
     }
-    tool = value;keyboardAnchor=null;dragging=false;lastCell=null;dragRetract=false;retractLinks=[];
+    tool = value;keyboardAnchor=null;dragging=false;lastCell=null;dragRetract=false;dragRetractOrigin=false;retractLinks=[];
     for (const name of ['road', 'inspect', 'cut']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
@@ -345,7 +345,7 @@
   }
   function reset(levelId = city.level.id) {
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragRetract=false;retractLinks=[];
+    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragRetract=false;dragRetractOrigin=false;retractLinks=[];
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     $('road-grade').value='0';updateGrade();
@@ -404,7 +404,10 @@
         if (!message && !dragRetract) {
           if (tool === 'road' && dragPath.length > 1 && next === dragPath[dragPath.length - 2]) {
             message = undoRoadChange(dragChanges[dragChanges.length - 1]);
-            if (!message) { dragPath.pop(); dragChanges.pop(); lastCell = next; }
+            if (!message) {
+              dragPath.pop();dragChanges.pop();lastCell=next;
+              if (dragPath.length===1&&dragRetractOrigin) dragRetract=dragRetractOrigin;
+            }
           } else {
             const change = tool === 'road' ? roadChange(lastCell, next) : null;
             message = tool==='cut' ? city.cut(lastCell,next) : city.connect(lastCell,next,dragGrade);
@@ -415,7 +418,7 @@
           }
         }
         inspectedCell=city.roads.has(next)?next:null;
-        if(message) {dragging=false;lastCell=null;dragRetract=false;retractLinks=[];toast(message);updateUI();draw();return;}
+        if(message) {dragging=false;lastCell=null;dragRetract=false;dragRetractOrigin=false;retractLinks=[];toast(message);updateUI();draw();return;}
       }
     } else {
       inspectedCell=city.roads.has(n)?n:null;lastCell=n;dragPath=[n];
@@ -432,10 +435,10 @@
     const roadAtBuilding=city.roads.has(hover)&&links.some(n=>city.buildings.has(n));
     dragRetract=tool!=='road'?false:city.buildings.has(hover)&&roadNeighbors.length?'building'
       :city.roads.has(hover)&&!city.bridges.has(hover)&&!roadAtBuilding&&roadNeighbors.length<=1?'road':false;
-    retractLinks=[];paint(hover);
+    dragRetractOrigin=dragRetract;retractLinks=[];paint(hover);
   });
   canvas.addEventListener('pointermove',e=>{keyboardMode=false;hover=eventCell(e);if(dragging)paint(hover);});
-  const endDrag=()=>{dragging=false;lastCell=null;dragPath=[];dragChanges=[];dragRetract=false;retractLinks=[];updateUI();draw();};
+  const endDrag=()=>{dragging=false;lastCell=null;dragPath=[];dragChanges=[];dragRetract=false;dragRetractOrigin=false;retractLinks=[];updateUI();draw();};
   canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
   canvas.addEventListener('pointerleave',()=>{hover=null;});
   $('road-tool').onclick=()=>setTool('road');

@@ -22,11 +22,14 @@ async function main() {
   const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const text=id=>evaluate(`document.getElementById(${JSON.stringify(id)}).textContent`);
   const select=(id,value)=>evaluate(`(()=>{const e=document.getElementById(${JSON.stringify(id)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  async function drag(x1,y1,x2,y2){
+  async function dragThrough(points){
     const r=await evaluate('(()=>{const r=document.querySelector("canvas").getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}})()');
     const mouse=(type,x,y)=>send('Input.dispatchMouseEvent',{type,x:r.x+(x+.5)*r.w/16,y:r.y+(y+.5)*r.h/12,button:'left',buttons:type==='mouseReleased'?0:1,clickCount:1});
-    await mouse('mousePressed',x1,y1);await mouse('mouseMoved',x2,y2);await mouse('mouseReleased',x2,y2);
+    await mouse('mousePressed',...points[0]);
+    for(const point of points.slice(1))await mouse('mouseMoved',...point);
+    await mouse('mouseReleased',...points[points.length-1]);
   }
+  const drag=(x1,y1,x2,y2)=>dragThrough([[x1,y1],[x2,y2]]);
   async function go(index){
     await click(`.level-card:nth-child(${index+1})`);
     if(await evaluate('document.querySelector("#level-dialog").open'))await click('#confirm-level');
@@ -54,7 +57,8 @@ async function main() {
     await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road connected to a building should not retract from its road cell');
     await drag(2,3,3,3);assert.equal(await text('budget'),'34','a road connected to a building should retract from the building');
     await drag(2,3,3,3);assert.equal(await text('budget'),'33','dragging outward from the building should rebuild the road');
-    await drag(5,3,4,3);assert.equal(await text('budget'),'34','a bare road endpoint should still retract');
+    await dragThrough([[5,3],[6,3],[5,3],[4,3]]);
+    assert.equal(await text('budget'),'34','returning from an extension should seamlessly continue into endpoint retraction');
     await drag(4,3,5,3);assert.equal(await text('budget'),'33','dragging outward from a bare endpoint should still extend the road');
     await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
     await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'33');
