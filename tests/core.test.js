@@ -69,25 +69,27 @@ test('unconnected city loses at the deadline and terminal states do not advance'
   const snapshot=JSON.stringify(city);city.toggle();run(city,3);city.edit(key(1,1));
   assert.equal(JSON.stringify(city),snapshot);
 });
-test('occupied cells and reserved next cells cannot be demolished', () => {
-  const city=new City();connect(city);city.toggle();run(city,2);
-  const car=city.cars.find(c=>city.roads.has(c.cell));assert.ok(car);
-  assert.ok(city.edit(car.cell,true));assert.ok(city.roads.has(car.cell));
-  if(car.next!==null&&city.roads.has(car.next)) {assert.ok(city.edit(car.next,true));assert.ok(city.roads.has(car.next));}
-});
 test('disconnecting and reconnecting roads updates path availability', () => {
   const city=new City();connect(city);
   city.edit(key(5,3),true);assert.equal(city.paths[0],null);
   city.connect(key(4,3),key(5,3));city.connect(key(5,3),key(6,3));assert.ok(city.paths[0]);
 });
-test('simulation never moves cars onto deleted roads during live editing', () => {
-  const city=new City();connect(city);city.toggle();run(city,1);
-  city.edit(key(5,3),true);run(city,8);
-  for(const car of city.cars) {
-    assert.ok(city.roads.has(car.cell)||city.buildings.has(car.cell));
-    assert.ok(car.next===null||city.roads.has(car.next)||city.buildings.has(car.next));
-  }
-  city.connect(key(4,3),key(5,3));city.connect(key(5,3),key(6,3));run(city,110);assert.equal(city.state,'won');
+test('operation locks every planning mutation while running or paused', () => {
+  const city=new City();connect(city);
+  const edge=city.serializeDesign().edges[0],before=city.serializeDesign();
+  city.toggle();
+  for(const mutate of [
+    ()=>city.edit(key(0,0)),
+    ()=>city.connect(edge[0],edge[1]),
+    ()=>city.cut(edge[0],edge[1]),
+    ()=>city.setSignal(edge[0],true,2),
+    ()=>city.transact([{type:'edit',cell:key(0,0),erase:false,grade:0}])
+  ]) assert.equal(mutate(),'运营期间不能修改规划，请先停止运营');
+  assert.equal(city.loadDesign(before),'运营期间不能读取设计，请先停止运营');
+  assert.deepEqual(city.serializeDesign(),before);
+  city.toggle();assert.equal(city.state,'paused');
+  assert.equal(city.edit(key(0,0)),'运营期间不能修改规划，请先停止运营');
+  assert.deepEqual(city.serializeDesign(),before);
 });
 test('stopping operation keeps the design and resets all simulation progress', () => {
   const city=new City();connect(city);city.edit(key(5,3),false,2);city.toggle();run(city,3);city.toggle();
@@ -100,7 +102,7 @@ test('stopping operation keeps the design and resets all simulation progress', (
 test('designs round-trip with road grades and signals while invalid data is atomic', () => {
   const source=new City();connect(source);source.edit(key(5,3),false,2);
   const junction=key(4,3);source.connect(junction,key(4,4));assert.equal(source.setSignal(junction,false,6),'');
-  const design=source.serializeDesign(), target=new City();target.edit(key(1,1));target.toggle();run(target,1);
+  const design=source.serializeDesign(), target=new City();target.edit(key(1,1));target.toggle();run(target,1);target.stop();
   assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');
   assert.deepEqual(target.serializeDesign(),design);assert.equal(target.state,'planning');assert.equal(target.elapsed,0);
   const before=target.serializeDesign();

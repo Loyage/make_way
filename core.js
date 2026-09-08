@@ -138,7 +138,7 @@
         || [[c.cell,c.cellMovement],[c.next,c.nextMovement]].some(([n,m]) => (n===a && m?.exitCell===b) || (n===b && m?.exitCell===a))));
     }
     connect(a,b,grade=0) {
-      if (['won','lost'].includes(this.state)) return '本局已结束';
+      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(a) || !Number.isInteger(b) || a<0 || b<0 || a>=WIDTH*HEIGHT || b>=WIDTH*HEIGHT || !neighbors(a).includes(b)) return '请沿相邻方格拖动';
       if (this.buildings.has(a) && this.buildings.has(b)) return '建筑之间需要道路';
       if (!this.edges.get(a)?.has(b) && [a,b].some(n=>this.roads.has(n) && this.links(n).length===2 && this.occupants(n).length)) return '请等车辆通过后再增设路口';
@@ -150,7 +150,7 @@
       this.addEdge(a,b);this.refreshPaths();return '';
     }
     cut(a,b) {
-      if (['won','lost'].includes(this.state)) return '本局已结束';
+      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!this.edges.get(a)?.has(b)) return '';
       if (this.edgeLocked(a,b)) return '车辆正在通过或已预约这段连接，请稍后剪断';
       if ([a,b].some(n=>this.signals.has(n) && this.links(n).length===3 && this.occupants(n).length)) return '请等车辆通过后再改变路口';
@@ -216,7 +216,7 @@
       for (const n of junctions) if (!this.signals.has(n)) this.signals.set(n, { enabled: false, green: 2 });
     }
     setSignal(n, enabled, green = 2) {
-      if (['won', 'lost'].includes(this.state)) return '本局已结束';
+      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!this.signals.has(n)) return '请选择三岔或十字路口';
       if (typeof enabled !== 'boolean' || ![2, 4, 6].includes(green)) return '无效的信号设置';
       if (this.signals.get(n).enabled !== enabled && this.occupants(n).length) return '请等路口车辆通过后再切换控制方式';
@@ -329,7 +329,7 @@
     }
     edit(n, erase = false, grade = 0) {
       if (!Number.isInteger(n) || n < 0 || n >= WIDTH * HEIGHT) return '';
-      if (this.state === 'won' || this.state === 'lost') return '本局已结束';
+      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
       if (erase) {
@@ -385,6 +385,7 @@
       };
     }
     loadDesign(design) {
+      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能读取设计，请先停止运营';
       if (!design || ![1,2].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
       const candidate = new City(this.level.id), seenRoads = new Set(), seenSignals = new Set();
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();

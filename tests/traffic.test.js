@@ -93,7 +93,8 @@ test('green phases alternate with an all-red clearance and freeze while paused',
   }
   city.setSignal(n,true,4);city.elapsed=3;assert.equal(city.signalPhase(n).axis,'horizontal');
   const phase=city.signalPhase(n);city.state='paused';city.step(.1);assert.deepEqual(city.signalPhase(n),phase);
-  city.setSignal(n,false,4);assert.equal(city.signalPhase(n).axis,'off');assert.equal(city.canEnter(n,WIDTH),true);
+  assert.equal(city.setSignal(n,false,4),'运营期间不能修改规划，请先停止运营');
+  assert.deepEqual(city.signalPhase(n),phase);
 });
 test('red holds a vehicle upstream; green permits entry; phase changes never revoke reservations',()=>{
   const {city,n}=cross(),c=car(n-WIDTH,WIDTH);c.route=1;city.cars=[c];city.toggle();city.step(.05);
