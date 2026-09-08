@@ -10,13 +10,17 @@ escape_unit() {
   value="${value//\\/\\\\}"; value="${value//\"/\\\"}"; value="${value//%/%%}"
   printf '%s' "$value"
 }
-# Admin password: prefer ADMIN_PASSWORD, fall back to a .env file, else a plain default.
+# Admin password: prefer ADMIN_PASSWORD, then fall back to the local .env file.
 PASSWORD="${ADMIN_PASSWORD:-}"
 if [[ -f "$ROOT/.env" ]]; then
   source "$ROOT/.env"
   PASSWORD="${PASSWORD:-$ADMIN_PASSWORD}"
 fi
-PASSWORD="${PASSWORD:-admin}"
+if [[ -z "$PASSWORD" || "$PASSWORD" == "admin" ]]; then
+  printf 'Refusing to install the network-facing admin panel without a strong ADMIN_PASSWORD.\n' >&2
+  printf 'Set ADMIN_PASSWORD in the environment or in %s/.env first.\n' "$ROOT" >&2
+  exit 1
+fi
 mkdir -p "$CONFIG"
 cat > "$CONFIG/traffic-game-admin.service" <<EOF
 [Unit]

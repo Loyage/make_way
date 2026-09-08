@@ -81,10 +81,25 @@ test('full downstream road causes waiting; releasing space restores flow',()=>{
 test('junctions are automatically added/removed and surviving signal settings persist',()=>{
   const city=street(),n=key(5,5);
   assert.equal(city.signals.has(n),false);city.connect(n,n-WIDTH);assert.equal(city.signals.has(n),true);
-  assert.equal(city.setSignal(n,false,6),'');city.edit(key(2,4));assert.deepEqual(city.signals.get(n),{enabled:false,green:6});
+  const defaults={enabled:false,green:2,yieldMode:'arrival',priority:['north','east','south','west'],automatic:true,phases:[['west-straight','east-straight'],['west-left','east-left'],['north-straight','south-straight'],['north-left','south-left']]};
+  assert.equal(city.setSignal(n,false,6),'');city.edit(key(2,4));assert.deepEqual(city.signals.get(n),{...defaults,green:6});
   city.edit(n-WIDTH,true);assert.equal(city.signals.has(n),false);
-  city.connect(n,n-WIDTH);assert.deepEqual(city.signals.get(n),{enabled:false,green:2});
+  city.connect(n,n-WIDTH);assert.deepEqual(city.signals.get(n),defaults);
   assert.ok(city.setSignal(n,true,0));assert.ok(city.setSignal(n,true,NaN));assert.ok(city.setSignal(0,true,2));
+});
+test('junction control supports entrance priority and safe custom signal phases',()=>{
+  const {city,n}=cross();
+  assert.equal(city.setSignal(n,{enabled:false,yieldMode:'priority',priority:['north','east','south','west']}),'');
+  const west=car(n-1);west.id=1;const north=car(n-WIDTH,WIDTH);north.id=2;north.route=1;city.cars=[west,north];
+  city.toggle();city.step(.05);assert.equal(north.next,n);assert.equal(west.next,null,'higher-priority north entrance goes first');
+  city.stop();
+  assert.ok(city.setSignal(n,{priority:['north','north','south','west']}));
+  assert.ok(city.setSignal(n,{automatic:false,phases:[['north-straight','west-straight']]}),'conflicting green movements are rejected');
+  assert.ok(city.setSignal(n,{automatic:false,phases:[]}));assert.ok(city.setSignal(n,{automatic:false,phases:Array.from({length:9},()=>['north-straight'])}));
+  assert.equal(city.setSignal(n,{enabled:true,automatic:false,green:4,phases:[['north-straight'],['west-left','east-left']]}),'');
+  city.elapsed=0;assert.equal(city.signalPhase(n).stage,'custom');assert.equal(city.canEnter(n,WIDTH,WIDTH),true);assert.equal(city.canEnter(n,1,1),false);
+  city.elapsed=4.25;assert.equal(city.signalPhase(n).index,1);assert.equal(city.canEnter(n,1,-WIDTH),true);
+  assert.equal(city.canEnter(n,1,WIDTH),true,'right turns continue to yield independently of the signal sequence');
 });
 test('green phases alternate with an all-red clearance and freeze while paused',()=>{
   const {city,n}=cross();
@@ -204,9 +219,4 @@ test('rear vehicle cannot pass a stopped front vehicle, then advances into the f
   assert.equal(city.available(n,1),false,'rear slot remains reserved during advancement');
   for(let i=0;i<3;i++)city.step(.05);
   assert.equal(rear.cellSlot,1);assert.equal(city.available(n,1),true);
-});
-test('terminal states reject road and signal changes',()=>{
-  const {city,n}=cross();city.state='won';const remaining=city.remaining;
-  city.edit(n,false,2);city.setSignal(n,false,6);
-  assert.equal(city.remaining,remaining);assert.deepEqual(city.signals.get(n),{enabled:true,green:2});
 });

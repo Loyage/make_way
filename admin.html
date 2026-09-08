@@ -29,10 +29,10 @@
     </header>
 
     <main class="admin-main">
-      <nav class="level-sidebar" aria-label="关卡列表">
+      <nav class="level-sidebar" aria-label="章节与关卡列表">
         <div class="sidebar-head">
-          <span>关卡列表</span>
-          <button id="new-level" class="tool">＋ 新建关卡</button>
+          <span>章节与关卡</span>
+          <div><button id="new-chapter" class="tool">＋ 章节</button><button id="new-level" class="tool">＋ 关卡</button></div>
         </div>
         <div id="level-nav" class="level-nav"></div>
         <div class="sidebar-actions">
@@ -52,6 +52,7 @@
           <details class="editor-section" open>
             <summary>基础信息</summary>
             <div class="field-grid">
+              <label>所属章节<select id="f-chapter"></select></label>
               <label>关卡 id（英文，唯一）<input id="f-id" type="text"></label>
               <label>中文名<input id="f-name" type="text"></label>
               <label>英文名<input id="f-english" type="text"></label>

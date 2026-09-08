@@ -26,7 +26,7 @@ test('invalid and unaffordable connections are atomic and never wrap edges',()=>
 test('scissors protect crossings and committed exits; cuts can be saved and restored',()=>{
  const {c,n}=cross(),a=car(n-1,0,1);c.cars=[a];c.toggle();c.step(.05);
  assert.equal(a.next,n);assert.ok(c.cut(n-1,n));assert.ok(c.cut(n,n+1));assert.ok(c.setSignal(n,true));
- c.stop();c.cut(n,n+1);const saved=c.serializeDesign();assert.equal(saved.version,5);
+ c.stop();c.cut(n,n+1);const saved=c.serializeDesign();assert.equal(saved.version,6);
  // Roundtrip on a real level, including a disconnected surface.
  const real=new City();real.connect(key(4,3),key(5,3));real.cut(key(4,3),key(5,3));const target=new City();
  assert.equal(target.loadDesign(real.serializeDesign()),'');assert.deepEqual(target.serializeDesign(),real.serializeDesign());

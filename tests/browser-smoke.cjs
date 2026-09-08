@@ -2,7 +2,8 @@
  * and Chromium exposing a local DevTools endpoint on port 9333. */
 'use strict';
 const assert = require('node:assert/strict');
-const LEVELS = require('../built-in-levels.json');
+const CATALOG = require('../built-in-levels.json');
+const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
@@ -38,9 +39,10 @@ async function main() {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
+    assert.equal(await evaluate('document.querySelectorAll(".level-chapter").length'),2);
     assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),8);
     for(let i=0;i<LEVELS.length;i++){
-      await click(`.level-card:nth-child(${i+1})`);
+      await click(`.level-card[data-level-id="${LEVELS[i].id}"]`);
       assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
       assert.equal(await text('map-name'),LEVELS[i].name);
       const initial=new (require('../core.js').City)(LEVELS[i].id);
@@ -56,6 +58,8 @@ async function main() {
 
     await go(0);
     assert.equal(await evaluate('document.querySelector("#road-grade")'),null);
+    assert.ok(await evaluate('document.querySelector("#signal-yield-mode")!==null && document.querySelector("#signal-automatic")!==null'));
+    assert.ok(await evaluate('document.querySelector("#signal-priority-list")!==null && document.querySelector("#signal-phase-list")!==null && document.querySelector("#add-signal-phase")!==null'));
     assert.ok(await evaluate('document.querySelector("#select-tool")!==null'));
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');

@@ -16,11 +16,9 @@ const BUILT_IN_LEVELS_PATH = path.join(__dirname, 'built-in-levels.json');
 // Listening beyond loopback exposes this panel to the network. The admin
 // password (and a future TLS layer) is then the only barrier; keep it strong.
 const isLoopback = host => host === '127.0.0.1' || host === 'localhost' || host === '::1';
-if (!isLoopback(HOST)) {
-  console.warn('ADMIN_HOST is not a loopback address: the admin panel is reachable from the network and is only protected by the password.');
-}
-// Simple password gate. Prefer ADMIN_PASSWORD (or a .env) over the built-in default.
-function getPassword() { return process.env.ADMIN_PASSWORD || process.env.PI_ADMIN_PASSWORD || 'admin'; }
+// Refuse to start without an explicitly configured password. The panel binds to
+// all interfaces by default, so a built-in credential would make it unsafe.
+function getPassword() { return process.env.ADMIN_PASSWORD || process.env.PI_ADMIN_PASSWORD || ''; }
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 const ADMIN_FILES = {
@@ -47,16 +45,17 @@ function issueSession() {
   sessions.set(token, { expires: Date.now() + SESSION_TTL_MS });
   return token;
 }
-function authenticated(req) {
+function sessionToken(req) {
   const header = req.headers.cookie || '';
   for (const part of header.split(';')) {
     const [name, value] = part.trim().split('=');
-    if (name === 'traffic_admin') {
-      const session = sessions.get(value);
-      if (session && session.expires > Date.now()) return true;
-    }
+    if (name === 'traffic_admin') return value || '';
   }
-  return false;
+  return '';
+}
+function authenticated(req) {
+  const session = sessions.get(sessionToken(req));
+  return Boolean(session && session.expires > Date.now());
 }
 function timingSafeEqual(a, b) {
   const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
@@ -64,15 +63,23 @@ function timingSafeEqual(a, b) {
 }
 
 // ── levels.json storage ─────────────────────────────────────────────────────
+function normalizeCatalog(data) {
+  if (!Array.isArray(data)) return data;
+  if (data.length === 8) return { version: 1, chapters: [
+    { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: data.slice(0,4) },
+    { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: data.slice(4) }
+  ] };
+  return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: data }] };
+}
 function defaultLevels() {
-  return JSON.parse(fs.readFileSync(BUILT_IN_LEVELS_PATH, 'utf8'));
+  return normalizeCatalog(JSON.parse(fs.readFileSync(BUILT_IN_LEVELS_PATH, 'utf8')));
 }
 function readLevels() {
-  try { return JSON.parse(fs.readFileSync(LEVELS_PATH, 'utf8')); }
+  try { return normalizeCatalog(JSON.parse(fs.readFileSync(LEVELS_PATH, 'utf8'))); }
   catch (error) { if (error.code === 'ENOENT') return defaultLevels(); throw error; }
 }
-async function writeLevels(levels) {
-  const payload = JSON.stringify(levels, null, 2) + '\n';
+async function writeLevels(catalog) {
+  const payload = JSON.stringify(catalog, null, 2) + '\n';
   const tmp = LEVELS_PATH + '.tmp-' + process.pid;
   await fsp.writeFile(tmp, payload, 'utf8');
   await fsp.rename(tmp, LEVELS_PATH);
@@ -80,8 +87,20 @@ async function writeLevels(levels) {
 
 // ── Validation ──────────────────────────────────────────────────────────────
 function isCoord(n) { return Number.isInteger(n) && n >= 0 && n < WIDTH * HEIGHT; }
-function validateLevels(list) {
-  if (!Array.isArray(list) || list.length === 0) return '关卡数据必须是非空数组';
+function validateLevels(data) {
+  const catalog = normalizeCatalog(data);
+  if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.chapters) || !catalog.chapters.length) return '章节数据必须包含非空 chapters 数组';
+  const chapterIds = new Set();
+  for (const chapter of catalog.chapters) {
+    if (!chapter || typeof chapter.id !== 'string' || !/^[a-z0-9-]+$/.test(chapter.id)) return '章节 id 只能包含小写字母、数字和连字符';
+    if (chapterIds.has(chapter.id)) return `章节 id 重复：${chapter.id}`;
+    chapterIds.add(chapter.id);
+    if (typeof chapter.name !== 'string' || !chapter.name.trim()) return `章节「${chapter.id}」缺少名称`;
+    if (typeof chapter.english !== 'string' || !chapter.english.trim()) return `章节「${chapter.id}」缺少英文名`;
+    if (!Array.isArray(chapter.levels)) return `章节「${chapter.id}」的 levels 必须是数组`;
+  }
+  const list = catalog.chapters.flatMap(chapter => chapter.levels);
+  if (!list.length) return '至少需要一个关卡';
   const ids = new Set();
   for (const level of list) {
     if (!level || typeof level !== 'object') return '每个关卡都必须是对象';
@@ -93,9 +112,9 @@ function validateLevels(list) {
       if (typeof level[field] !== 'string' || !level[field].trim()) return `关卡「${level.id}」缺少 ${field}`;
     }
     // scalar parameters
-    if (!Number.isFinite(level.budget) || level.budget < 1) return `关卡「${level.id}」的预算无效`;
+    if (!Number.isInteger(level.budget) || level.budget < 1) return `关卡「${level.id}」的预算无效`;
     if (!Number.isFinite(level.duration) || level.duration < 1) return `关卡「${level.id}」的时长无效`;
-    if (!Number.isFinite(level.target) || level.target < 1) return `关卡「${level.id}」的目标无效`;
+    if (!Number.isInteger(level.target) || level.target < 1) return `关卡「${level.id}」的目标无效`;
     // features
     const features = level.features || {};
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals']) {
@@ -126,12 +145,12 @@ function validateLevels(list) {
       for (const h of route.homes) {
         if (!h || typeof h !== 'object' || !isCoord(h.cell)) return `关卡「${level.id}」的路线 homes 坐标越界`;
         if (!Number.isFinite(h.rate) || h.rate <= 0) return `关卡「${level.id}」的路线 homes.rate 无效`;
-        if (!Number.isFinite(h.passengers) || h.passengers <= 0) return `关卡「${level.id}」的路线 homes.passengers 无效`;
+        if (!Number.isInteger(h.passengers) || h.passengers <= 0) return `关卡「${level.id}」的路线 homes.passengers 无效`;
       }
       for (const g of route.goals) {
         if (!g || typeof g !== 'object' || !isCoord(g.cell)) return `关卡「${level.id}」的路线 goals 坐标越界`;
         if (typeof g.label !== 'string' || !g.label.trim()) return `关卡「${level.id}」的路线 goals.label 无效`;
-        if (g.input != null && (!Number.isFinite(g.input) || g.input <= 0)) return `关卡「${level.id}」的路线 goals.input 无效`;
+        if (g.input != null && (!Number.isInteger(g.input) || g.input <= 0)) return `关卡「${level.id}」的路线 goals.input 无效`;
       }
       if (route.homes.some(h => route.goals.some(g => h.cell === g.cell))) return `关卡「${level.id}」的路线住宅与目的地位于同一格`;
       const homeCells = route.homes.map(h => h.cell);
@@ -151,6 +170,12 @@ function validateLevels(list) {
         buildingRoute.set(g.cell, ri);
       }
     }
+    const deliverable = level.routes.reduce((sum, route) => {
+      const passengers = route.homes.reduce((total, home) => total + home.passengers, 0);
+      const capacity = route.goals.some(goal => goal.input == null) ? Infinity : route.goals.reduce((total, goal) => total + goal.input, 0);
+      return sum + Math.min(passengers, capacity);
+    }, 0);
+    if (level.target > deliverable) return `关卡「${level.id}」的目标 ${level.target} 超过最多可送达人数 ${deliverable}`;
     // homes/goals must not sit on water or trees
     const forbidden = new Set([...level.water, ...level.trees]);
     for (const route of level.routes) {
@@ -160,7 +185,7 @@ function validateLevels(list) {
     // initialEdges
     if (level.initialEdges !== undefined && level.initialEdges !== null) {
       if (!Array.isArray(level.initialEdges)) return `关卡「${level.id}」的 initialEdges 必须是数组`;
-      const seen = new Set();
+      const seen = new Set(), roadGrades = new Map();
       for (const edge of level.initialEdges) {
         if (!Array.isArray(edge) || edge.length !== 3) return `关卡「${level.id}」的 initialEdges 每项须为 [a,b,grade]`;
         const [a, b, grade] = edge;
@@ -168,8 +193,17 @@ function validateLevels(list) {
         if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return `关卡「${level.id}」的 initialEdges 道路等级无效`;
         const id = `${Math.min(a, b)}:${Math.max(a, b)}`;
         if (seen.has(id)) return `关卡「${level.id}」的 initialEdges 包含重复连接`;
+        if (buildingRoute.has(a) && buildingRoute.has(b)) return `关卡「${level.id}」的 initialEdges 不能直接连接两座建筑`;
+        for (const cell of [a,b]) if (!buildingRoute.has(cell)) {
+          if (level.trees.includes(cell) || level.water.includes(cell) && !level.bridges.includes(cell)) return `关卡「${level.id}」的初始道路 ${cell} 位于不可建设地形`;
+          // Initial edges are applied in order; later edges may repaint a shared
+          // road cell, matching City.connect() during level construction.
+          roadGrades.set(cell, grade);
+        }
         seen.add(id);
       }
+      const initialCost = [...roadGrades].reduce((sum, [,grade]) => sum + ROAD_TYPES[grade].cost, 0);
+      if (initialCost > level.budget) return `关卡「${level.id}」的初始道路需要 ${initialCost} 点，超过预算 ${level.budget}`;
     }
   }
   return '';
@@ -197,7 +231,7 @@ function send(res, status, body, headers = {}) {
   res.end(data);
 }
 
-async function handleApi(req, res, pathname) {
+async function handleApi(req, res, pathname, adminPassword) {
   pruneSessions();
   if (pathname === '/api/login' && req.method === 'POST') {
     let body = '';
@@ -205,7 +239,7 @@ async function handleApi(req, res, pathname) {
     req.on('end', () => {
       let password = '';
       try { password = JSON.parse(body || '{}').password || ''; } catch { /* ignore */ }
-      if (!timingSafeEqual(password, getPassword())) return send(res, 401, { error: '密码错误' });
+      if (!timingSafeEqual(password, adminPassword)) return send(res, 401, { error: '密码错误' });
       const token = issueSession();
       send(res, 200, { ok: true }, {
         'Set-Cookie': `traffic_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_MS / 1000}`
@@ -214,26 +248,27 @@ async function handleApi(req, res, pathname) {
     return true;
   }
   if (pathname === '/api/logout' && req.method === 'POST') {
+    sessions.delete(sessionToken(req));
     send(res, 200, { ok: true }, { 'Set-Cookie': 'traffic_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
     return true;
   }
   if (!authenticated(req)) { send(res, 401, { error: '未登录' }); return true; }
 
   if (pathname === '/api/levels' && req.method === 'GET') {
-    send(res, 200, { levels: readLevels(), hasOverride: fs.existsSync(LEVELS_PATH) });
+    send(res, 200, { catalog: readLevels(), hasOverride: fs.existsSync(LEVELS_PATH) });
     return true;
   }
   if (pathname === '/api/levels' && req.method === 'PUT') {
     let body = '';
     req.on('data', chunk => { body += chunk; if (body.length > 1024 * 1024) req.destroy(); });
     req.on('end', async () => {
-      let levels;
-      try { levels = JSON.parse(body || '[]'); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
-      const error = validateLevels(levels) || setLevels(levels);
+      let catalog;
+      try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+      const error = validateLevels(catalog) || setLevels(catalog);
       if (error) return send(res, 400, { error });
       try {
-        await writeLevels(levels);
-        send(res, 200, { ok: true, count: levels.length });
+        await writeLevels(catalog);
+        send(res, 200, { ok: true, chapters: catalog.chapters.length, count: catalog.chapters.reduce((sum,chapter)=>sum+chapter.levels.length,0) });
       } catch (writeError) {
         send(res, 500, { error: '写入失败：' + writeError.message });
       }
@@ -245,13 +280,16 @@ async function handleApi(req, res, pathname) {
 
 async function createAdminServer({ port = PORT, host = HOST } = {}) {
   if (!/^\d+$/.test(String(port)) || port < 0 || port > 65535) throw new Error('ADMIN_PORT/PORT must be an integer between 0 and 65535');
+  const adminPassword = getPassword();
+  if (!adminPassword) throw new Error('ADMIN_PASSWORD or PI_ADMIN_PASSWORD must be set');
+  if (!isLoopback(host)) console.warn('ADMIN_HOST is not a loopback address: the admin panel is reachable from the network and is only protected by the password.');
   const assets = await loadAssets();
   const server = http.createServer({ maxHeaderSize: 8192 }, async (req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(req.url.split('?')[0]); }
     catch { return send(res, 400, { error: 'Bad request' }); }
     if (pathname.startsWith('/api/')) {
-      try { if (await handleApi(req, res, pathname)) return; }
+      try { if (await handleApi(req, res, pathname, adminPassword)) return; }
       catch (error) { return send(res, 500, { error: error.message }); }
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Method not allowed' });
@@ -283,4 +321,4 @@ function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { validateLevels, readLevels, writeLevels, defaultLevels, createAdminServer };
+module.exports = { validateLevels, normalizeCatalog, readLevels, writeLevels, defaultLevels, createAdminServer };

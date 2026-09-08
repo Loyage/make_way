@@ -34,7 +34,19 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .road-actions .tool { border-color: var(--line); background: var(--paper); }
 .road-actions .danger-button { color: #a95749; border-color: #d9b7ae; }
 .road-inspector.locked { display: block; color: var(--muted); }
-.signal-controls { border-left: 1px solid var(--line); padding-left: 24px; }
+.signal-controls { display: grid; gap: 10px; border-left: 1px solid var(--line); padding-left: 24px; }
+.signal-controls [hidden] { display: none !important; }
+.signal-master { font-weight: 700; }
+.signal-subpanel { display: grid; gap: 9px; padding: 10px 12px; border: 1px solid #d5dfd2; border-radius: 9px; background: #f8faf3; }
+.signal-subpanel > label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; }
+.signal-order-list, .signal-phase-list { display: grid; gap: 7px; margin-top: 6px; }
+.signal-order-row, .signal-phase-heading { display: flex; align-items: center; gap: 5px; }
+.signal-order-row span, .signal-phase-heading strong { margin-right: auto; font-size: 10px; }
+.signal-order-row .tool, .signal-phase-heading .tool, .signal-custom-heading .tool { min-height: 28px; padding: 4px 8px; font-size: 10px; }
+.signal-custom-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.signal-phase-card { padding: 8px; border: 1px solid #d5dfd2; border-radius: 8px; background: #fffef9; }
+.signal-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; margin-top: 8px; }
+.signal-action-grid label { display: flex; align-items: center; gap: 5px; font-size: 9px; }
 .road-inspector.locked .signal-controls { display: none; }
 #signal-phase { color: var(--green); min-height: 20px; }
 .bus-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 22px; border-top: 1px solid var(--line); background: #eef7f5; }
@@ -76,7 +88,12 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .level-selector { margin-bottom: 24px; }
 .level-selector-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 12px; }
 .level-selector-heading small { color: var(--muted); font-size: 10px; }
-.level-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.level-list { display: grid; gap: 14px; }
+.level-chapter { padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: #f8f8f2; }
+.level-chapter-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 2px 9px; }
+.level-chapter-heading strong { color: var(--green); font-size: 12px; }
+.level-chapter-heading small { color: var(--muted); font-size: 9px; letter-spacing: 1px; }
+.level-chapter-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .level-card { position: relative; text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 15px 12px; color: var(--ink); }
 .level-card strong { display: block; font-size: 13px; margin: 8px 0 5px; }
 .level-card small { color: var(--muted); font-size: 10px; }
@@ -86,7 +103,7 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .level-card.selected::after { content: '●'; position: absolute; right: 12px; top: 13px; font-size: 9px; color: var(--green); }
 .chapter small { max-width: 125px; }
 @media (max-width: 760px) {
-  .level-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .level-chapter-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .level-card { padding: 11px; }
   .level-card strong { font-size: 12px; }
   .level-card small { font-size: 9px; }

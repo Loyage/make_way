@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, LEVELS, WIDTH, HEIGHT } = require('../core.js');
+const { City, LEVELS, CHAPTERS, WIDTH, HEIGHT } = require('../core.js');
 
 const { buildReferencePlan } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
@@ -45,7 +45,9 @@ for (const level of LEVELS) {
     assert.equal(city.state,'lost');assert.equal(city.elapsed,level.duration);
   });
 }
-test('eight levels unlock tools progressively and definitions stay immutable', () => {
+test('two chapters contain four progressively unlocked levels each', () => {
+  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',4],['city-control','城市调度',4]]);
+  assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
   assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','woodland','signal-school','multi-route-school','rush-hour','bus-school']);
   for(const id of ['bridge-school','riverside','cut-school']) assert.throws(()=>new City(id),RangeError);
   const names=['grade','load','cut','inspect','signals','bus'];

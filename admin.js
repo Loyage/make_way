@@ -13,8 +13,9 @@
   ];
 
   const canvas = $('map'), ctx = canvas.getContext('2d');
-  let levels = [];          // full level set
-  let currentIndex = null;  // selected index into levels
+  let catalog = { version: 1, chapters: [] };
+  let currentChapterIndex = 0;
+  let currentLevelIndex = null;
   let tool = 'water';
   let roadGrade = 0;
   let activeRoute = 0;      // which route the home/goal tools place
@@ -25,10 +26,14 @@
   let cellSize = 40;
 
   // ── Current level helpers ─────────────────────────────────────────────
-  const current = () => (currentIndex === null ? null : levels[currentIndex]);
+  const chapters = () => catalog.chapters;
+  const currentChapter = () => chapters()[currentChapterIndex] || null;
+  const current = () => (currentLevelIndex === null ? null : currentChapter()?.levels[currentLevelIndex] || null);
+  const allLevels = () => chapters().flatMap(chapter => chapter.levels);
   const currentRoute = () => current()?.routes[activeRoute] || null;
   const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
   const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
+  function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
   function markDirty() { dirty = true; const el = $('save-status'); el.textContent = '有未保存更改'; el.classList.add('dirty'); }
 
   // ── API ───────────────────────────────────────────────────────────────
@@ -46,9 +51,11 @@
   }
   async function loadLevels() {
     const data = await api('/api/levels');
-    levels = data.levels;
-    currentIndex = levels.length ? 0 : null;
+    catalog = data.catalog;
+    currentChapterIndex = 0;
+    currentLevelIndex = chapters()[0]?.levels.length ? 0 : null;
     dirty = false;
+    const status=$('save-status');status.textContent='已从磁盘载入';status.classList.remove('dirty');
     renderAll();
   }
   async function login(password) {
@@ -57,7 +64,7 @@
     await loadLevels();
   }
   async function save() {
-    await api('/api/levels', { method: 'PUT', body: JSON.stringify(levels) });
+    await api('/api/levels', { method: 'PUT', body: JSON.stringify(catalog) });
     dirty = false; const el = $('save-status'); el.textContent = '已保存'; el.classList.remove('dirty');
     toast('已保存到 levels.json，重启游戏服务后生效');
   }
@@ -92,27 +99,38 @@
   // ── Rendering ─────────────────────────────────────────────────────────
   function renderLevelNav() {
     const nav = $('level-nav'); nav.replaceChildren();
-    levels.forEach((level, i) => {
-      const b = document.createElement('button');
-      b.className = i === currentIndex ? 'selected' : '';
-      const name = document.createElement('span'); name.textContent = level.name || level.id;
-      const id = document.createElement('small'); id.textContent = level.id;
-      b.append(name, id);
-      b.onclick = () => selectLevel(i);
-      nav.append(b);
+    chapters().forEach((chapter, ci) => {
+      const group=document.createElement('section');group.className='chapter-nav-group';
+      const head=document.createElement('div');head.className='chapter-nav-head';head.classList.toggle('selected',ci===currentChapterIndex);
+      const choose=document.createElement('button');choose.className='chapter-select';choose.type='button';
+      const title=document.createElement('strong');title.textContent=chapter.name;
+      const count=document.createElement('small');count.textContent=`${chapter.levels.length} 关`;
+      choose.append(title,count);choose.onclick=()=>selectChapter(ci);
+      const edit=document.createElement('button');edit.className='chapter-icon';edit.type='button';edit.textContent='✎';edit.title='编辑章节';edit.onclick=()=>editChapter(ci);
+      const remove=document.createElement('button');remove.className='chapter-icon danger-btn';remove.type='button';remove.textContent='×';remove.title='删除章节';remove.onclick=()=>deleteChapter(ci);
+      head.append(choose,edit,remove);group.append(head);
+      const list=document.createElement('div');list.className='chapter-levels';
+      chapter.levels.forEach((level,li)=>{
+        const b=document.createElement('button');b.className=ci===currentChapterIndex&&li===currentLevelIndex?'selected':'';
+        const name=document.createElement('span');name.textContent=level.name||level.id;
+        const id=document.createElement('small');id.textContent=level.id;
+        b.append(name,id);b.onclick=()=>selectLevel(ci,li);list.append(b);
+      });
+      group.append(list);nav.append(group);
     });
   }
   function renderEditor() {
     const level = current();
     const body = $('editor-body');
     if (!level) {
-      body.hidden = true; $('editor-title').textContent = '未选择关卡';
-      $('editor-subtitle').textContent = '从左侧选择或新建一个关卡开始编辑。';
+      body.hidden = true; $('editor-title').textContent = currentChapter()?.name || '未选择关卡';
+      $('editor-subtitle').textContent = currentChapter()?'此章节暂无关卡，可从左侧新建。':'从左侧选择或新建一个章节开始编辑。';
       return;
     }
     body.hidden = false;
     $('editor-title').textContent = level.name;
-    $('editor-subtitle').textContent = `${level.difficulty} · ${level.lesson} · id: ${level.id}`;
+    $('editor-subtitle').textContent = `${currentChapter().name} · ${level.difficulty} · ${level.lesson} · id: ${level.id}`;
+    const chapterSelect=$('f-chapter');chapterSelect.replaceChildren(...chapters().map(chapter=>{const option=document.createElement('option');option.value=chapter.id;option.textContent=chapter.name;return option;}));chapterSelect.value=currentChapter().id;
     $('f-id').value = level.id;
     $('f-name').value = level.name; $('f-english').value = level.english;
     $('f-difficulty').value = level.difficulty; $('f-lesson').value = level.lesson;
@@ -160,14 +178,14 @@
       route.homes.forEach((h, hi) => {
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
-          mkCoord(`住宅${hi + 1} 坐标`, h.cell, v => { h.cell = v; }),
+          mkCoord(`住宅${hi + 1} 坐标`, h.cell, v => { removeInitialEdgesAt(level,[h.cell]);h.cell = v; }),
           mkText('速率 rate（人/秒）', h.rate, v => { h.rate = Number(v); }),
           mkText('总输出 passengers', h.passengers, v => { h.passengers = Number(v); })
         );
         const use = document.createElement('button'); use.className = 'tool'; use.textContent = hi === activeHome ? '当前' : '设为当前';
         use.onclick = () => { activeRoute = ri; activeHome = hi; renderRoutes(); draw(); };
         const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
-        del.onclick = () => { route.homes.splice(hi, 1); if (activeHome >= route.homes.length) activeHome = Math.max(0, route.homes.length - 1); markDirty(); renderRoutes(); draw(); };
+        del.onclick = () => { if(route.homes.length===1){toast('每条路线至少保留一个住宅');return;}removeInitialEdgesAt(level,[h.cell]);route.homes.splice(hi, 1); if (activeHome >= route.homes.length) activeHome = Math.max(0, route.homes.length - 1); markDirty(); renderRoutes(); draw(); };
         row.append(use, del); card.append(row);
       });
       const addHome = document.createElement('button'); addHome.className = 'tool'; addHome.textContent = '＋ 住宅';
@@ -179,14 +197,14 @@
       route.goals.forEach((g, gi) => {
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
-          mkCoord(`目的地${gi + 1} 坐标`, g.cell, v => { g.cell = v; }),
+          mkCoord(`目的地${gi + 1} 坐标`, g.cell, v => { removeInitialEdgesAt(level,[g.cell]);g.cell = v; }),
           mkText('标签 label', g.label, v => { g.label = v; }),
           mkText('输入上限 input（留空为不限）', g.input ?? '', v => { g.input = v === '' ? undefined : Number(v); })
         );
         const use = document.createElement('button'); use.className = 'tool'; use.textContent = gi === activeGoal ? '当前' : '设为当前';
         use.onclick = () => { activeRoute = ri; activeGoal = gi; renderRoutes(); draw(); };
         const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
-        del.onclick = () => { route.goals.splice(gi, 1); if (activeGoal >= route.goals.length) activeGoal = Math.max(0, route.goals.length - 1); markDirty(); renderRoutes(); draw(); };
+        del.onclick = () => { if(route.goals.length===1){toast('每条路线至少保留一个目的地');return;}removeInitialEdgesAt(level,[g.cell]);route.goals.splice(gi, 1); if (activeGoal >= route.goals.length) activeGoal = Math.max(0, route.goals.length - 1); markDirty(); renderRoutes(); draw(); };
         row.append(use, del); card.append(row);
       });
       const addGoal = document.createElement('button'); addGoal.className = 'tool'; addGoal.textContent = '＋ 目的地';
@@ -203,7 +221,7 @@
       });
       const remove = document.createElement('button'); remove.className = 'tool danger-btn'; remove.textContent = '删除路线';
       remove.style.marginLeft = 'auto';
-      remove.onclick = () => { level.routes.splice(ri, 1); if (activeRoute >= level.routes.length) activeRoute = Math.max(0, level.routes.length - 1); markDirty(); renderRoutes(); draw(); };
+      remove.onclick = () => { if(level.routes.length===1){toast('每个关卡至少保留一条路线');return;}removeInitialEdgesAt(level,[...route.homes,...route.goals].map(building=>building.cell));level.routes.splice(ri, 1); if (activeRoute >= level.routes.length) activeRoute = Math.max(0, level.routes.length - 1); markDirty(); renderRoutes(); draw(); };
       colorRow.append(remove);
       card.append(colorRow);
       list.append(card);
@@ -213,33 +231,53 @@
   function renderAll() { renderLevelNav(); renderEditor(); }
 
   // ── Selection & CRUD ─────────────────────────────────────────────────
-  function selectLevel(i) { currentIndex = i; activeRoute = 0; activeHome = 0; activeGoal = 0; renderAll(); }
+  function selectChapter(ci) { currentChapterIndex=ci;currentLevelIndex=chapters()[ci].levels.length?0:null;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
+  function selectLevel(ci,li) { currentChapterIndex=ci;currentLevelIndex=li;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
+  function uniqueChapterId() { let n=chapters().length+1,id=`chapter-${n}`;while(chapters().some(chapter=>chapter.id===id))id=`chapter-${++n}`;return id; }
+  function newChapter() {
+    const chapter={id:uniqueChapterId(),name:'新章节',english:'NEW CHAPTER',levels:[]};
+    chapters().push(chapter);currentChapterIndex=chapters().length-1;currentLevelIndex=null;markDirty();renderAll();
+  }
+  function editChapter(ci) {
+    const chapter=chapters()[ci],name=prompt('章节名称',chapter.name);if(name===null)return;
+    const english=prompt('章节英文名',chapter.english);if(english===null)return;
+    const id=prompt('章节 id（小写字母、数字和连字符）',chapter.id);if(id===null)return;
+    const next={name:name.trim(),english:english.trim(),id:id.trim()};
+    if(!next.name||!next.english||!/^[-a-z0-9]+$/.test(next.id)){toast('章节名称、英文名不能为空，id 只能包含小写字母、数字和连字符');return;}
+    if(chapters().some((item,index)=>index!==ci&&item.id===next.id)){toast('章节 id 不能重复');return;}
+    Object.assign(chapter,next);currentChapterIndex=ci;markDirty();renderAll();
+  }
+  function deleteChapter(ci) {
+    const chapter=chapters()[ci];
+    if(chapter.levels.length){toast('请先移动或删除该章节中的全部关卡');return;}
+    if(chapters().length===1){toast('至少保留一个章节');return;}
+    if(!confirm(`确定删除空章节「${chapter.name}」？`))return;
+    chapters().splice(ci,1);if(ci<currentChapterIndex)currentChapterIndex--;else if(ci===currentChapterIndex)currentChapterIndex=Math.min(ci,chapters().length-1);currentLevelIndex=chapters()[currentChapterIndex].levels.length?0:null;markDirty();renderAll();
+  }
   function newLevel() {
-    const id = 'level-' + (levels.length + 1);
-    levels.push({
+    const chapter=currentChapter();if(!chapter){toast('请先新建章节');return;}
+    let n=allLevels().length+1,id=`level-${n}`;while(allLevels().some(level=>level.id===id))id=`level-${++n}`;
+    chapter.levels.push({
       id, name: '新关卡', english: 'NEW LEVEL', difficulty: '自定义', title: '未命名关卡',
-      description: '', tip: '', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
+      description: '请在此填写关卡任务说明。', tip: '请在此填写给玩家的规划提示。', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
       busLineLimit: 3, budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
         homes: [{ cell: keyCoord(2, 2), rate: 1, passengers: 60 }],
         goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
       }], initialEdges: []
     });
-    currentIndex = levels.length - 1; activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
+    currentLevelIndex=chapter.levels.length-1;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
   }
   function duplicateLevel() {
-    const src = current(); if (!src) return;
-    const copy = JSON.parse(JSON.stringify(src));
-    copy.id = copy.id + '-copy'; copy.name = copy.name + '（副本）';
-    levels.splice(currentIndex + 1, 0, copy);
-    currentIndex = currentIndex + 1; activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
+    const src=current(),chapter=currentChapter();if(!src)return;
+    const copy=JSON.parse(JSON.stringify(src)),base=copy.id+'-copy';let id=base,n=2;while(allLevels().some(level=>level.id===id))id=`${base}-${n++}`;copy.id=id;copy.name=copy.name+'（副本）';
+    chapter.levels.splice(currentLevelIndex+1,0,copy);currentLevelIndex++;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
   }
   function deleteLevel() {
-    const level = current(); if (!level) return;
-    if (!confirm(`确定删除关卡「${level.name}」？此操作不可撤销。`)) return;
-    levels.splice(currentIndex, 1);
-    currentIndex = levels.length ? Math.min(currentIndex, levels.length - 1) : null;
-    activeRoute = 0; activeHome = 0; activeGoal = 0; markDirty(); renderAll();
+    const level=current(),chapter=currentChapter();if(!level)return;
+    if(!confirm(`确定删除关卡「${level.name}」？此操作不可撤销。`))return;
+    chapter.levels.splice(currentLevelIndex,1);currentLevelIndex=chapter.levels.length?Math.min(currentLevelIndex,chapter.levels.length-1):null;
+    activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
   }
 
   // ── Map editing ──────────────────────────────────────────────────────
@@ -252,42 +290,51 @@
   function applyTool(cell) {
     const level = current(); if (cell === null || !level) return;
     const remove = arr => { const i = arr.indexOf(cell); if (i >= 0) arr.splice(i, 1); };
-    if (tool === 'home') { const c = currentRoute(); if (c.homes[activeHome]) c.homes[activeHome].cell = cell; else c.homes[activeHome] = { cell, rate: 1, passengers: 60 }; }
-    else if (tool === 'goal') { const c = currentRoute(); if (c.goals[activeGoal]) c.goals[activeGoal].cell = cell; else c.goals[activeGoal] = { cell, label: '目的地' }; }
-    else if (tool === 'erase') {
-      // Remove terrain and any edge touching this cell.
+    const occupied = level.routes.some(route=>[...(route.homes||[]),...(route.goals||[])].some(building=>building.cell===cell));
+    if (['water','bridge','tree'].includes(tool) && occupied) { toast('建筑所在格不能改为水面、桥梁或树木'); return; }
+    if (tool === 'home' || tool === 'goal') {
+      const route=currentRoute();if(!route){toast('请先添加一条路线');return;}
+      const building=tool==='home'?route.homes[activeHome]:route.goals[activeGoal];
+      const conflict=level.routes.some(item=>[...item.homes,...item.goals].some(other=>other!==building&&other.cell===cell));
+      if(conflict){toast(`此处已有其他住宅或目的地（格 ${cell}）`);return;}
+      if(building.cell!==cell)removeInitialEdgesAt(level,[building.cell]);
+      remove(level.water);remove(level.trees);remove(level.bridges);building.cell=cell;
+    } else if (tool === 'erase') {
+      // Remove terrain and any edge touching this cell. Buildings are edited
+      // with their dedicated tools and are intentionally preserved.
       remove(level.water); remove(level.trees); remove(level.bridges);
       level.initialEdges = (level.initialEdges || []).filter(([a, b]) => a !== cell && b !== cell);
-      // If a home/goal sits here, do nothing to it (must use home/goal tools).
     } else {
-      if (tool === 'water') { level.water.push(cell); remove(level.bridges); remove(level.trees); }
+      if (tool === 'water') { level.water.push(cell); remove(level.bridges); remove(level.trees); level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>a!==cell&&b!==cell); }
       else if (tool === 'bridge') { if (!level.water.includes(cell)) level.water.push(cell); if (!level.bridges.includes(cell)) level.bridges.push(cell); remove(level.trees); }
-      else if (tool === 'tree') { remove(level.water); remove(level.bridges); if (!level.trees.includes(cell)) level.trees.push(cell); }
+      else if (tool === 'tree') { remove(level.water); remove(level.bridges); if (!level.trees.includes(cell)) level.trees.push(cell); level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>a!==cell&&b!==cell); }
     }
-    // Deduplicate terrain arrays.
     level.water = [...new Set(level.water)];
     level.bridges = [...new Set(level.bridges)];
     level.trees = [...new Set(level.trees)];
-    if (tool === 'home' || tool === 'goal') {
-      // Warn on overlaps within the active route (homes vs goals, or same kind).
-      const route = currentRoute();
-      const homes = route.homes, goals = route.goals;
-      const homeCells = homes.map(h => h.cell), goalCells = goals.map(g => g.cell);
-      const all = [...homeCells, ...goalCells];
-      const duplicates = all.filter((c, i) => all.indexOf(c) !== i);
-      if (duplicates.includes(cell)) toast(`注意：此处已有其他住宅/目的地 (格 ${cell})，请分开放置`);
-    }
-    updateToolHint();
-    markDirty(); draw();
+    updateToolHint();markDirty();draw();
   }
   function connectCells(a, b) {
     const level = current();
     if (a === b) return;
     const ax = point(a).x, ay = point(a).y, bx = point(b).x, by = point(b).y;
-    if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1) return; // must be adjacent
-    const edge = [a, b, roadGrade];
-    const exists = (level.initialEdges || []).some(([x, y]) => (x === a && y === b) || (x === b && y === a));
-    if (!exists) { level.initialEdges = (level.initialEdges || []).concat([edge]); markDirty(); }
+    if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1) return;
+    const buildings=new Set(level.routes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+    if(buildings.has(a)&&buildings.has(b)){toast('初始道路不能直接连接两座建筑');return;}
+    for(const cell of [a,b]) if(!buildings.has(cell)&&(level.trees.includes(cell)||level.water.includes(cell)&&!level.bridges.includes(cell))){toast('初始道路不能经过树木或非桥梁水面');return;}
+    const existing = (level.initialEdges || []).find(([x, y]) => x === a && y === b || x === b && y === a);
+    if (existing) {
+      if(existing[2]!==roadGrade){existing[2]=roadGrade;markDirty();}
+    } else { level.initialEdges = (level.initialEdges || []).concat([[a,b,roadGrade]]); markDirty(); }
+  }
+  function connectPath(from,to) {
+    let {x,y}=point(from);const target=point(to),dx=Math.abs(target.x-x),dy=Math.abs(target.y-y);let ix=0,iy=0,current=from;
+    while(x!==target.x||y!==target.y){
+      if(x!==target.x&&(y===target.y||(ix+.5)/(dx||1)<=(iy+.5)/(dy||1))){x+=Math.sign(target.x-x);ix++;}
+      else{y+=Math.sign(target.y-y);iy++;}
+      const next=keyCoord(x,y);connectCells(current,next);current=next;
+    }
+    return current;
   }
 
   // ── Drawing ──────────────────────────────────────────────────────────
@@ -381,9 +428,10 @@
   }
   $('login-submit').onclick = doLogin;
   $('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
-  $('logout').onclick = async () => { await api('/api/logout', { method: 'POST' }); location.reload(); };
+  $('logout').onclick = async () => { if(dirty&&!confirm('有未保存更改，确定退出登录并放弃这些更改吗？'))return;dirty=false;await api('/api/logout', { method: 'POST' }); location.reload(); };
   $('save').onclick = async () => { try { await save(); } catch (err) { toast('保存失败：' + err.message); } };
-  $('reload').onclick = async () => { try { await loadLevels(); toast('已从磁盘重新载入'); } catch (err) { toast(err.message); } };
+  $('reload').onclick = async () => { if(dirty&&!confirm('有未保存更改，确定从磁盘重新载入并放弃这些更改吗？'))return;try { await loadLevels(); toast('已从磁盘重新载入'); } catch (err) { toast(err.message); } };
+  $('new-chapter').onclick = newChapter;
   $('new-level').onclick = newLevel;
   $('duplicate').onclick = duplicateLevel;
   $('delete-level').onclick = deleteLevel;
@@ -395,6 +443,10 @@
   };
 
   // Bind field inputs to current level
+  $('f-chapter').onchange=()=>{
+    const level=current(),targetIndex=chapters().findIndex(chapter=>chapter.id===$('f-chapter').value);if(!level||targetIndex<0||targetIndex===currentChapterIndex)return;
+    currentChapter().levels.splice(currentLevelIndex,1);chapters()[targetIndex].levels.push(level);currentChapterIndex=targetIndex;currentLevelIndex=chapters()[targetIndex].levels.length-1;markDirty();renderAll();toast('关卡已移动到所选章节');
+  };
   const textFields = { 'f-id': 'id', 'f-name': 'name', 'f-english': 'english', 'f-difficulty': 'difficulty', 'f-lesson': 'lesson', 'f-title': 'title', 'f-description': 'description', 'f-tip': 'tip' };
   for (const [elId, prop] of Object.entries(textFields)) {
     $(elId).onchange = () => { const l = current(); if (l) { l[prop] = $(elId).value; markDirty(); renderLevelNav(); $('editor-title').textContent = l.name; } };
@@ -430,7 +482,7 @@
   canvas.addEventListener('pointermove', e => {
     hover = cellFromEvent(e);
     if (dragging && tool === 'road' && hover !== null && lastCell !== null) {
-      connectCells(lastCell, hover); lastCell = hover;
+      lastCell = connectPath(lastCell, hover);
     } else if (dragging && tool !== 'road' && hover !== null) {
       if (hover !== lastCell) { lastCell = hover; applyTool(hover); }
     }
@@ -457,6 +509,7 @@
   // Detect unsaved changes before leaving
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
+  $('grade-control').style.visibility = 'hidden';
   new ResizeObserver(resize).observe(canvas);
   resize();
 })();

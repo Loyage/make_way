@@ -3,7 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createGameServer } = require('../server.js');
-const BUILT_IN_LEVELS = require('../built-in-levels.json');
+const BUILT_IN_CATALOG = require('../built-in-levels.json');
+const BUILT_IN_LEVELS = BUILT_IN_CATALOG.chapters.flatMap(chapter => chapter.levels);
 
 async function setup(t) {
   const server = await createGameServer();

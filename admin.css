@@ -42,12 +42,20 @@ input[type=checkbox]{accent-color:var(--green)}
 .admin-main{display:grid;grid-template-columns:250px minmax(0,1fr);gap:22px;padding:24px 0 48px;align-items:start}
 .level-sidebar{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;position:sticky;top:16px}
 .sidebar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-weight:600}
-.sidebar-head .tool{padding:6px 10px}
-.level-nav{display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow:auto}
-.level-nav button{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:8px;padding:10px 11px;color:var(--ink);font-size:13px}
-.level-nav button:hover{background:#f3f6ee}
-.level-nav button.selected{background:#e9efdf;border-color:#7ea079}
-.level-nav button small{color:var(--muted);font-size:10px}
+.sidebar-head>div{display:flex;gap:5px}.sidebar-head .tool{padding:6px 8px}
+.level-nav{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}
+.chapter-nav-group{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fafaf5}
+.chapter-nav-head{display:flex;align-items:center;gap:3px;padding:4px;border-bottom:1px solid var(--line)}
+.chapter-nav-head.selected{background:#eef3e6}
+.chapter-select{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;flex:1;border:0;background:transparent;padding:7px;color:var(--ink);text-align:left}
+.chapter-select strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.chapter-select small{color:var(--muted);font-size:9px;white-space:nowrap}
+.chapter-icon{width:25px;height:25px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted)}
+.chapter-levels{display:flex;flex-direction:column;padding:4px}
+.chapter-levels:empty::after{content:'暂无关卡';padding:9px;color:var(--muted);font-size:10px;text-align:center}
+.chapter-levels button{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:7px;padding:8px 9px;color:var(--ink);font-size:12px}
+.chapter-levels button:hover{background:#f3f6ee}
+.chapter-levels button.selected{background:#e9efdf;border-color:#7ea079}
+.chapter-levels button small{color:var(--muted);font-size:9px}
 .sidebar-actions{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
 .sidebar-actions .primary{width:100%}
 

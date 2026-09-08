@@ -68,6 +68,11 @@ function straight(grade,rate,seconds=120) {
   c.level={...c.level,budget:100,duration:seconds,target:rate*seconds+1};
   c.resetOperation();line(c,1,5,14,5,grade);return c;
 }
+test('large custom demand rates generate every due passenger even with coarse steps',()=>{
+  const c=straight(0,50,2);c.edges.clear();c.refreshPaths();c.toggle();
+  for(let i=0;i<10;i++)c.step(.1);
+  assert.equal(c.generated[0],50);assert.equal(c.queues[0],50);
+});
 test('saturated straight roads sustain about 2 / 5 / 6.67 people per second',()=>{
   for(const [grade,expected] of [[0,2],[1,5],[2,20/3]]) {
     const c=straight(grade,10);c.toggle();

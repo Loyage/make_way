@@ -8,25 +8,42 @@
     if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
     return value;
   }
-  let LEVELS = typeof module !== 'undefined' && module.exports
-    ? require('./built-in-levels.json').map(deepFreeze)
-    : [];
-  let api = null;
-  // Default scenario and convenience exports are retained for Node consumers.
-  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, target: 0, routes: [] };
-  // Replace the active scenario list at runtime after reading a JSON data file.
-  function setLevels(list) {
-    if (!Array.isArray(list) || list.length === 0) return '关卡数据必须是非空数组';
-    const seen = new Set();
-    for (const level of list) {
-      if (!level || typeof level !== 'object' || typeof level.id !== 'string' || !level.id) return '每个关卡都需要唯一的字符串 id';
-      if (seen.has(level.id)) return `关卡 id 重复：${level.id}`;
-      seen.add(level.id);
+  let LEVELS = [], CHAPTERS = [], api = null;
+  function legacyCatalog(list) {
+    if (list.length === 8) return { version: 1, chapters: [
+      { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: list.slice(0,4) },
+      { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: list.slice(4) }
+    ] };
+    return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: list }] };
+  }
+  // Replace the active chapter catalog. Legacy flat level arrays are migrated
+  // in memory so existing levels.json overrides remain usable.
+  function setLevels(data) {
+    const catalog = Array.isArray(data) ? legacyCatalog(data) : data;
+    if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.chapters) || !catalog.chapters.length) return '章节数据必须包含非空 chapters 数组';
+    const chapterIds = new Set(), levelIds = new Set(), chapters = [];
+    for (const chapter of catalog.chapters) {
+      if (!chapter || typeof chapter.id !== 'string' || !chapter.id || chapterIds.has(chapter.id)
+        || typeof chapter.name !== 'string' || !chapter.name.trim() || typeof chapter.english !== 'string' || !chapter.english.trim()
+        || !Array.isArray(chapter.levels)) return '每个章节都需要唯一 id、名称、英文名和 levels 数组';
+      chapterIds.add(chapter.id);
+      const levels = [];
+      for (const level of chapter.levels) {
+        if (!level || typeof level !== 'object' || typeof level.id !== 'string' || !level.id) return '每个关卡都需要唯一的字符串 id';
+        if (levelIds.has(level.id)) return `关卡 id 重复：${level.id}`;
+        levelIds.add(level.id);levels.push(level);
+      }
+      chapters.push({ id: chapter.id, name: chapter.name.trim(), english: chapter.english.trim(), levels });
     }
-    LEVELS = list.map(level => deepFreeze(level));
-    if (api) api.LEVELS = LEVELS;
+    if (!levelIds.size) return '至少需要一个关卡';
+    CHAPTERS = chapters.map(deepFreeze);LEVELS = CHAPTERS.flatMap(chapter => chapter.levels);
+    if (api) { api.CHAPTERS = CHAPTERS;api.LEVELS = LEVELS; }
     return '';
   }
+  const initialCatalog = typeof module !== 'undefined' && module.exports ? require('./built-in-levels.json') : null;
+  if (initialCatalog) setLevels(initialCatalog);
+  // Default scenario and convenience exports are retained for Node consumers.
+  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, target: 0, routes: [] };
   function neighbors(n) {
     const { x, y } = point(n), out = [];
     if (x > 0) out.push(n - 1);
@@ -77,6 +94,13 @@
   const BUS_LINE_COLORS = Object.freeze(['#1686a0', '#d06b47', '#7868b2', '#4f965d', '#c08a28', '#a64f78']);
   const VEHICLE_WIDTH = .085, VEHICLE_LENGTH = .28, BUS_WIDTH = .11, BUS_LENGTH = .46, LANE_WIDTH = .12;
   const PHASES = Object.freeze(['horizontal-straight', 'horizontal-left', 'vertical-straight', 'vertical-left']);
+  const SIGNAL_ENTRIES = Object.freeze({ north: WIDTH, east: -1, south: -WIDTH, west: 1 });
+  const SIGNAL_ENTRY_ORDER = Object.freeze(['north', 'east', 'south', 'west']);
+  const SIGNAL_ACTIONS = Object.freeze(SIGNAL_ENTRY_ORDER.flatMap(entry => ['straight', 'left'].map(turn => `${entry}-${turn}`)));
+  const DEFAULT_CUSTOM_PHASES = Object.freeze([
+    Object.freeze(['west-straight', 'east-straight']), Object.freeze(['west-left', 'east-left']),
+    Object.freeze(['north-straight', 'south-straight']), Object.freeze(['north-left', 'south-left'])
+  ]);
   const vector = heading => ({ x: Math.abs(heading) === 1 ? Math.sign(heading) : 0, y: Math.abs(heading) === WIDTH ? Math.sign(heading) : 0 });
   function movement(entry, exit = entry) {
     const a = vector(entry), b = vector(exit), cross = a.x * b.y - a.y * b.x;
@@ -93,6 +117,33 @@
     // Opposing protected left turns pass to the left of one another.
     if (a.turn === 'left' && b.turn === 'left' && a.entry === -b.entry && a.mask !== 15 && b.mask !== 15) return false;
     return Boolean(a.mask & b.mask);
+  }
+  function signalActionMovement(action) {
+    const [entryName, turn] = action.split('-'), entry = SIGNAL_ENTRIES[entryName];
+    if (!entry || !['straight', 'left'].includes(turn)) return null;
+    const leftExit = ({ [1]: -WIDTH, [WIDTH]: 1, [-1]: WIDTH, [-WIDTH]: -1 })[entry];
+    return movement(entry, turn === 'straight' ? entry : leftExit);
+  }
+  function movementAction(move) {
+    const entry = SIGNAL_ENTRY_ORDER.find(name => SIGNAL_ENTRIES[name] === move.entry);
+    return entry && move.turn !== 'right' ? `${entry}-${move.turn}` : '';
+  }
+  function defaultSignal() {
+    return { enabled: false, green: 2, yieldMode: 'arrival', priority: [...SIGNAL_ENTRY_ORDER], automatic: true, phases: DEFAULT_CUSTOM_PHASES.map(phase => [...phase]) };
+  }
+  function cloneSignal(signal) { return { ...signal, priority: [...signal.priority], phases: signal.phases.map(phase => [...phase]) }; }
+  function signalProblem(signal) {
+    if (typeof signal.enabled !== 'boolean' || ![2,4,6].includes(signal.green)
+      || !['arrival','priority'].includes(signal.yieldMode) || typeof signal.automatic !== 'boolean') return '无效的路口控制设置';
+    if (!Array.isArray(signal.priority) || signal.priority.length !== SIGNAL_ENTRY_ORDER.length
+      || new Set(signal.priority).size !== SIGNAL_ENTRY_ORDER.length || signal.priority.some(name => !SIGNAL_ENTRY_ORDER.includes(name))) return '路口方向优先顺序无效';
+    if (!Array.isArray(signal.phases) || signal.phases.length < 1 || signal.phases.length > 8) return '手动灯序须包含 1 至 8 个阶段';
+    for (const phase of signal.phases) {
+      if (!Array.isArray(phase) || !phase.length || new Set(phase).size !== phase.length || phase.some(action => !SIGNAL_ACTIONS.includes(action))) return '每个手动阶段至少需要一个有效放行动作';
+      const moves = phase.map(signalActionMovement);
+      for (let i=0;i<moves.length;i++) for (let j=i+1;j<moves.length;j++) if (movementsConflict(moves[i],moves[j])) return '同一阶段不能包含互相冲突的放行动作';
+    }
+    return '';
   }
   function vehiclePosition(n, heading, lane, slot, centered = false) {
     const p = point(n), d = vector(heading), along = centered ? 0 : slot === 0 ? -.25 : .25;
@@ -250,14 +301,21 @@
       this.homeGoal = homeGoal;
       const junctions = new Set([...this.roads].filter(n => this.links(n).length >= 3));
       for (const n of this.signals.keys()) if (!junctions.has(n)) this.signals.delete(n);
-      for (const n of junctions) if (!this.signals.has(n)) this.signals.set(n, { enabled: false, green: 2 });
+      for (const n of junctions) if (!this.signals.has(n)) this.signals.set(n, defaultSignal());
     }
     setSignal(n, enabled, green = 2) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!this.signals.has(n)) return '请选择三岔或十字路口';
-      if (typeof enabled !== 'boolean' || ![2, 4, 6].includes(green)) return '无效的信号设置';
-      if (this.signals.get(n).enabled !== enabled && this.occupants(n).length) return '请等路口车辆通过后再切换控制方式';
-      this.signals.set(n, { enabled, green });
+      const current = this.signals.get(n), candidate = cloneSignal(current);
+      if (enabled && typeof enabled === 'object') {
+        for (const field of ['enabled','green','yieldMode','automatic']) if (enabled[field] !== undefined) candidate[field] = enabled[field];
+        if (enabled.priority !== undefined) candidate.priority = Array.isArray(enabled.priority) ? [...enabled.priority] : enabled.priority;
+        if (enabled.phases !== undefined) candidate.phases = Array.isArray(enabled.phases) ? enabled.phases.map(phase => Array.isArray(phase) ? [...phase] : phase) : enabled.phases;
+      } else { candidate.enabled = enabled; candidate.green = green; }
+      const problem = signalProblem(candidate);
+      if (problem) return problem;
+      if (current.enabled !== candidate.enabled && this.occupants(n).length) return '请等路口车辆通过后再切换控制方式';
+      this.signals.set(n, candidate);
       return '';
     }
     createBusLine(name, color) {
@@ -286,20 +344,22 @@
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       const line = this.busLine(lineId);
       if (!line || !settings || typeof settings !== 'object') return '公交线路不存在';
+      const candidate = { name: line.name, color: line.color, returnTrip: line.returnTrip };
       if (settings.name !== undefined) {
         const name = typeof settings.name === 'string' ? settings.name.trim() : '';
         if (!name || name.length > 20) return '线路名称须为 1 至 20 个字符';
-        line.name = name;
+        candidate.name = name;
       }
       if (settings.color !== undefined) {
         if (typeof settings.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(settings.color)) return '线路颜色无效';
-        line.color = settings.color.toLowerCase();
+        candidate.color = settings.color.toLowerCase();
       }
       if (settings.returnTrip !== undefined) {
         if (typeof settings.returnTrip !== 'boolean') return '原路返回设置无效';
         if (settings.returnTrip && line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1]) return '线路已经闭环，无需开启原路返回';
-        line.returnTrip = settings.returnTrip;
+        candidate.returnTrip = settings.returnTrip;
       }
+      Object.assign(line, candidate);
       return '';
     }
     deleteBusLine(lineId = this.activeBusLineId) {
@@ -388,19 +448,22 @@
     }
     signalPhase(n) {
       const signal = this.signals.get(n);
-      if (!signal || !signal.enabled) return { axis: 'off', turn: 'off', stage: 'off', remaining: 0 };
+      if (!signal || !signal.enabled) return { axis: 'off', turn: 'off', stage: 'off', remaining: 0, actions: [] };
+      const phases = signal.automatic ? PHASES : signal.phases;
       const span = signal.green + SIGNAL_CLEARANCE;
-      const t = this.elapsed % (span * 4), local = t % span;
-      const stage = PHASES[Math.floor(t / span)];
-      const [axis, turn] = stage.split('-');
-      return local >= signal.green
-        ? { axis: 'clearance', turn: 'clearance', stage: 'clearance', remaining: span - local }
-        : { axis, turn, stage, remaining: signal.green - local };
+      const t = this.elapsed % (span * phases.length), local = t % span, index = Math.floor(t / span);
+      if (local >= signal.green) return { axis: 'clearance', turn: 'clearance', stage: 'clearance', remaining: span - local, actions: [], index };
+      if (!signal.automatic) return { axis: 'custom', turn: 'custom', stage: 'custom', remaining: signal.green - local, actions: phases[index], index };
+      const stage = phases[index], [axis, turn] = stage.split('-');
+      return { axis, turn, stage, remaining: signal.green - local, actions: [], index };
     }
     canEnter(n, heading, exitHeading = heading) {
-      const phase = this.signalPhase(n), move = movement(heading, exitHeading);
-      return move.turn === 'right' || phase.axis === 'off'
-        || (phase.axis === (Math.abs(heading) === 1 ? 'horizontal' : 'vertical') && phase.turn === move.turn);
+      const signal = this.signals.get(n), phase = this.signalPhase(n), move = movement(heading, exitHeading);
+      if (move.turn === 'right' || phase.axis === 'off') return true;
+      if (!signal || phase.axis === 'clearance') return false;
+      return signal.automatic
+        ? phase.axis === (Math.abs(heading) === 1 ? 'horizontal' : 'vertical') && phase.turn === move.turn
+        : phase.actions.includes(movementAction(move));
     }
     occupants(n, self) { return [...this.cars,...this.buses].filter(c => !c.done && c !== self && (c.cell === n || c.next === n)); }
     reservations(car) {
@@ -473,7 +536,7 @@
         roads: new Set(this.roads),
         edges: new Map([...this.edges].map(([n, links]) => [n, new Set(links)])),
         grades: new Map(this.roadGrades),
-        signals: new Map([...this.signals].map(([n, signal]) => [n, { ...signal }]))
+        signals: new Map([...this.signals].map(([n, signal]) => [n, cloneSignal(signal)]))
       };
       for (const action of actions) {
         let message = '规划操作无效';
@@ -543,18 +606,18 @@
     }
     serializeDesign() {
       return {
-        version: 5,
+        version: 6,
         edges: [...this.edges].flatMap(([a,vs])=>[...vs].filter(b=>a<b).map(b=>[a,b])).sort(([a,b],[c,d])=>a-c||b-d),
         levelId: this.level.id,
         roads: [...this.roads].sort((a, b) => a - b).map(cell => ({ cell, grade: this.roadGrades.get(cell) || 0 })),
-        signals: [...this.signals].sort(([a], [b]) => a - b).map(([cell, signal]) => ({ cell, enabled: signal.enabled, green: signal.green })),
+        signals: [...this.signals].sort(([a], [b]) => a - b).map(([cell, signal]) => ({ cell, ...cloneSignal(signal) })),
         busLines: this.busLines.map(line => ({ id: line.id, name: line.name, color: line.color, route: [...line.route], count: line.count, stops: [...line.stops].sort((a,b)=>a-b), returnTrip: line.returnTrip })),
         activeBusLineId: this.activeBusLineId
       };
     }
     loadDesign(design) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能读取设计，请先停止运营';
-      if (!design || ![1,2,3,4,5].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
+      if (!design || ![1,2,3,4,5,6].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
       const candidate = new City(this.level.id), seenRoads = new Set(), seenSignals = new Set();
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
       candidate.refreshPaths();
@@ -583,9 +646,14 @@
       for (const saved of design.signals) {
         if (!saved || !Number.isInteger(saved.cell) || seenSignals.has(saved.cell)
           || typeof saved.enabled !== 'boolean' || ![2, 4, 6].includes(saved.green)
-          || !candidate.signals.has(saved.cell)) return '存档中的信号灯数据无效';
+          || !candidate.signals.has(saved.cell)
+          || design.version === 6 && signalProblem(saved)) return '存档中的信号灯数据无效';
+        const settings = design.version === 6
+          ? { enabled: saved.enabled, green: saved.green, yieldMode: saved.yieldMode, priority: saved.priority, automatic: saved.automatic, phases: saved.phases }
+          : { enabled: saved.enabled, green: saved.green };
+        const message = candidate.setSignal(saved.cell, settings);
+        if (message) return '存档中的信号灯数据无效';
         seenSignals.add(saved.cell);
-        candidate.signals.set(saved.cell, { enabled: saved.enabled, green: saved.green });
       }
       if (design.version === 3) {
         if (design.bus !== null && (!design.bus || typeof design.bus !== 'object' || !Array.isArray(design.bus.route))) return '存档中的公交线路无效';
@@ -598,7 +666,7 @@
           const line = candidate.activeBusLine;
           for (const building of disabled) for (const road of neighbors(building)) line.stops.delete(road);
         }
-      } else if (design.version === 4 || design.version === 5) {
+      } else if ([4,5,6].includes(design.version)) {
         if (!Array.isArray(design.busLines) || design.busLines.length > candidate.busLineLimit) return '存档中的公交线路无效';
         const ids = new Set();
         for (const saved of design.busLines) {
@@ -606,9 +674,9 @@
             || typeof saved.name !== 'string' || !saved.name.trim() || saved.name.trim().length > 20
             || typeof saved.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(saved.color)
             || !Array.isArray(saved.route) || !Array.isArray(saved.stops)
-            || design.version === 5 && (typeof saved.returnTrip !== 'boolean' || saved.returnTrip && saved.route.length >= 3 && saved.route[0] === saved.route[saved.route.length - 1])) return '存档中的公交线路无效';
+            || design.version >= 5 && (typeof saved.returnTrip !== 'boolean' || saved.returnTrip && saved.route.length >= 3 && saved.route[0] === saved.route[saved.route.length - 1])) return '存档中的公交线路无效';
           ids.add(saved.id);
-          candidate.busLines.push({ id: saved.id, name: saved.name.trim(), color: saved.color.toLowerCase(), route: [], count: 1, stops: new Set(), returnTrip: design.version === 5 ? saved.returnTrip : false });
+          candidate.busLines.push({ id: saved.id, name: saved.name.trim(), color: saved.color.toLowerCase(), route: [], count: 1, stops: new Set(), returnTrip: design.version >= 5 ? saved.returnTrip : false });
           candidate.activeBusLineId = saved.id;
           let message = candidate.setBusCount(saved.count, saved.id);
           if (!message) message = candidate.setBusRoute(saved.route, saved.id);
@@ -770,7 +838,7 @@
       for (let hi = 0; hi < this.homes.length; hi++) {
         const home = this.homes[hi];
         this.spawnTimers[hi] -= dt;
-        if (this.spawnTimers[hi] <= 1e-9 && this.generated[hi] < home.passengers) {
+        while (this.spawnTimers[hi] <= 1e-9 && this.generated[hi] < home.passengers) {
           this.generated[hi]++;
           this.queues[hi]++;
           this.queueTimes[hi]?.push(this.elapsed);
@@ -804,14 +872,24 @@
         if (!waiting) {car.yieldNode=null;car.yieldSince=null;}
         else if (car.yieldNode!==n) {car.yieldNode=n;car.yieldSince=this.elapsed;}
       }
-      const priority = car => {
+      const signalPriority = car => {
+        const path = plans.get(car), signal = path ? this.signals.get(path[1]) : null;
+        if (!path || path.length < 2 || car.cellSlot === 0 || !signal || signal.enabled || signal.yieldMode !== 'priority') return null;
+        const entry = SIGNAL_ENTRY_ORDER.find(name => SIGNAL_ENTRIES[name] === path[1]-car.cell);
+        return { node: path[1], rank: signal.priority.indexOf(entry) };
+      };
+      const turnPriority = car => {
         const path = plans.get(car);
         if (!path || path.length < 3 || car.cellSlot === 0 || !this.signals.get(path[1])?.enabled) return 0;
         return movement(path[1]-car.cell, path[2]-path[1]).turn === 'right' ? 1 : 0;
       };
-      // Uncommitted right turns yield to eligible straight/left traffic this
-      // tick; admitted vehicles keep their reservations and clear normally.
-      for (const car of [...this.cars].sort((a,b) => (a.yieldSince ?? -Infinity)-(b.yieldSince ?? -Infinity) || priority(a)-priority(b) || a.id-b.id)) {
+      // At priority-controlled junctions, approach rank precedes arrival time.
+      // Elsewhere arrival time remains authoritative; right turns still yield.
+      for (const car of [...this.cars].sort((a,b) => {
+        const ap=signalPriority(a),bp=signalPriority(b);
+        if(ap&&bp&&ap.node===bp.node&&ap.rank!==bp.rank)return ap.rank-bp.rank;
+        return (a.yieldSince??-Infinity)-(b.yieldSince??-Infinity)||turnPriority(a)-turnPriority(b)||a.id-b.id;
+      })) {
         if (car.done) continue;
         if (car.next === null) {
           const path = plans.get(car);
@@ -863,7 +941,7 @@
       else if (this.elapsed >= this.level.duration) this.state = 'lost';
     }
   }
-  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

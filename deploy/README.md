@@ -34,7 +34,7 @@ bash deploy/install-service.sh
 ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
 ```
 
-它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码，默认 `admin`。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入 `levels.json`；除此之外的安全隔离与游戏服务一致。
+它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入 `levels.json`；除此之外的安全隔离与游戏服务一致。
 
 面板保存关卡后写入项目根目录 `levels.json`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
 

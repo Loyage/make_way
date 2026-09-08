@@ -13,7 +13,7 @@
 
 - `index.html`：页面结构、控件、对话框和脚本加载顺序
 - `style.css`：桌面端和移动端响应式样式
-- `built-in-levels.json`：16 × 12 网格上的默认关卡数据
+- `built-in-levels.json`：按 `chapters[].levels[]` 组织的默认章节与 16 × 12 网格关卡数据
 - `core.js`：与 DOM 无关的地图、道路、寻路、容量、信号灯和车辆模拟
 - `game.js`：Canvas 绘制、输入事件、界面状态与 `localStorage` 设计存档
 - `server.js`：零依赖、只读、资源白名单式 HTTP 服务
@@ -26,7 +26,7 @@
 
 ## 架构约束
 
-1. `core.js` 必须先于 `game.js` 加载。`game.js` 启动时先读取 `built-in-levels.json`，再尝试读取可选的 `levels.json` 覆盖层，然后才能创建 `City`。保持 `index.html` 底部脚本顺序不变。
+1. `core.js` 必须先于 `game.js` 加载。`game.js` 启动时先读取 `built-in-levels.json` 的章节目录，再尝试读取可选的 `levels.json` 覆盖层，然后才能创建 `City`。章节使用 `chapters[].levels[]` 嵌套结构，`TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平关卡列表；旧版扁平数组仍须兼容迁移。保持 `index.html` 底部脚本顺序不变。
 2. `core.js` 同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore`，Node 测试使用 `module.exports`。Node 端从 `built-in-levels.json` 读取默认数据；修改模块边界时须兼容两种环境。
 3. 模拟逻辑应留在 `core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `game.js`。
 4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。

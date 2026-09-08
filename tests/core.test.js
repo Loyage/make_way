@@ -110,11 +110,18 @@ test('stopping operation keeps the design and resets all simulation progress', (
 });
 test('designs round-trip with road grades and signals while invalid data is atomic', () => {
   const source=new City();connect(source);source.edit(key(5,3),false,2);
-  const junction=key(4,3);source.connect(junction,key(4,4));assert.equal(source.setSignal(junction,false,6),'');
+  const junction=key(4,3);source.connect(junction,key(4,4));
+  assert.equal(source.setSignal(junction,{enabled:true,green:6,automatic:false,yieldMode:'priority',priority:['west','south','east','north'],phases:[['north-straight'],['west-left','east-left']]}),'');
   const design=source.serializeDesign(), target=new City();target.edit(key(1,1));target.toggle();run(target,1);target.stop();
-  assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');
+  assert.equal(design.version,6);assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');
   assert.deepEqual(target.serializeDesign(),design);assert.equal(target.state,'planning');assert.equal(target.elapsed,0);
+  const legacy=JSON.parse(JSON.stringify(design));legacy.version=5;
+  for(const signal of legacy.signals)for(const field of ['automatic','yieldMode','priority','phases'])delete signal[field];
+  const migrated=new City();assert.equal(migrated.loadDesign(legacy),'');
+  assert.equal(migrated.signals.get(junction).automatic,true);assert.equal(migrated.signals.get(junction).yieldMode,'arrival');
   const before=target.serializeDesign();
+  const conflicting=JSON.parse(JSON.stringify(design));conflicting.signals.find(signal=>signal.cell===junction).phases=[['north-straight','west-straight']];
+  assert.ok(target.loadDesign(conflicting));assert.deepEqual(target.serializeDesign(),before);
   assert.ok(target.loadDesign({...design,roads:[...design.roads,{cell:-1,grade:0}]}));
   assert.deepEqual(target.serializeDesign(),before);
   assert.ok(target.loadDesign({...design,levelId:'rush-hour'}));

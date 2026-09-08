@@ -36,7 +36,7 @@ test('one to three buses consume budget and survive design round trips', () => {
   assert.equal(source.setBusStop(stopCell,false),'');assert.equal(source.isBusStop(stopCell),false);
   assert.equal(source.remaining,0);
   const design=source.serializeDesign(),target=new City('bus-school');
-  assert.equal(design.version,5);assert.equal(target.loadDesign(design),'');
+  assert.equal(design.version,6);assert.equal(target.loadDesign(design),'');
   assert.deepEqual(target.busRoute,route);assert.equal(target.busCount,3);assert.equal(target.isBusStop(stopCell),false);assert.deepEqual(target.serializeDesign(),design);
   const legacy=JSON.parse(JSON.stringify(design));legacy.version=4;for(const line of legacy.busLines)delete line.returnTrip;
   const migrated=new City('bus-school');assert.equal(migrated.loadDesign(legacy),'');assert.equal(migrated.activeBusLine.returnTrip,false);
@@ -114,6 +114,14 @@ test('buses bypass home output rate, respect capacity, and deliver eligible pass
   assert.equal(city.state,'won');assert.ok(city.delivered>=city.level.target);
   assert.ok(city.arrivals.some(event=>event.vehicle==='bus'));
   assert.ok(city.byRoute.every(count=>count>0));
+});
+
+test('bus metadata updates are atomic when one requested field is invalid', () => {
+  const city=new City('bus-school');
+  assert.equal(city.createBusLine('原线路','#1686a0'),'');
+  const before={name:city.activeBusLine.name,color:city.activeBusLine.color,returnTrip:city.activeBusLine.returnTrip};
+  assert.match(city.updateBusLine(city.activeBusLineId,{name:'不应保留',color:'invalid'}),/颜色无效/);
+  assert.deepEqual({name:city.activeBusLine.name,color:city.activeBusLine.color,returnTrip:city.activeBusLine.returnTrip},before);
 });
 
 test('multiple lines keep independent metadata, vehicles and road stops', () => {
