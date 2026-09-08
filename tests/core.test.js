@@ -84,6 +84,9 @@ test('operation locks every planning mutation while running or paused', () => {
     ()=>city.connect(edge[0],edge[1]),
     ()=>city.cut(edge[0],edge[1]),
     ()=>city.setSignal(edge[0],true,2),
+    ()=>city.setBusRoute([]),
+    ()=>city.setBusCount(2),
+    ()=>city.setBusStop(city.homes[0].cell,false),
     ()=>city.transact([{type:'edit',cell:key(0,0),erase:false,grade:0}])
   ]) assert.equal(mutate(),'运营期间不能修改规划，请先停止运营');
   assert.equal(city.loadDesign(before),'运营期间不能读取设计，请先停止运营');

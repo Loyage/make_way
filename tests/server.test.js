@@ -41,6 +41,7 @@ test('index contains no embedded level metadata', async t => {
   assert.match(manual,/慢行小城游戏指南/);
   assert.match(manual,/拖拽起点与第一步情况表/);
   assert.match(manual,/一辆车怎样完成出行/);
+  assert.match(manual,/公交接客不受住宅每秒出口流量限制/);
 });
 test('health, HEAD and conditional caching work', async t => {
   const port=await setup(t);

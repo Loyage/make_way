@@ -37,6 +37,10 @@ function buildReferencePlan(city) {
     for(const n of city.signals.keys()) assert.equal(city.setSignal(n,true,4),'');
     return;
   }
+  if(city.level.id==='bus-school') {
+    const loop=city.level.initialEdges.slice(0,32).map(edge=>edge[0]);loop.push(loop[0]);
+    assert.equal(city.setBusCount(3),'');assert.equal(city.setBusRoute(loop),'');return;
+  }
   // Minimize new road cost, then distance; connections always remain explicit.
   // A route may hold several homes and goals, so connect every home to its
   // nearest reachable goal (multi->multi still resolves to a concrete OD path).

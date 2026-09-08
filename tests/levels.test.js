@@ -45,10 +45,10 @@ for (const level of LEVELS) {
     assert.equal(city.state,'lost');assert.equal(city.elapsed,level.duration);
   });
 }
-test('seven levels unlock tools progressively and definitions stay immutable', () => {
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','woodland','signal-school','multi-route-school','rush-hour']);
+test('eight levels unlock tools progressively and definitions stay immutable', () => {
+  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','woodland','signal-school','multi-route-school','rush-hour','bus-school']);
   for(const id of ['bridge-school','riverside','cut-school']) assert.throws(()=>new City(id),RangeError);
-  const names=['grade','load','cut','inspect','signals'];
+  const names=['grade','load','cut','inspect','signals','bus'];
   assert.equal(LEVELS[3].features.signals,true,'signals must be available from lesson four');
   for(const name of names) {
     const values=LEVELS.map(level=>level.features[name]);
@@ -59,6 +59,7 @@ test('seven levels unlock tools progressively and definitions stay immutable', (
   assert.equal(multi.homes.length, 2);
   assert.equal(multi.goals.length, 2);
   assert.ok(multi.goals.every(goal => goal.input === 60));
+  assert.equal(LEVELS.at(-1).features.bus,true,'bus routes unlock in the final lesson');
   for (const id of ['signal-school','rush-hour']) {
     const routes = LEVELS.find(level => level.id === id).routes;
     assert.ok(routes.some(route => route.homes.length > 1 && route.goals.length > 1), `${id} should reuse multi-point demand`);

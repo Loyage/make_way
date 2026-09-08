@@ -38,7 +38,7 @@ async function main() {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
-    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),7);
+    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),8);
     for(let i=0;i<LEVELS.length;i++){
       await click(`.level-card:nth-child(${i+1})`);
       assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
@@ -48,6 +48,8 @@ async function main() {
       assert.equal(await evaluate('document.querySelectorAll("#demand-list li").length'),LEVELS[i].routes.length);
       assert.equal(await evaluate('document.querySelectorAll(".connection-row").length'),LEVELS[i].routes.length);
     }
+    assert.equal(await evaluate('document.querySelector("#bus-tool").hidden'),false);
+    assert.equal(await evaluate('document.querySelector("#bus-controls").hidden'),false);
 
     await go(0);
     assert.equal(await evaluate('document.querySelector("#road-grade")'),null);
@@ -112,7 +114,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 7 progressive levels, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 8 progressive levels, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

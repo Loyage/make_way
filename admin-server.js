@@ -101,6 +101,7 @@ function validateLevels(list) {
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals']) {
       if (typeof features[name] !== 'boolean') return `关卡「${level.id}」的 features.${name} 必须是布尔值`;
     }
+    if (features.bus !== undefined && typeof features.bus !== 'boolean') return `关卡「${level.id}」的 features.bus 必须是布尔值`;
     // terrain sets
     for (const field of ['water', 'bridges', 'trees']) {
       if (!Array.isArray(level[field])) return `关卡「${level.id}」的 ${field} 必须是数组`;
