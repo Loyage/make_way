@@ -51,7 +51,8 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#bus-tool").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#bus-controls").hidden'),false);
     assert.ok(await evaluate('document.querySelector("#bus-line-select")'));
-    assert.ok(await evaluate('document.querySelector("#new-bus-line")!==null && document.querySelector("#redraw-bus")!==null && document.querySelector("#delete-bus")!==null'));
+    assert.ok(await evaluate('document.querySelector("#new-bus-line")!==null && document.querySelector("#trim-bus")!==null && document.querySelector("#redraw-bus")!==null && document.querySelector("#delete-bus")!==null'));
+    assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
     await go(0);
     assert.equal(await evaluate('document.querySelector("#road-grade")'),null);

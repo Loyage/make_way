@@ -11,12 +11,19 @@ function loop(city) {
 }
 function run(city, seconds) { for(let i=0;i<seconds*20&&city.state==='running';i++) city.step(.05); }
 
-test('bus route must be a closed walk over explicit existing road connections', () => {
+test('bus routes can be drawn in sections but regular service requires a closed walk', () => {
   const city=new City('bus-school'),route=loop(city),before=city.remaining;
-  assert.ok(city.setBusRoute(route.slice(0,-1)));
-  assert.ok(city.setBusRoute([route[0],route[2],route[0]]));
-  assert.equal(city.setBusRoute([route[0],route[1],route[0]]),'','an immediate return over the same edge is legal');
+  assert.ok(city.setBusRoute([route[0],route[2]]));
+  assert.equal(city.appendBusRoute(route.slice(0,2)),'');
   assert.equal(city.remaining,before-BUS_COST);
+  const partial=city.serializeDesign(),partialCopy=new City('bus-school');assert.equal(partialCopy.loadDesign(partial),'');assert.deepEqual(partialCopy.busRoute,city.busRoute);
+  assert.match(city.toggle(),/尚未闭环/);assert.equal(city.state,'planning');
+  assert.ok(city.appendBusRoute([route[0],route[1]]));
+  assert.equal(city.appendBusRoute(route.slice(1)),'');assert.deepEqual(city.busRoute,route);
+  const trimmed=[route.at(-1),route.at(-2),route.at(-3)];assert.equal(city.trimBusRoute(trimmed),'');assert.deepEqual(city.busRoute,route.slice(0,-2));
+  assert.ok(city.trimBusRoute([city.busRoute.at(-1),route[0]]));
+  assert.equal(city.appendBusRoute(route.slice(-3)),'');assert.deepEqual(city.busRoute,route);
+  assert.equal(city.toggle(),'');assert.equal(city.state,'running');city.stop();
   assert.ok(city.cut(route[0],route[1]));
   assert.ok(city.edit(route[0],true));
   assert.equal(city.setBusRoute([]),'');assert.equal(city.remaining,before);
@@ -29,11 +36,30 @@ test('one to three buses consume budget and survive design round trips', () => {
   assert.equal(source.setBusStop(stopCell,false),'');assert.equal(source.isBusStop(stopCell),false);
   assert.equal(source.remaining,0);
   const design=source.serializeDesign(),target=new City('bus-school');
-  assert.equal(design.version,4);assert.equal(target.loadDesign(design),'');
+  assert.equal(design.version,5);assert.equal(target.loadDesign(design),'');
   assert.deepEqual(target.busRoute,route);assert.equal(target.busCount,3);assert.equal(target.isBusStop(stopCell),false);assert.deepEqual(target.serializeDesign(),design);
+  const legacy=JSON.parse(JSON.stringify(design));legacy.version=4;for(const line of legacy.busLines)delete line.returnTrip;
+  const migrated=new City('bus-school');assert.equal(migrated.loadDesign(legacy),'');assert.equal(migrated.activeBusLine.returnTrip,false);
   assert.ok(target.setBusCount(4));
   target.toggle();assert.equal(target.buses.length,3);assert.ok(target.setBusRoute([]));assert.ok(target.setBusCount(1));
   target.toggle();assert.equal(target.stop(),true);assert.equal(target.buses.length,0);assert.deepEqual(target.busRoute,route);
+});
+
+test('an open line can return over the same road and skips every stop on the return trip', () => {
+  const city=new City('bus-school'),ring=loop(city),outbound=[...ring.slice(31,-1),...ring.slice(0,6)];
+  assert.equal(city.setBusRoute(outbound),'');
+  assert.match(city.toggle(),/尚未闭环/);
+  assert.equal(city.updateBusLine(city.activeBusLineId,{returnTrip:true}),'');
+  const line=city.activeBusLine,operating=city.busOperatingRoute(line);
+  assert.deepEqual(operating,[...outbound,...outbound.slice(0,-1).reverse()]);
+  const saved=city.serializeDesign(),copy=new City('bus-school');assert.equal(copy.loadDesign(saved),'');assert.equal(copy.activeBusLine.returnTrip,true);
+  assert.equal(city.toggle(),'');assert.equal(city.buses.length,1);
+  const goalIndex=0,goal=city.goals[goalIndex],goalRoad=ring[4],outboundPosition=outbound.indexOf(goalRoad),returnPosition=operating.lastIndexOf(goalRoad);
+  const passenger={route:goal.route,goal:goal.cell,goalIndex,commuteStarted:0};
+  const bus={lineId:line.id,cell:goalRoad,routePosition:returnPosition,passengers:[passenger],dwell:0,needsStop:true};
+  city.serviceBusStop(bus);assert.equal(bus.passengers.length,1,'the return trip must not unload at stops');
+  bus.routePosition=outboundPosition;bus.needsStop=true;city.serviceBusStop(bus);
+  assert.equal(bus.passengers.length,0);assert.equal(city.byGoal[goalIndex],1);
 });
 
 test('road cells become stops for adjacent buildings and can be toggled per line', () => {

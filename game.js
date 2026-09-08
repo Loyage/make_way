@@ -10,7 +10,7 @@
   let cellSize = 40, lastFrame = 0, accumulator = 0;
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
-  let pendingDesign = null;
+  let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   function storedDesign(levelId = city.level.id) {
@@ -105,7 +105,7 @@
     if (value === 'bus' && !city.level.features.bus) {
       toast('完成前面的教学关卡后解锁公交线路'); return;
     }
-    tool = value;keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;
+    tool = value;if(value!=='bus')busEditMode='draw';keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;
     $('road-inspector').hidden=tool!=='select';
     for (const name of ['select', 'road', 'cut', 'bus']) {
       $(name + '-tool').classList.toggle('active', name === tool);
@@ -118,6 +118,21 @@
     const a=point(selection.start),b=point(selection.end),cells=[];
     for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++) for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++) cells.push(key(x,y));
     return cells;
+  }
+  function updateBusVisibilityControls() {
+    const panel=$('bus-line-visibility'), ids=new Set(city.busLines.map(line=>line.id));
+    for(const id of dimmedBusLines) if(!ids.has(id)) dimmedBusLines.delete(id);
+    const signature=city.busLines.map(line=>`${line.id}:${line.name}:${line.color}:${dimmedBusLines.has(line.id)}`).join('|');
+    if(panel.dataset.signature===signature)return;
+    panel.dataset.signature=signature;panel.replaceChildren();
+    for(const line of city.busLines) {
+      const dimmed=dimmedBusLines.has(line.id),button=document.createElement('button');
+      button.type='button';button.className='bus-visibility-toggle';button.classList.toggle('dimmed',dimmed);button.setAttribute('aria-pressed',String(!dimmed));
+      button.style.setProperty('--bus-color',line.color);button.textContent=`${dimmed?'○':'◉'} ${line.name}`;
+      button.title=dimmed?'当前线路已虚化，点击突出显示':'当前线路已突出显示，点击虚化';
+      button.onclick=()=>{if(dimmedBusLines.has(line.id))dimmedBusLines.delete(line.id);else dimmedBusLines.add(line.id);panel.dataset.signature='';updateUI();draw();};
+      panel.append(button);
+    }
   }
   function updateBusLineInspector(cell, planning) {
     const panel=$('bus-line-inspector'), lines=cell===null?[]:city.linesAtCell(cell);
@@ -209,6 +224,39 @@
     ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
   }
   function circle(x,y,r,color) { ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill(); }
+  function busSegment(aCell,bCell,s) {
+    const a=point(aCell),b=point(bCell),dx=b.x-a.x,dy=b.y-a.y,offset=s*.13;
+    return { x1:(a.x+.5)*s-dy*offset, y1:(a.y+.5)*s+dx*offset, x2:(b.x+.5)*s-dy*offset, y2:(b.y+.5)*s+dx*offset, dx, dy };
+  }
+  function busDirection(segment,color,s) {
+    const mx=(segment.x1+segment.x2)/2,my=(segment.y1+segment.y2)/2,back=s*.075,wing=s*.045;
+    const bx=mx-segment.dx*back,by=my-segment.dy*back;
+    line(bx-segment.dy*wing,by+segment.dx*wing,mx,my,color,s*.022);
+    line(bx+segment.dy*wing,by-segment.dx*wing,mx,my,color,s*.022);
+  }
+  function busTurn(ctxPath,previous,next,cell,s) {
+    const p=point(cell),reverse=previous.dx===-next.dx&&previous.dy===-next.dy;
+    const cx=(p.x+.5)*s+(reverse?previous.dx*s*.28:0),cy=(p.y+.5)*s+(reverse?previous.dy*s*.28:0);
+    ctxPath.quadraticCurveTo(cx,cy,next.x1,next.y1);
+  }
+  function strokeBusRoute(route,color,width,s,dashed=false,joinEnds=false) {
+    if(route.length<2)return;
+    const segments=[];for(let i=1;i<route.length;i++)segments.push(busSegment(route[i-1],route[i],s));
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';
+    if(dashed)ctx.setLineDash([s*.13,s*.1]);
+    ctx.beginPath();ctx.moveTo(segments[0].x1,segments[0].y1);ctx.lineTo(segments[0].x2,segments[0].y2);
+    for(let i=1;i<segments.length;i++){busTurn(ctx,segments[i-1],segments[i],route[i],s);ctx.lineTo(segments[i].x2,segments[i].y2);}
+    if(joinEnds)busTurn(ctx,segments[segments.length-1],segments[0],route[0],s);
+    ctx.stroke();ctx.restore();
+  }
+  function strokeBusConnector(previous,next,cell,color,width,s,dashed=false) {
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';if(dashed)ctx.setLineDash([s*.13,s*.1]);
+    ctx.beginPath();ctx.moveTo(previous.x2,previous.y2);busTurn(ctx,previous,next,cell,s);ctx.stroke();ctx.restore();
+  }
+  function drawBusRoute(route,color,width,s,dashed=false,joinEnds=false) {
+    strokeBusRoute(route,'#fffef9',width*1.8,s,dashed,joinEnds);strokeBusRoute(route,color,width,s,dashed,joinEnds);
+    for(let i=1;i<route.length;i+=2)busDirection(busSegment(route[i-1],route[i],s),color,s);
+  }
   function label(text,x,y,size,color,weight='500') {
     ctx.font = `${weight} ${size}px system-ui, sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';ctx.fillStyle=color;ctx.fillText(text,x,y);
   }
@@ -354,15 +402,22 @@
     }
     ctx.lineCap='round';
     for(const busLine of city.busLines) if(busLine.route.length) {
-      const active=busLine.id===city.activeBusLineId;
-      for(let i=1;i<busLine.route.length;i++) {
-        const a=point(busLine.route[i-1]),b=point(busLine.route[i]);
-        line((a.x+.5)*s,(a.y+.5)*s,(b.x+.5)*s,(b.y+.5)*s,'#fffef9',s*(active?.15:.12));
-        line((a.x+.5)*s,(a.y+.5)*s,(b.x+.5)*s,(b.y+.5)*s,busLine.color,s*(active?.085:.065));
+      const active=busLine.id===city.activeBusLineId,width=s*(active?.078:.06),closed=busLine.route.length>=3&&busLine.route[0]===busLine.route[busLine.route.length-1];
+      ctx.save();ctx.globalAlpha=dimmedBusLines.has(busLine.id)?.14:1;ctx.filter=dimmedBusLines.has(busLine.id)?'saturate(25%)':'none';
+      drawBusRoute(busLine.route,busLine.color,width,s,false,closed);
+      if(busLine.returnTrip&&!closed) {
+        const returnRoute=[...busLine.route].reverse(),outLast=busSegment(busLine.route.at(-2),busLine.route.at(-1),s),returnFirst=busSegment(returnRoute[0],returnRoute[1],s);
+        const returnLast=busSegment(returnRoute.at(-2),returnRoute.at(-1),s),outFirst=busSegment(busLine.route[0],busLine.route[1],s);
+        strokeBusConnector(outLast,returnFirst,busLine.route.at(-1),'#fffef9',width*1.8,s,true);
+        strokeBusConnector(outLast,returnFirst,busLine.route.at(-1),busLine.color,width,s,true);
+        drawBusRoute(returnRoute,busLine.color,width,s,true);
+        strokeBusConnector(returnLast,outFirst,busLine.route[0],'#fffef9',width*1.8,s,true);
+        strokeBusConnector(returnLast,outFirst,busLine.route[0],busLine.color,width,s,true);
       }
       for(const n of busLine.stops) {
         const p=point(n);circle((p.x+.5)*s,(p.y+.5)*s,s*.11,'#fffef9');circle((p.x+.5)*s,(p.y+.5)*s,s*.067,'#f0b84f');
       }
+      ctx.restore();
     }
     ctx.lineCap='butt';
     for(const n of city.trees) {
@@ -404,7 +459,7 @@
       rounded(x*s+1,y*s+1,rw*s-2,rh*s-2,s*.1,'#37678c12','#37678c');
     }
     if(dragDraft) {
-      const color=dragDraft.kind==='erase'?'#c8844f':dragDraft.kind==='cut'?'#a97346':dragDraft.kind==='bus'?(city.activeBusLine?.color||'#1686a0'):'#317a57';
+      const color=dragDraft.kind==='erase'||dragDraft.kind==='bus-trim'?'#c8844f':dragDraft.kind==='cut'?'#a97346':dragDraft.kind==='bus'?(city.activeBusLine?.color||'#1686a0'):'#317a57';
       for(const n of dragDraft.path){const {x,y}=point(n);rounded(x*s+3,y*s+3,s-6,s-6,s*.09,color+'20',color);}
       if(dragDraft.path.length>1) for(let i=1;i<dragDraft.path.length;i++){
         const a=point(dragDraft.path[i-1]),b=point(dragDraft.path[i]);line((a.x+.5)*s,(a.y+.5)*s,(b.x+.5)*s,(b.y+.5)*s,color,s*.08);
@@ -415,7 +470,7 @@
       const {x,y}=point(selected),retracting=dragDraft?.kind==='erase';
       rounded(x*s+1,y*s+1,s-2,s-2,s*.1,retracting?'#d18d4f22':'#317a5719',retracting?'#c68b56':'#6d936b');
       if(tool==='cut')label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
-      if(tool==='bus')label('▰',(x+.5)*s,(y+.5)*s,s*.34,city.activeBusLine?.color||'#1686a0','800');
+      if(tool==='bus')label(busEditMode==='trim'?'−':'▰',(x+.5)*s,(y+.5)*s,s*.34,busEditMode==='trim'?'#c8844f':city.activeBusLine?.color||'#1686a0','800');
       if(tool==='road'&&!city.buildings.has(selected)&&!city.roads.has(selected))label(retracting?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,retracting?'#bd8253':'#82a277');
     }
     if(city.state==='paused') {
@@ -443,6 +498,7 @@
     $('cut-tool').disabled=city.state!=='planning';
     $('bus-tool').disabled=city.state!=='planning';
     const busLine=city.activeBusLine, planningBus=city.state==='planning';
+    const busClosed=Boolean(busLine?.route.length>=3&&busLine.route[0]===busLine.route[busLine.route.length-1]);
     const lineSelect=$('bus-line-select'), selectedId=lineSelect.value;
     const lineSignature=city.busLines.map(line=>`${line.id}:${line.name}`).join('|');
     if(lineSelect.dataset.signature!==lineSignature) {
@@ -455,14 +511,22 @@
     $('bus-line-name').disabled=!planningBus||!busLine;
     $('bus-line-color').disabled=!planningBus||!busLine;
     $('bus-count').disabled=!planningBus||!busLine;
+    $('bus-return-trip').disabled=!planningBus||!busLine||busClosed;
+    $('trim-bus').disabled=!planningBus||!busLine||busLine.route.length<2;
+    $('trim-bus').classList.toggle('active',tool==='bus'&&busEditMode==='trim');
     $('redraw-bus').disabled=!planningBus||!busLine;
     $('delete-bus').disabled=!planningBus||!busLine;
     if(document.activeElement!==$('bus-line-name')) $('bus-line-name').value=busLine?.name||'';
     if(document.activeElement!==$('bus-line-color')) $('bus-line-color').value=busLine?.color||'#1686a0';
     if(document.activeElement!==$('bus-count')) $('bus-count').value=String(busLine?.count||1);
+    $('bus-return-trip').checked=Boolean(busLine?.returnTrip);
     const busPassengers=city.buses.reduce((sum,bus)=>sum+bus.passengers.length,0), planned=city.busLines.filter(line=>line.route.length);
-    $('bus-status').textContent=busLine?(busLine.route.length?`${busLine.route.length-1} 段闭环 · ${busLine.count} 辆 · ${busLine.count*BUS_COST} 点${city.buses.length?` · 全网载客 ${busPassengers}/${city.buses.length*BUS_CAPACITY}`:''}`:'当前线路尚未绘制'):`尚无线路 · 本关上限 ${city.busLineLimit} 条`;
+    if(busLine?.route.length) {
+      const routeState=busClosed?`${busLine.route.length-1} 段闭环`:busLine.returnTrip?`${busLine.route.length-1} 段往返 · 返程不停站`:`${busLine.route.length-1} 段 · 待闭环`;
+      $('bus-status').textContent=`${routeState} · ${busLine.count} 辆 · ${busLine.count*BUS_COST} 点${city.buses.length?` · 全网载客 ${busPassengers}/${city.buses.length*BUS_CAPACITY}`:''}`;
+    } else $('bus-status').textContent=busLine?'当前线路尚未绘制':`尚无线路 · 本关上限 ${city.busLineLimit} 条`;
     if(planned.length>1) $('bus-status').textContent+=` · 已规划 ${planned.length}/${city.busLineLimit} 条`;
+    updateBusVisibilityControls();
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
     $('speed').textContent=speed+'×';
     $('connection-count').textContent=city.routes.filter((r,i)=>city.routeConnected(i)).length+' / '+city.routes.length;
@@ -489,7 +553,7 @@
   }
   function reset(levelId = city.level.id) {
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;
+    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     configureLevel();setTool('select');updateUI();draw();toast(`欢迎来到${city.level.name}！${city.level.tip}`);
@@ -498,11 +562,30 @@
     const rect=canvas.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/rect.width*WIDTH),y=Math.floor((event.clientY-rect.top)/rect.height*HEIGHT);
     return x>=0&&x<WIDTH&&y>=0&&y<HEIGHT?key(x,y):null;
   }
+  function busDraftProblem(start) {
+    const line=city.activeBusLine;
+    if(busEditMode==='trim') {
+      if(!line||line.route.length<2)return '当前线路没有可擦除的路段';
+      return start===line.route[line.route.length-1]?'':'请从当前线路末端开始反向擦除';
+    }
+    if(!city.roads.has(start))return '请从已有道路开始绘制公交线路';
+    if(!line?.route.length)return '';
+    if(line.route[0]===line.route[line.route.length-1])return '当前线路已经闭环；如需续画，请先反向擦除尾段';
+    if(start!==line.route[line.route.length-1])return '请从当前公交线路的末端继续绘制';
+    return '';
+  }
   function extendDraft(next) {
     if(!dragDraft||next===lastCell)return;
     const path=dragDraft.path;
+    if(dragDraft.kind==='bus-trim') {
+      if(path.length>1&&next===path[path.length-2]){path.pop();lastCell=next;return;}
+      const expected=city.activeBusLine?.route[city.activeBusLine.route.length-path.length-1];
+      if(next!==expected){toast('请严格沿公交线路，从末端逐格反向擦除');return;}
+      path.push(next);lastCell=next;return;
+    }
     if(dragDraft.kind==='bus') {
-      if(path.length>1&&path[0]===path[path.length-1])return;
+      const line=city.activeBusLine,origin=line?.route.length?line.route[0]:path[0];
+      if(path.length>1&&origin===path[path.length-1])return;
       const current=path[path.length-1];
       if(!city.roads.has(next)||!city.edges.get(current)?.has(next)){toast('公交线路只能沿已有且明确连通的道路绘制');return;}
       path.push(next);lastCell=next;return;
@@ -536,9 +619,17 @@
   function commitDrag() {
     if(!dragDraft||dragDraft.path.length<2)return;
     const {path,kind}=dragDraft;let actions=[];
+    if(kind==='bus-trim') {
+      const message=city.trimBusRoute(path),line=city.activeBusLine;
+      if(message){toast(message);return;}
+      toast(`已擦除尾部 ${path.length-1} 段${line.route.length?'，可继续反向擦除或接着绘制':'，线路已清空并返还车辆预算'}`);
+      return;
+    }
     if(kind==='bus') {
-      const message=city.setBusRoute(path);
-      toast(message||`公交闭环已规划 · ${path.length-1} 段`);
+      const message=city.appendBusRoute(path),line=city.activeBusLine;
+      if(message){toast(message);return;}
+      const closed=line.route.length>=3&&line.route[0]===line.route[line.route.length-1];
+      toast(closed?`公交闭环已完成 · ${line.route.length-1} 段`:line.returnTrip?`已追加线路 · ${line.route.length-1} 段，原路返回可运营`:`已追加线路 · ${line.route.length-1} 段，请从末端继续直至闭环`);
       return;
     }
     if(kind==='build') {
@@ -558,9 +649,12 @@
     e.preventDefault();canvas.focus({preventScroll:true});keyboardAnchor=null;keyboardMode=false;dragging=true;
     canvas.setPointerCapture(e.pointerId);hover=eventCell(e);if(hover===null)return;
     if(tool==='select'){selectionAnchor=hover;selection={start:hover,end:hover};updateUI();draw();return;}
-    if(tool==='bus'&&!city.roads.has(hover)){dragging=false;toast('请从已有道路开始绘制公交线路');return;}
+    if(tool==='bus'){
+      const problem=busDraftProblem(hover);
+      if(problem){dragging=false;toast(problem);return;}
+    }
     lastCell=hover;dragGrade=city.roads.has(hover)?city.roadGrades.get(hover)||0:0;
-    dragDraft={kind:tool==='cut'?'cut':tool==='bus'?'bus':null,path:[hover]};draw();
+    dragDraft={kind:tool==='cut'?'cut':tool==='bus'?(busEditMode==='trim'?'bus-trim':'bus'):null,path:[hover]};draw();
   });
   canvas.addEventListener('pointermove',e=>{
     keyboardMode=false;hover=eventCell(e);if(!dragging||hover===null)return;
@@ -575,13 +669,15 @@
   $('select-tool').onclick=()=>setTool('select');
   $('road-tool').onclick=()=>setTool('road');
   $('cut-tool').onclick=()=>setTool('cut');
-  $('bus-tool').onclick=()=>setTool('bus');
-  $('bus-line-select').onchange=()=>{toast(city.selectBusLine($('bus-line-select').value));updateUI();draw();};
-  $('new-bus-line').onclick=()=>{const message=city.createBusLine();toast(message||'已新建公交线路，请开始绘制闭环');updateUI();draw();};
+  $('bus-tool').onclick=()=>{busEditMode='draw';setTool('bus');};
+  $('bus-line-select').onchange=()=>{busEditMode='draw';toast(city.selectBusLine($('bus-line-select').value));updateUI();draw();};
+  $('new-bus-line').onclick=()=>{busEditMode='draw';const message=city.createBusLine();toast(message||'已新建公交线路，可以分段绘制');updateUI();draw();};
   $('bus-line-name').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value});toast(message||'线路名称已更新');updateUI();draw();};
   $('bus-line-color').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{color:$('bus-line-color').value});toast(message||'线路颜色已更新');updateUI();draw();};
   $('bus-count').onchange=()=>{const message=city.setBusCount(Number($('bus-count').value));toast(message||`已配置 ${city.busCount} 辆公交车`);updateUI();draw();};
-  $('redraw-bus').onclick=()=>{setTool('bus');toast(city.activeBusLine?.route.length?'请绘制新闭环，提交后替换当前线路':'请沿已有道路绘制闭环');};
+  $('trim-bus').onclick=()=>{busEditMode='trim';setTool('bus');toast('请从当前线路末端开始，沿线路反向拖动擦除');updateUI();};
+  $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=city.updateBusLine(city.activeBusLineId,{returnTrip:enabled});toast(message||(enabled?'已开启原路返回；返程默认不停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
+  $('redraw-bus').onclick=()=>{const message=city.setBusRoute([]);if(message){toast(message);return;}busEditMode='draw';setTool('bus');toast('当前线路已清空，请从起点分段绘制');updateUI();draw();};
   $('delete-bus').onclick=()=>{const name=city.activeBusLine?.name,message=city.deleteBusLine();toast(message||`已删除${name?'「'+name+'」':''}并返还车辆预算`);updateUI();draw();};
   const changeSignal=()=>{
     if (!city.level.features.signals) { toast('红绿灯将在下一课解锁'); updateUI(); return; }
@@ -629,7 +725,13 @@
     if(message){toast(message);return;}
     speed=1;accumulator=0;resultShown=false;inspectedCell=null;updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
-  $('start').onclick=()=>{if(city.state==='planning')setTool('select');city.toggle();accumulator=0;updateUI();};
+  function toggleOperation() {
+    const planning=city.state==='planning',message=city.toggle();
+    if(message){toast(message);updateUI();return;}
+    if(planning)setTool('select');
+    accumulator=0;updateUI();
+  }
+  $('start').onclick=toggleOperation;
   $('stop').onclick=()=>{if(city.state==='running')city.toggle();updateUI();$('stop-dialog').showModal();};
   $('cancel-stop').onclick=()=> $('stop-dialog').close();
   $('confirm-stop').onclick=()=>{city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
@@ -646,9 +748,9 @@
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-    if(e.key==='1')setTool('select');if(e.key==='2')setTool('road');if(e.key==='3')setTool('cut');if(e.key==='4')setTool('bus');
+    if(e.key==='1')setTool('select');if(e.key==='2')setTool('road');if(e.key==='3')setTool('cut');if(e.key==='4'){busEditMode='draw';setTool('bus');}
     if(e.key==='Escape'){keyboardAnchor=null;if(tool==='bus'){dragDraft=null;lastCell=null;draw();}}
-    if(e.key.toLowerCase()==='p'){if(city.state==='planning')setTool('select');city.toggle();accumulator=0;updateUI();e.preventDefault();}
+    if(e.key.toLowerCase()==='p'){toggleOperation();e.preventDefault();}
     if(document.activeElement!==canvas)return;
     let {x,y}=point(keyboardCell);
     if(e.key.startsWith('Arrow')){
@@ -674,9 +776,10 @@
         toast(keyboardAnchor===null?'本段结束':'用方向键延伸，空格或 Esc 结束');
       } else if(tool==='bus') {
         if(!dragDraft) {
-          if(!city.roads.has(keyboardCell)){toast('请从已有道路开始绘制公交线路');return;}
-          keyboardAnchor=keyboardCell;lastCell=keyboardCell;dragDraft={kind:'bus',path:[keyboardCell]};
-          toast('用方向键沿道路绘制并回到起点，再按空格提交');
+          const problem=busDraftProblem(keyboardCell);
+          if(problem){toast(problem);return;}
+          keyboardAnchor=keyboardCell;lastCell=keyboardCell;dragDraft={kind:busEditMode==='trim'?'bus-trim':'bus',path:[keyboardCell]};
+          toast(busEditMode==='trim'?'用方向键沿线路反向擦除，空格提交':'用方向键从末端续画，空格提交本段');
         } else {
           commitDrag();keyboardAnchor=null;lastCell=null;dragDraft=null;
         }

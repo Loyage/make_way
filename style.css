@@ -50,11 +50,16 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .bus-line-inspector { display: grid; gap: 8px; margin-top: 12px; }
 .bus-line-inspector[hidden] { display: none; }
 .bus-line-card { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid; border-left-width: 5px; border-radius: 8px; background: #f7fbfa; }
-.bus-line-card.active { box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #cddedb; }
 .bus-line-card.active { box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #b9d6d5; }
 .bus-line-card strong { font-size: 11px; }
 .bus-line-card span { margin-right: auto; color: var(--muted); font-size: 10px; }
 .bus-line-card .tool { padding: 6px 8px; border-color: var(--line); background: var(--paper); font-size: 10px; }
+#trim-bus.active { border-color: #dfc09f; background: #f7eadf; color: #9a6138; }
+.bus-controls .bus-return-label { padding: 5px 8px; border: 1px solid #c7deda; border-radius: 7px; background: #f8fbf8; }
+.bus-return-label small { opacity: .8; }
+.bus-controls > .bus-line-visibility { display: flex; flex: 1 0 100%; flex-direction: row; flex-wrap: wrap; gap: 7px; margin: 0; padding-top: 9px; border-top: 1px solid #d3e3df; }
+.bus-visibility-toggle { padding: 5px 9px; border: 1px solid #c9d9d5; border-left: 4px solid var(--bus-color); border-radius: 999px; background: #fffef9; color: #365a59; font: inherit; font-size: 10px; cursor: pointer; }
+.bus-visibility-toggle.dimmed { opacity: .48; filter: saturate(.35); }
 @media (max-width: 760px) {
   .road-inspector { grid-template-columns: 1fr; padding: 16px; }
   .signal-controls { border-left: 0; border-top: 1px solid var(--line); padding: 14px 0 0; }
