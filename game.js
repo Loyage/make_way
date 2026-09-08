@@ -229,32 +229,43 @@
     return { x1:(a.x+.5)*s-dy*offset, y1:(a.y+.5)*s+dx*offset, x2:(b.x+.5)*s-dy*offset, y2:(b.y+.5)*s+dx*offset, dx, dy };
   }
   function busDirection(segment,color,s) {
-    const mx=(segment.x1+segment.x2)/2,my=(segment.y1+segment.y2)/2,back=s*.075,wing=s*.045;
+    const mx=(segment.x1+segment.x2)/2,my=(segment.y1+segment.y2)/2,back=s*.085,wing=s*.052;
     const bx=mx-segment.dx*back,by=my-segment.dy*back;
-    line(bx-segment.dy*wing,by+segment.dx*wing,mx,my,color,s*.022);
-    line(bx+segment.dy*wing,by-segment.dx*wing,mx,my,color,s*.022);
+    line(bx-segment.dy*wing,by+segment.dx*wing,mx,my,color,s*.023);
+    line(bx+segment.dy*wing,by-segment.dx*wing,mx,my,color,s*.023);
   }
-  function busTurn(ctxPath,previous,next,cell,s) {
-    const p=point(cell),reverse=previous.dx===-next.dx&&previous.dy===-next.dy;
-    const cx=(p.x+.5)*s+(reverse?previous.dx*s*.28:0),cy=(p.y+.5)*s+(reverse?previous.dy*s*.28:0);
-    ctxPath.quadraticCurveTo(cx,cy,next.x1,next.y1);
+  function busTurn(ctxPath,previous,next,s) {
+    if(previous.dx===next.dx&&previous.dy===next.dy){ctxPath.lineTo(previous.x2,previous.y2);return;}
+    const r=s*.2;
+    const incoming={x:previous.x2-previous.dx*r,y:previous.y2-previous.dy*r};
+    const outgoing={x:next.x1+next.dx*r,y:next.y1+next.dy*r};
+    ctxPath.lineTo(incoming.x,incoming.y);
+    if(previous.dx===-next.dx&&previous.dy===-next.dy) {
+      const reach=s*.18;
+      ctxPath.bezierCurveTo(previous.x2+previous.dx*reach,previous.y2+previous.dy*reach,next.x1-next.dx*reach,next.y1-next.dy*reach,outgoing.x,outgoing.y);
+      return;
+    }
+    const control={x:previous.dx?next.x1:previous.x2,y:previous.dy?next.y1:previous.y2};
+    ctxPath.quadraticCurveTo(control.x,control.y,outgoing.x,outgoing.y);
   }
   function strokeBusRoute(route,color,width,s,dashed=false,joinEnds=false) {
     if(route.length<2)return;
     const segments=[];for(let i=1;i<route.length;i++)segments.push(busSegment(route[i-1],route[i],s));
     ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';
-    if(dashed)ctx.setLineDash([s*.13,s*.1]);
-    ctx.beginPath();ctx.moveTo(segments[0].x1,segments[0].y1);ctx.lineTo(segments[0].x2,segments[0].y2);
-    for(let i=1;i<segments.length;i++){busTurn(ctx,segments[i-1],segments[i],route[i],s);ctx.lineTo(segments[i].x2,segments[i].y2);}
-    if(joinEnds)busTurn(ctx,segments[segments.length-1],segments[0],route[0],s);
+    if(dashed)ctx.setLineDash([s*.11,s*.095]);
+    ctx.beginPath();ctx.moveTo(segments[0].x1,segments[0].y1);
+    for(let i=0;i<segments.length;i++) {
+      const next=i+1<segments.length?segments[i+1]:joinEnds?segments[0]:null;
+      if(next)busTurn(ctx,segments[i],next,s);else ctx.lineTo(segments[i].x2,segments[i].y2);
+    }
     ctx.stroke();ctx.restore();
   }
-  function strokeBusConnector(previous,next,cell,color,width,s,dashed=false) {
-    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';if(dashed)ctx.setLineDash([s*.13,s*.1]);
-    ctx.beginPath();ctx.moveTo(previous.x2,previous.y2);busTurn(ctx,previous,next,cell,s);ctx.stroke();ctx.restore();
+  function strokeBusConnector(previous,next,color,width,s,dashed=false) {
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';if(dashed)ctx.setLineDash([s*.11,s*.095]);
+    ctx.beginPath();ctx.moveTo(previous.x2,previous.y2);busTurn(ctx,previous,next,s);ctx.stroke();ctx.restore();
   }
   function drawBusRoute(route,color,width,s,dashed=false,joinEnds=false) {
-    strokeBusRoute(route,'#fffef9',width*1.8,s,dashed,joinEnds);strokeBusRoute(route,color,width,s,dashed,joinEnds);
+    strokeBusRoute(route,color,width,s,dashed,joinEnds);
     for(let i=1;i<route.length;i+=2)busDirection(busSegment(route[i-1],route[i],s),color,s);
   }
   function label(text,x,y,size,color,weight='500') {
@@ -402,17 +413,15 @@
     }
     ctx.lineCap='round';
     for(const busLine of city.busLines) if(busLine.route.length) {
-      const active=busLine.id===city.activeBusLineId,width=s*(active?.078:.06),closed=busLine.route.length>=3&&busLine.route[0]===busLine.route[busLine.route.length-1];
+      const active=busLine.id===city.activeBusLineId,width=s*(active?.05:.04),closed=busLine.route.length>=3&&busLine.route[0]===busLine.route[busLine.route.length-1];
       ctx.save();ctx.globalAlpha=dimmedBusLines.has(busLine.id)?.14:1;ctx.filter=dimmedBusLines.has(busLine.id)?'saturate(25%)':'none';
       drawBusRoute(busLine.route,busLine.color,width,s,false,closed);
       if(busLine.returnTrip&&!closed) {
         const returnRoute=[...busLine.route].reverse(),outLast=busSegment(busLine.route.at(-2),busLine.route.at(-1),s),returnFirst=busSegment(returnRoute[0],returnRoute[1],s);
         const returnLast=busSegment(returnRoute.at(-2),returnRoute.at(-1),s),outFirst=busSegment(busLine.route[0],busLine.route[1],s);
-        strokeBusConnector(outLast,returnFirst,busLine.route.at(-1),'#fffef9',width*1.8,s,true);
-        strokeBusConnector(outLast,returnFirst,busLine.route.at(-1),busLine.color,width,s,true);
+        strokeBusConnector(outLast,returnFirst,busLine.color,width,s,true);
         drawBusRoute(returnRoute,busLine.color,width,s,true);
-        strokeBusConnector(returnLast,outFirst,busLine.route[0],'#fffef9',width*1.8,s,true);
-        strokeBusConnector(returnLast,outFirst,busLine.route[0],busLine.color,width,s,true);
+        strokeBusConnector(returnLast,outFirst,busLine.color,width,s,true);
       }
       for(const n of busLine.stops) {
         const p=point(n);circle((p.x+.5)*s,(p.y+.5)*s,s*.11,'#fffef9');circle((p.x+.5)*s,(p.y+.5)*s,s*.067,'#f0b84f');
@@ -513,7 +522,10 @@
     $('bus-count').disabled=!planningBus||!busLine;
     $('bus-return-trip').disabled=!planningBus||!busLine||busClosed;
     $('trim-bus').disabled=!planningBus||!busLine||busLine.route.length<2;
-    $('trim-bus').classList.toggle('active',tool==='bus'&&busEditMode==='trim');
+    const trimming=tool==='bus'&&busEditMode==='trim';
+    $('trim-bus').classList.toggle('active',trimming);
+    $('trim-bus').textContent=trimming?'取消擦除':'反向擦除';
+    $('trim-bus').setAttribute('aria-pressed',String(trimming));
     $('redraw-bus').disabled=!planningBus||!busLine;
     $('delete-bus').disabled=!planningBus||!busLine;
     if(document.activeElement!==$('bus-line-name')) $('bus-line-name').value=busLine?.name||'';
@@ -675,7 +687,14 @@
   $('bus-line-name').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value});toast(message||'线路名称已更新');updateUI();draw();};
   $('bus-line-color').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{color:$('bus-line-color').value});toast(message||'线路颜色已更新');updateUI();draw();};
   $('bus-count').onchange=()=>{const message=city.setBusCount(Number($('bus-count').value));toast(message||`已配置 ${city.busCount} 辆公交车`);updateUI();draw();};
-  $('trim-bus').onclick=()=>{busEditMode='trim';setTool('bus');toast('请从当前线路末端开始，沿线路反向拖动擦除');updateUI();};
+  $('trim-bus').onclick=()=>{
+    if(tool==='bus'&&busEditMode==='trim') {
+      busEditMode='draw';dragging=false;dragDraft=null;lastCell=null;toast('已取消反向擦除，可以继续绘制线路');
+    } else {
+      busEditMode='trim';setTool('bus');toast('请从当前线路末端开始，沿线路反向拖动擦除；再次点击或按 Esc 取消');
+    }
+    updateUI();draw();
+  };
   $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=city.updateBusLine(city.activeBusLineId,{returnTrip:enabled});toast(message||(enabled?'已开启原路返回；返程默认不停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
   $('redraw-bus').onclick=()=>{const message=city.setBusRoute([]);if(message){toast(message);return;}busEditMode='draw';setTool('bus');toast('当前线路已清空，请从起点分段绘制');updateUI();draw();};
   $('delete-bus').onclick=()=>{const name=city.activeBusLine?.name,message=city.deleteBusLine();toast(message||`已删除${name?'「'+name+'」':''}并返还车辆预算`);updateUI();draw();};
@@ -749,7 +768,14 @@
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
     if(e.key==='1')setTool('select');if(e.key==='2')setTool('road');if(e.key==='3')setTool('cut');if(e.key==='4'){busEditMode='draw';setTool('bus');}
-    if(e.key==='Escape'){keyboardAnchor=null;if(tool==='bus'){dragDraft=null;lastCell=null;draw();}}
+    if(e.key==='Escape'){
+      keyboardAnchor=null;
+      if(tool==='bus') {
+        const wasTrimming=busEditMode==='trim';busEditMode='draw';dragging=false;dragDraft=null;lastCell=null;
+        if(wasTrimming)toast('已取消反向擦除，可以继续绘制线路');
+        updateUI();draw();
+      }
+    }
     if(e.key.toLowerCase()==='p'){toggleOperation();e.preventDefault();}
     if(document.activeElement!==canvas)return;
     let {x,y}=point(keyboardCell);
