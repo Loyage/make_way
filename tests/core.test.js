@@ -55,6 +55,7 @@ test('a starter plan connects all routes and wins within the time limit', () => 
   city.toggle();run(city,120);
   assert.equal(city.state,'won');assert.ok(city.delivered>=TARGET);
   assert.equal(city.commuteTimes.length,city.delivered);assert.equal(city.arrivals.length,city.delivered);
+  assert.ok(city.arrivals.every(event=>Number.isInteger(event.goal)&&Number.isInteger(event.goalIndex)));
   assert.ok(city.commuteTimes.every(time=>time>0));
   assert.ok(city.byRoute.every(n=>n>0));assert.ok(city.elapsed<=120);
 });

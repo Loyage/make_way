@@ -9,8 +9,10 @@
       if (city.delivered < seen) reset(city.delivered);
       while (seen < city.delivered) {
         const event = city.arrivals[seen] || { route: 0 };
-        const goal = city.routes[event.route].goal;
-        for (let i = 0; i < 7; i++) effects.push({ goal, age: 0, angle: i * Math.PI * 2 / 7, color: city.routes[event.route].color });
+        const route = city.routes[event.route] || city.routes[0];
+        const goal = Number.isInteger(event.goal) ? event.goal
+          : city.goals?.[event.goalIndex]?.cell ?? route?.goals?.[0]?.cell ?? route?.goal;
+        if (Number.isInteger(goal)) for (let i = 0; i < 7; i++) effects.push({ goal, age: 0, angle: i * Math.PI * 2 / 7, color: route?.color || '#708b9b' });
         seen++;
       }
     }

@@ -523,7 +523,7 @@
             if (car.goalIndex != null) this.byGoal[car.goalIndex]++;
             const commuteTime = Math.max(0, this.elapsed - (car.commuteStarted ?? this.elapsed));
             this.commuteTimes.push(commuteTime);
-            this.arrivals.push({ route: car.route, time: this.elapsed, commuteTime });
+            this.arrivals.push({ route: car.route, goal: car.goal, goalIndex: car.goalIndex, time: this.elapsed, commuteTime });
           }
         }
       }
