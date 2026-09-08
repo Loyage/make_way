@@ -119,6 +119,7 @@
     $('f-title').value = level.title; $('f-description').value = level.description;
     $('f-tip').value = level.tip;
     $('f-budget').value = level.budget; $('f-duration').value = level.duration; $('f-target').value = level.target;
+    $('f-bus-line-limit').value = level.busLineLimit ?? 1;
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals', 'bus']) $('f-' + name).checked = Boolean(level.features[name]);
     renderRoutes();
     draw();
@@ -218,7 +219,7 @@
     levels.push({
       id, name: '新关卡', english: 'NEW LEVEL', difficulty: '自定义', title: '未命名关卡',
       description: '', tip: '', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
-      budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
+      busLineLimit: 3, budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
         homes: [{ cell: keyCoord(2, 2), rate: 1, passengers: 60 }],
         goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
@@ -401,6 +402,7 @@
   for (const elId of ['f-budget', 'f-duration', 'f-target']) {
     $(elId).onchange = () => { const l = current(); const prop = elId.replace('f-', ''); if (l) { l[prop] = Number($(elId).value); markDirty(); } };
   }
+  $('f-bus-line-limit').onchange = () => { const l = current(); if (l) { l.busLineLimit = Number($('f-bus-line-limit').value); markDirty(); } };
   for (const name of ['grade', 'load', 'cut', 'inspect', 'signals', 'bus']) {
     $('f-' + name).onchange = () => { const l = current(); if (l) { l.features[name] = $('f-' + name).checked; markDirty(); } };
   }

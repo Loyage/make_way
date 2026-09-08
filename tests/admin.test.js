@@ -38,6 +38,8 @@ test('validateLevels rejects structural problems', () => {
   const badEdge = JSON.parse(JSON.stringify(good));
   badEdge[0].initialEdges = (badEdge[0].initialEdges || []).concat([[0, 0, 0]]);
   assert.match(validateLevels(badEdge), /initialEdges/);
+  const badBusLimit = JSON.parse(JSON.stringify(good)); badBusLimit[0].busLineLimit = 9;
+  assert.match(validateLevels(badBusLimit), /busLineLimit/);
   const dupHome = JSON.parse(JSON.stringify(good));
   dupHome[0].routes[0].homes.push({ cell: dupHome[0].routes[0].homes[0].cell, rate: 4, passengers: 60 });
   assert.match(validateLevels(dupHome), /重叠的住宅/);

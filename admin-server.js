@@ -102,6 +102,7 @@ function validateLevels(list) {
       if (typeof features[name] !== 'boolean') return `关卡「${level.id}」的 features.${name} 必须是布尔值`;
     }
     if (features.bus !== undefined && typeof features.bus !== 'boolean') return `关卡「${level.id}」的 features.bus 必须是布尔值`;
+    if (level.busLineLimit !== undefined && (!Number.isInteger(level.busLineLimit) || level.busLineLimit < 1 || level.busLineLimit > 6)) return `关卡「${level.id}」的 busLineLimit 必须是 1 至 6 的整数`;
     // terrain sets
     for (const field of ['water', 'bridges', 'trees']) {
       if (!Array.isArray(level[field])) return `关卡「${level.id}」的 ${field} 必须是数组`;
