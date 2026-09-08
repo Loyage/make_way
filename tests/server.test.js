@@ -38,8 +38,9 @@ test('index contains no embedded level metadata', async t => {
   assert.match(html,/id="level-summary"><\/small>/);
   assert.match(html,/id="mission-title"><\/h2>/);
   const manual=(await request(port,'/manual.html')).body;
-  assert.match(manual,/统一操作手册/);
+  assert.match(manual,/慢行小城游戏指南/);
   assert.match(manual,/拖拽起点与第一步情况表/);
+  assert.match(manual,/一辆车怎样完成出行/);
 });
 test('health, HEAD and conditional caching work', async t => {
   const port=await setup(t);
