@@ -37,6 +37,12 @@
         <div id="level-nav" class="level-nav"></div>
         <div class="sidebar-actions">
           <button id="save" class="primary">保存到 levels.json</button>
+          <button id="save-preset" class="tool">另存为配置…</button>
+          <div class="preset-load">
+            <select id="preset-select" aria-label="选择要载入的配置"></select>
+            <button id="load-preset" class="tool">载入配置</button>
+          </div>
+          <button id="overwrite-default" class="tool danger-btn">覆盖默认配置</button>
           <button id="reload" class="tool">重新载入磁盘</button>
         </div>
       </nav>
@@ -78,9 +84,25 @@
             </div>
           </details>
 
+          <details class="editor-section" id="campaign-section" open>
+            <summary>多日任务</summary>
+            <div class="campaign-toggle"><label><input id="f-campaign" type="checkbox"> 启用连续五日任务</label></div>
+            <div id="campaign-editor" hidden>
+              <p class="section-hint">每天拥有独立的路线、人口、运营时长、运输目标与最高收入。切换日期后，下方「路线与建筑」和地图会编辑该日内容；地形、初始道路和总预算由五天共用。</p>
+              <div id="campaign-days" class="campaign-days" role="tablist" aria-label="任务日期"></div>
+              <div class="field-grid nums campaign-fields">
+                <label>当日时长（秒）<input id="f-day-duration" type="number" min="1" step="1"></label>
+                <label>当日运输目标（人）<input id="f-day-target" type="number" min="1" step="1"></label>
+                <label>当日最高收入（点）<input id="f-day-income" type="number" min="0" step="1"></label>
+              </div>
+              <div class="campaign-actions"><button id="copy-prev-day" class="tool">复制前一天配置</button><button id="copy-next-day" class="tool">复制到下一天</button></div>
+            </div>
+          </details>
+
           <details class="editor-section" open>
             <summary>路线与建筑</summary>
             <p class="section-hint">每一条路线可包含多个住宅（home，各自输出速率/总人数）与多个目的地（goal，各自标签/可选输入上限）。在地图用「住宅 / 目的地」工具配合当前路线与当前住宅/目的地放置坐标；在下方列表增删并编辑各点。</p>
+            <p class="section-hint coord-legend">坐标系：地图中心为原点 (0,0)，向右为 +x，向上为 +y；x 范围 −8～7，y 范围 −6～5。下方建筑坐标以此为准。</p>
             <div id="route-list" class="route-list"></div>
             <button id="add-route" class="tool">＋ 添加路线</button>
           </details>

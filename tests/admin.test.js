@@ -21,9 +21,9 @@ function request(port, url, method = 'GET', body = null, headers = {}) {
 test('validateLevels accepts the built-in chapter catalog', () => {
   const catalog=defaultLevels();
   assert.equal(validateLevels(catalog), '');
-  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',4],['城市调度',4]]);
+  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',6],['城市调度',4]]);
   const flat=catalog.chapters.flatMap(chapter=>chapter.levels),migrated=normalizeCatalog(flat);
-  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[4,4]);assert.equal(validateLevels(flat),'');
+  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[6,4]);assert.equal(validateLevels(flat),'');
 });
 
 test('validateLevels rejects chapter and level structural problems', () => {
@@ -58,6 +58,12 @@ test('validateLevels rejects chapter and level structural problems', () => {
   const crossRoute=JSON.parse(JSON.stringify(good)),crossLevel=first(crossRoute);
   crossLevel.routes.push({name:'占位',color:'#638d69',light:'#dae6cb',homes:[{cell:crossLevel.routes[0].goals[0].cell,rate:1,passengers:60}],goals:[{cell:crossLevel.routes[0].homes[0].cell+1,label:'终'}]});
   assert.match(validateLevels(crossRoute),/重叠/);
+  const badDays=JSON.parse(JSON.stringify(good)),campaignLevel=badDays.chapters[0].levels.find(level=>level.id==='growing-city');campaignLevel.campaign.days.pop();
+  assert.match(validateLevels(badDays),/正好包含 5 天/);
+  const impossibleDay=JSON.parse(JSON.stringify(good)),dayLevel=impossibleDay.chapters[0].levels.find(level=>level.id==='growing-city');dayLevel.campaign.days[2].target=999999;
+  assert.match(validateLevels(impossibleDay),/第 3 天.*最多可送达/);
+  const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].target++;
+  assert.match(validateLevels(mismatchedFirst),/必须与第 1 天一致/);
 });
 
 test('setLevels rebuilds active LEVELS and freezes definitions', () => {
@@ -113,8 +119,39 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.body,/id="new-chapter"/);assert.match(page.body,/id="f-chapter"/);
+  assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
+  assert.match(page.body,/id="save-preset"/);assert.match(page.body,/id="load-preset"/);assert.match(page.body,/id="preset-select"/);assert.match(page.body,/id="overwrite-default"/);
+  assert.match(page.body,/坐标系：地图中心为原点/);
 
   const logout=await request(port,'/api/logout','POST',null,{Cookie:cookie.split(';')[0]});
   assert.equal(logout.status,200);
   assert.equal((await request(port,'/api/levels','GET',null,{Cookie:cookie.split(';')[0]})).status,401,'logout must revoke the server-side session');
+});
+
+test('admin server saves named presets and overwrites the default config', async t => {
+  const { createAdminServer, defaultLevels } = require('../admin-server.js');
+  const fs = require('node:fs'), path = require('node:path');
+  const BUILT_IN = path.join(__dirname, '..', 'built-in-levels.json');
+  const PRESET_DIR = path.join(__dirname, '..', 'level-presets');
+  const backup = fs.readFileSync(BUILT_IN, 'utf8');
+  process.env.ADMIN_PASSWORD = 'test-secret';
+  const server = await createAdminServer({ port: 0, host: '127.0.0.1' });
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => { server.close(resolve); try { fs.rmSync(PRESET_DIR, { recursive: true, force: true }); } catch { /* ignore */ } }));
+  const port = server.address().port;
+  const login = await request(port, '/api/login', 'POST', JSON.stringify({ password: 'test-secret' }));
+  const cookie = (login.headers['set-cookie'] || []).find(c => c.startsWith('traffic_admin=')).split(';')[0];
+  const auth = { Cookie: cookie }, body = JSON.stringify(defaultLevels());
+
+  assert.deepEqual(JSON.parse((await request(port, '/api/presets', 'GET', null, auth)).body).presets, []);
+  assert.equal((await request(port, '/api/presets/my-config', 'PUT', body, auth)).status, 200);
+  assert.equal((await request(port, '/api/presets/my-config', 'PUT', body, auth)).status, 409, 'duplicate preset name must be rejected');
+  assert.deepEqual(JSON.parse((await request(port, '/api/presets', 'GET', null, auth)).body).presets, ['my-config']);
+  const loaded = await request(port, '/api/presets/my-config', 'GET', null, auth);
+  assert.equal(loaded.status, 200);
+  assert.equal(JSON.parse(loaded.body).catalog.chapters.length, 2);
+  assert.equal((await request(port, '/api/presets/bad%2Fname', 'PUT', body, auth)).status, 400);
+
+  try { assert.equal((await request(port, '/api/default', 'PUT', body, auth)).status, 200); }
+  finally { fs.writeFileSync(BUILT_IN, backup); }
 });

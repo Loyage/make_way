@@ -113,6 +113,14 @@ canvas#map{display:block;width:100%;aspect-ratio:4/3;touch-action:none;cursor:cr
 .sw.goal{border:2px solid #729d7a;background:#fffef9}
 .sw.road{background:#b8c4ab}
 
+/* Multi-day campaign */
+.campaign-toggle,.campaign-actions{margin:0 20px 16px}.campaign-toggle label{display:flex;align-items:center;gap:8px;font-weight:600}.campaign-days{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:0 20px 14px}.campaign-days .tool{padding:8px 5px}.campaign-fields{margin-bottom:10px!important}.campaign-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* Level order, presets & coordinates */
+.level-row{display:flex;align-items:center;gap:4px}.level-row .level-order{width:22px;flex:none;text-align:center;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}.level-row>button{flex:1;min-width:0}.level-row .level-move{flex:none;width:22px;height:22px;padding:0;font-size:11px;border:1px solid #d6dbd1;background:transparent;border-radius:5px;color:#7b8677}.level-row .level-move:disabled{opacity:.3}.level-row .level-move:not(:disabled):hover{background:#eef3e6}
+.preset-load{display:flex;gap:5px}.preset-load select{flex:1;min-width:0;padding:7px;font-size:12px}
+.coord-box{display:flex;gap:4px}.coord-box input{flex:1;min-width:0}.coord-legend{font-weight:600;color:#345e40}
+
 /* Danger */
 .editor-section.danger{display:flex;gap:10px;padding:16px 20px;border-color:#ecd3cd}
 .danger-btn{color:var(--danger);border-color:#e2b6ae}

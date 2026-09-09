@@ -16,6 +16,7 @@
   let catalog = { version: 1, chapters: [] };
   let currentChapterIndex = 0;
   let currentLevelIndex = null;
+  let activeCampaignDay = 0;
   let tool = 'water';
   let roadGrade = 0;
   let activeRoute = 0;      // which route the home/goal tools place
@@ -30,9 +31,13 @@
   const currentChapter = () => chapters()[currentChapterIndex] || null;
   const current = () => (currentLevelIndex === null ? null : currentChapter()?.levels[currentLevelIndex] || null);
   const allLevels = () => chapters().flatMap(chapter => chapter.levels);
-  const currentRoute = () => current()?.routes[activeRoute] || null;
+  const activeRoutes = () => current()?.campaign?.days?.[activeCampaignDay]?.routes || current()?.routes || [];
+  const allRoutes = level => level?.campaign?.days?.flatMap(day => day.routes || []) || level?.routes || [];
+  const currentRoute = () => activeRoutes()[activeRoute] || null;
   const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
   const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
+  const cellToXY = n => ({ x: n % WIDTH - 8, y: 5 - Math.floor(n / WIDTH) });
+  const xyToCell = (x, y) => (Number.isInteger(x) && Number.isInteger(y) && x >= -8 && x <= 7 && y >= -6 && y <= 5) ? (5 - y) * WIDTH + (x + 8) : null;
   function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
   function markDirty() { dirty = true; const el = $('save-status'); el.textContent = '有未保存更改'; el.classList.add('dirty'); }
 
@@ -56,7 +61,7 @@
     currentLevelIndex = chapters()[0]?.levels.length ? 0 : null;
     dirty = false;
     const status=$('save-status');status.textContent='已从磁盘载入';status.classList.remove('dirty');
-    renderAll();
+    renderAll();loadPresets().catch(()=>{});
   }
   async function login(password) {
     await api('/api/login', { method: 'POST', body: JSON.stringify({ password }) });
@@ -67,6 +72,15 @@
     await api('/api/levels', { method: 'PUT', body: JSON.stringify(catalog) });
     dirty = false; const el = $('save-status'); el.textContent = '已保存'; el.classList.remove('dirty');
     toast('已保存到 levels.json，重启游戏服务后生效');
+  }
+  async function loadPresets() {
+    const data = await api('/api/presets');
+    const select = $('preset-select'), current = select.value;
+    select.replaceChildren();
+    const empty = document.createElement('option'); empty.value = ''; empty.textContent = data.presets.length ? '选择配置…' : '（暂无保存的配置）';
+    select.append(empty);
+    for (const name of data.presets) { const o = document.createElement('option'); o.value = name; o.textContent = name; select.append(o); }
+    if (current && data.presets.includes(current)) select.value = current;
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────
@@ -111,13 +125,25 @@
       head.append(choose,edit,remove);group.append(head);
       const list=document.createElement('div');list.className='chapter-levels';
       chapter.levels.forEach((level,li)=>{
-        const b=document.createElement('button');b.className=ci===currentChapterIndex&&li===currentLevelIndex?'selected':'';
+        const row=document.createElement('div');row.className='level-row';
+        const order=document.createElement('span');order.className='level-order';order.textContent=String(li+1).padStart(2,'0');order.title=`第 ${li+1} 关`;
+        const b=document.createElement('button');b.type='button';b.className=ci===currentChapterIndex&&li===currentLevelIndex?'selected':'';
         const name=document.createElement('span');name.textContent=level.name||level.id;
         const id=document.createElement('small');id.textContent=level.id;
-        b.append(name,id);b.onclick=()=>selectLevel(ci,li);list.append(b);
+        b.append(name,id);b.onclick=()=>selectLevel(ci,li);
+        const up=document.createElement('button');up.className='level-move';up.type='button';up.textContent='↑';up.title='上移关卡';up.disabled=li===0;up.onclick=()=>moveLevel(ci,li,-1);
+        const down=document.createElement('button');down.className='level-move';down.type='button';down.textContent='↓';down.title='下移关卡';down.disabled=li===chapter.levels.length-1;down.onclick=()=>moveLevel(ci,li,1);
+        row.append(order,b,up,down);list.append(row);
       });
       group.append(list);nav.append(group);
     });
+  }
+  function moveLevel(ci,li,delta) {
+    const chapter=chapters()[ci],target=li+delta;
+    if(target<0||target>=chapter.levels.length)return;
+    const [level]=chapter.levels.splice(li,1);chapter.levels.splice(target,0,level);
+    currentChapterIndex=ci;currentLevelIndex=target;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;
+    markDirty();renderAll();
   }
   function renderEditor() {
     const level = current();
@@ -139,13 +165,28 @@
     $('f-budget').value = level.budget; $('f-duration').value = level.duration; $('f-target').value = level.target;
     $('f-bus-line-limit').value = level.busLineLimit ?? 1;
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals', 'bus']) $('f-' + name).checked = Boolean(level.features[name]);
+    renderCampaign();
     renderRoutes();
     draw();
   }
+  function renderCampaign() {
+    const level=current(),enabled=Boolean(level?.campaign);
+    $('f-campaign').checked=enabled;$('campaign-editor').hidden=!enabled;
+    $('f-duration').disabled=enabled;$('f-target').disabled=enabled;
+    if(!enabled)return;
+    if(!Array.isArray(level.campaign.days)||level.campaign.days.length!==5)return;
+    activeCampaignDay=Math.min(activeCampaignDay,4);
+    level.routes=level.campaign.days[0].routes;
+    level.duration=level.campaign.days[0].duration;level.target=level.campaign.days[0].target;
+    const tabs=$('campaign-days');tabs.replaceChildren();
+    level.campaign.days.forEach((day,index)=>{const button=document.createElement('button');button.type='button';button.className='tool'+(index===activeCampaignDay?' active':'');button.textContent=`第 ${index+1} 天`;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(index===activeCampaignDay));button.onclick=()=>{activeCampaignDay=index;activeRoute=0;activeHome=0;activeGoal=0;renderCampaign();renderRoutes();draw();};tabs.append(button);});
+    const day=level.campaign.days[activeCampaignDay];$('f-day-duration').value=day.duration;$('f-day-target').value=day.target;$('f-day-income').value=day.maxIncome;
+    $('copy-prev-day').disabled=activeCampaignDay===0;$('copy-next-day').disabled=activeCampaignDay===4;
+  }
   function renderRoutes() {
     const list = $('route-list'); list.replaceChildren();
-    const level = current();
-    level.routes.forEach((route, ri) => {
+    const level = current(),routes=activeRoutes();
+    routes.forEach((route, ri) => {
       if (!Array.isArray(route.homes)) route.homes = [];
       if (!Array.isArray(route.goals)) route.goals = [];
       const card = document.createElement('div');
@@ -160,11 +201,16 @@
       head.append(dot, name, select);
       card.append(head);
 
-      const mkCoord = (labelText, val, onchange) => {
-        const l = document.createElement('label'); l.textContent = labelText;
-        const inp = document.createElement('input'); inp.type = 'text'; inp.value = val;
-        inp.onchange = () => { onchange(Number(inp.value)); markDirty(); draw(); };
-        l.append(inp); return l;
+      const mkXY = (labelText, cell, onchange) => {
+        const l = document.createElement('label');
+        const span = document.createElement('span'); span.textContent = labelText;
+        const box = document.createElement('span'); box.className = 'coord-box';
+        const { x, y } = cellToXY(cell);
+        const xi = document.createElement('input'); xi.type = 'number'; xi.value = x; xi.title = 'x 轴（右为正）';
+        const yi = document.createElement('input'); yi.type = 'number'; yi.value = y; yi.title = 'y 轴（上为正）';
+        const apply = () => { const next = xyToCell(Number(xi.value), Number(yi.value)); if (next === null) { toast('坐标越界：x∈[-8,7]，y∈[-6,5]'); const cur = cellToXY(cell); xi.value = cur.x; yi.value = cur.y; return; } onchange(next); };
+        xi.onchange = apply; yi.onchange = apply;
+        box.append(xi, yi); l.append(span, box); return l;
       };
       const mkText = (labelText, val, onchange) => {
         const l = document.createElement('label'); l.textContent = labelText;
@@ -178,7 +224,7 @@
       route.homes.forEach((h, hi) => {
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
-          mkCoord(`住宅${hi + 1} 坐标`, h.cell, v => { removeInitialEdgesAt(level,[h.cell]);h.cell = v; }),
+          mkXY(`住宅${hi + 1} 坐标 (x, y)`, h.cell, v => { removeInitialEdgesAt(level,[h.cell]);h.cell = v; }),
           mkText('居民产生率 generationRate（人/秒）', h.generationRate ?? h.rate, v => { h.generationRate = Number(v); delete h.rate; delete h.carRate; }),
           mkText('总人口 passengers', h.passengers, v => { h.passengers = Number(v); })
         );
@@ -197,7 +243,7 @@
       route.goals.forEach((g, gi) => {
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
-          mkCoord(`目的地${gi + 1} 坐标`, g.cell, v => { removeInitialEdgesAt(level,[g.cell]);g.cell = v; }),
+          mkXY(`目的地${gi + 1} 坐标 (x, y)`, g.cell, v => { removeInitialEdgesAt(level,[g.cell]);g.cell = v; }),
           mkText('标签 label', g.label, v => { g.label = v; }),
           mkText('输入上限 input（留空为不限）', g.input ?? '', v => { g.input = v === '' ? undefined : Number(v); })
         );
@@ -221,7 +267,7 @@
       });
       const remove = document.createElement('button'); remove.className = 'tool danger-btn'; remove.textContent = '删除路线';
       remove.style.marginLeft = 'auto';
-      remove.onclick = () => { if(level.routes.length===1){toast('每个关卡至少保留一条路线');return;}removeInitialEdgesAt(level,[...route.homes,...route.goals].map(building=>building.cell));level.routes.splice(ri, 1); if (activeRoute >= level.routes.length) activeRoute = Math.max(0, level.routes.length - 1); markDirty(); renderRoutes(); draw(); };
+      remove.onclick = () => { if(routes.length===1){toast('每个关卡每天至少保留一条路线');return;}removeInitialEdgesAt(level,[...route.homes,...route.goals].map(building=>building.cell));routes.splice(ri, 1); if (activeRoute >= routes.length) activeRoute = Math.max(0, routes.length - 1); markDirty(); renderRoutes(); draw(); };
       colorRow.append(remove);
       card.append(colorRow);
       list.append(card);
@@ -231,8 +277,8 @@
   function renderAll() { renderLevelNav(); renderEditor(); }
 
   // ── Selection & CRUD ─────────────────────────────────────────────────
-  function selectChapter(ci) { currentChapterIndex=ci;currentLevelIndex=chapters()[ci].levels.length?0:null;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
-  function selectLevel(ci,li) { currentChapterIndex=ci;currentLevelIndex=li;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
+  function selectChapter(ci) { currentChapterIndex=ci;currentLevelIndex=chapters()[ci].levels.length?0:null;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
+  function selectLevel(ci,li) { currentChapterIndex=ci;currentLevelIndex=li;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;renderAll(); }
   function uniqueChapterId() { let n=chapters().length+1,id=`chapter-${n}`;while(chapters().some(chapter=>chapter.id===id))id=`chapter-${++n}`;return id; }
   function newChapter() {
     const chapter={id:uniqueChapterId(),name:'新章节',english:'NEW CHAPTER',levels:[]};
@@ -266,12 +312,12 @@
         goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
       }], initialEdges: []
     });
-    currentLevelIndex=chapter.levels.length-1;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
+    currentLevelIndex=chapter.levels.length-1;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
   }
   function duplicateLevel() {
     const src=current(),chapter=currentChapter();if(!src)return;
     const copy=JSON.parse(JSON.stringify(src)),base=copy.id+'-copy';let id=base,n=2;while(allLevels().some(level=>level.id===id))id=`${base}-${n++}`;copy.id=id;copy.name=copy.name+'（副本）';
-    chapter.levels.splice(currentLevelIndex+1,0,copy);currentLevelIndex++;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
+    chapter.levels.splice(currentLevelIndex+1,0,copy);currentLevelIndex++;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
   }
   function deleteLevel() {
     const level=current(),chapter=currentChapter();if(!level)return;
@@ -290,12 +336,12 @@
   function applyTool(cell) {
     const level = current(); if (cell === null || !level) return;
     const remove = arr => { const i = arr.indexOf(cell); if (i >= 0) arr.splice(i, 1); };
-    const occupied = level.routes.some(route=>[...(route.homes||[]),...(route.goals||[])].some(building=>building.cell===cell));
+    const occupied = allRoutes(level).some(route=>[...(route.homes||[]),...(route.goals||[])].some(building=>building.cell===cell));
     if (['water','bridge','tree'].includes(tool) && occupied) { toast('建筑所在格不能改为水面、桥梁或树木'); return; }
     if (tool === 'home' || tool === 'goal') {
       const route=currentRoute();if(!route){toast('请先添加一条路线');return;}
       const building=tool==='home'?route.homes[activeHome]:route.goals[activeGoal];
-      const conflict=level.routes.some(item=>[...item.homes,...item.goals].some(other=>other!==building&&other.cell===cell));
+      const conflict=activeRoutes().some(item=>[...item.homes,...item.goals].some(other=>other!==building&&other.cell===cell));
       if(conflict){toast(`此处已有其他住宅或目的地（格 ${cell}）`);return;}
       if(building.cell!==cell)removeInitialEdgesAt(level,[building.cell]);
       remove(level.water);remove(level.trees);remove(level.bridges);building.cell=cell;
@@ -319,7 +365,9 @@
     if (a === b) return;
     const ax = point(a).x, ay = point(a).y, bx = point(b).x, by = point(b).y;
     if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1) return;
-    const buildings=new Set(level.routes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+    const buildings=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+    const futureBuildings=new Set(allRoutes(level).flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)).filter(cell=>!buildings.has(cell)));
+    if([a,b].some(cell=>futureBuildings.has(cell))){toast('初始道路不能占用未来建筑工地');return;}
     if(buildings.has(a)&&buildings.has(b)){toast('初始道路不能直接连接两座建筑');return;}
     for(const cell of [a,b]) if(!buildings.has(cell)&&(level.trees.includes(cell)||level.water.includes(cell)&&!level.bridges.includes(cell))){toast('初始道路不能经过树木或非桥梁水面');return;}
     const existing = (level.initialEdges || []).find(([x, y]) => x === a && y === b || x === b && y === a);
@@ -368,10 +416,15 @@
       ctx.stroke();
     }
     // buildings
-    level.routes.forEach((route) => {
+    activeRoutes().forEach((route) => {
       (route.homes || []).forEach(h => drawBuilding(h.cell, route.color, true));
       (route.goals || []).forEach(g => drawBuilding(g.cell, route.color, false));
     });
+    if(level.campaign){
+      const active=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell))),sites=new Map();
+      for(let day=activeCampaignDay+1;day<level.campaign.days.length;day++)for(const route of level.campaign.days[day].routes)for(const building of [...route.homes,...route.goals])if(!active.has(building.cell)&&!sites.has(building.cell))sites.set(building.cell,day-activeCampaignDay);
+      for(const [cell,days] of sites)drawSite(cell,days);
+    }
     // highlight the active home/goal of the active route
     const route = currentRoute();
     if (route) {
@@ -388,6 +441,9 @@
       ctx.strokeStyle = tool === 'erase' ? '#c68b56' : '#6d936b'; ctx.lineWidth = 2;
       ctx.strokeRect(x * s + 1, y * s + 1, s - 2, s - 2);
     }
+  }
+  function drawSite(n,days) {
+    const s=cellSize,{x,y}=point(n),cx=(x+.5)*s,cy=(y+.5)*s;ctx.save();ctx.fillStyle='#a6aaa4';ctx.strokeStyle='#777d78';ctx.lineWidth=1.5;ctx.setLineDash([3,2]);ctx.fillRect(cx-s*.24,cy-s*.2,s*.48,s*.4);ctx.strokeRect(cx-s*.28,cy-s*.24,s*.56,s*.48);ctx.setLineDash([]);ctx.fillStyle='#fff';ctx.font=`700 ${s*.24}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(days),cx,cy);ctx.restore();
   }
   function drawBuilding(n, color, isHome) {
     const s = cellSize; const { x, y } = point(n);
@@ -430,19 +486,57 @@
   $('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
   $('logout').onclick = async () => { if(dirty&&!confirm('有未保存更改，确定退出登录并放弃这些更改吗？'))return;dirty=false;await api('/api/logout', { method: 'POST' }); location.reload(); };
   $('save').onclick = async () => { try { await save(); } catch (err) { toast('保存失败：' + err.message); } };
+  $('save-preset').onclick = async () => {
+    const name = prompt('请输入配置文件名（不能重复）：');
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) { toast('配置文件名不能为空'); return; }
+    try { await api('/api/presets/' + encodeURIComponent(trimmed), { method: 'PUT', body: JSON.stringify(catalog) }); await loadPresets(); toast(`已另存为配置「${trimmed}」`); }
+    catch (err) { toast('另存为失败：' + err.message); }
+  };
+  $('load-preset').onclick = async () => {
+    const name = $('preset-select').value;
+    if (!name) { toast('请先选择一个配置'); return; }
+    if (dirty && !confirm('有未保存更改，确定载入所选配置并放弃这些更改吗？')) return;
+    try { const data = await api('/api/presets/' + encodeURIComponent(name)); catalog = data.catalog; currentChapterIndex = 0; currentLevelIndex = chapters()[0]?.levels.length ? 0 : null; activeCampaignDay = 0; activeRoute = 0; activeHome = 0; activeGoal = 0; dirty = false; const status = $('save-status'); status.textContent = `已载入配置「${name}」`; status.classList.remove('dirty'); renderAll(); toast(`已载入配置「${name}」`); }
+    catch (err) { toast('载入失败：' + err.message); }
+  };
+  $('overwrite-default').onclick = async () => {
+    if (!confirm('确定用当前配置覆盖默认配置 built-in-levels.json？此操作会改写随版本发布的默认关卡。')) return;
+    try { await api('/api/default', { method: 'PUT', body: JSON.stringify(catalog) }); toast('已覆盖默认配置，重启游戏服务后生效'); }
+    catch (err) { toast('覆盖失败：' + err.message); }
+  };
   $('reload').onclick = async () => { if(dirty&&!confirm('有未保存更改，确定从磁盘重新载入并放弃这些更改吗？'))return;try { await loadLevels(); toast('已从磁盘重新载入'); } catch (err) { toast(err.message); } };
   $('new-chapter').onclick = newChapter;
   $('new-level').onclick = newLevel;
   $('duplicate').onclick = duplicateLevel;
   $('delete-level').onclick = deleteLevel;
   $('add-route').onclick = () => {
-    const level = current(); if (!level) return;
-    const c = COLORS[level.routes.length % COLORS.length];
-    level.routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
-    activeRoute = level.routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
+    const level = current(),routes=activeRoutes(); if (!level) return;
+    const c = COLORS[routes.length % COLORS.length];
+    routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
+    activeRoute = routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
   };
 
   // Bind field inputs to current level
+  $('f-campaign').onchange=()=>{
+    const level=current();if(!level)return;
+    if($('f-campaign').checked){
+      const routes=JSON.parse(JSON.stringify(level.routes));
+      level.campaign={days:Array.from({length:5},(_,index)=>({duration:level.duration,target:level.target,maxIncome:18+index*2,routes:JSON.parse(JSON.stringify(routes))}))};
+      activeCampaignDay=0;level.routes=level.campaign.days[0].routes;
+    }else{
+      level.routes=JSON.parse(JSON.stringify(level.campaign.days[0].routes));level.duration=level.campaign.days[0].duration;level.target=level.campaign.days[0].target;delete level.campaign;activeCampaignDay=0;
+    }
+    activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderEditor();
+  };
+  for(const id of ['f-day-duration','f-day-target','f-day-income'])$(id).onchange=()=>{
+    const level=current(),day=level?.campaign?.days?.[activeCampaignDay];if(!day)return;
+    const prop=id==='f-day-duration'?'duration':id==='f-day-target'?'target':'maxIncome';day[prop]=Number($(id).value);
+    if(activeCampaignDay===0){level.duration=day.duration;level.target=day.target;}markDirty();
+  };
+  $('copy-prev-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===0)return;level.campaign.days[activeCampaignDay]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay-1]));activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
+  $('copy-next-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===4)return;level.campaign.days[activeCampaignDay+1]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay]));activeCampaignDay++;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
   $('f-chapter').onchange=()=>{
     const level=current(),targetIndex=chapters().findIndex(chapter=>chapter.id===$('f-chapter').value);if(!level||targetIndex<0||targetIndex===currentChapterIndex)return;
     currentChapter().levels.splice(currentLevelIndex,1);chapters()[targetIndex].levels.push(level);currentChapterIndex=targetIndex;currentLevelIndex=chapters()[targetIndex].levels.length-1;markDirty();renderAll();toast('关卡已移动到所选章节');
@@ -481,6 +575,7 @@
   });
   canvas.addEventListener('pointermove', e => {
     hover = cellFromEvent(e);
+    if (hover !== null && !dragging) { const { x, y } = cellToXY(hover); $('map-status').textContent = `悬停：(${x}, ${y})`; }
     if (dragging && tool === 'road' && hover !== null && lastCell !== null) {
       lastCell = connectPath(lastCell, hover);
     } else if (dragging && tool !== 'road' && hover !== null) {
@@ -491,7 +586,7 @@
   const endDrag = () => { dragging = false; lastCell = null; dragAnchor = null; draw(); };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
-  canvas.addEventListener('pointerleave', () => { hover = null; if (!dragging) draw(); });
+  canvas.addEventListener('pointerleave', () => { hover = null; updateToolHint(); if (!dragging) draw(); });
 
   // Keyboard: 1-7 tools
   const toolOrder = ['water', 'bridge', 'tree', 'home', 'goal', 'road', 'erase'];

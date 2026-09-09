@@ -65,10 +65,10 @@ function timingSafeEqual(a, b) {
 // ── levels.json storage ─────────────────────────────────────────────────────
 function normalizeCatalog(data) {
   if (!Array.isArray(data)) return data;
-  if (data.length === 8) return { version: 1, chapters: [
-    { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: data.slice(0,4) },
-    { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: data.slice(4) }
-  ] };
+  if (data.length === 8 || data.length === 9 || data.length === 10) { const split = data.length - 4; return { version: 1, chapters: [
+    { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: data.slice(0,split) },
+    { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: data.slice(split) }
+  ] }; }
   return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: data }] };
 }
 function defaultLevels() {
@@ -83,6 +83,40 @@ async function writeLevels(catalog) {
   const tmp = LEVELS_PATH + '.tmp-' + process.pid;
   await fsp.writeFile(tmp, payload, 'utf8');
   await fsp.rename(tmp, LEVELS_PATH);
+}
+
+// ── Named presets & default override ─────────────────────────────────────
+const PRESETS_DIR = path.join(__dirname, 'level-presets');
+function safePresetName(name) {
+  return typeof name === 'string' && /^[A-Za-z0-9_\-\u4e00-\u9fa5]{1,40}$/.test(name) && name !== '.' && name !== '..';
+}
+function presetPath(name) { return path.join(PRESETS_DIR, name + '.json'); }
+async function listPresets() {
+  try {
+    const entries = await fsp.readdir(PRESETS_DIR);
+    return entries.filter(name => name.endsWith('.json')).map(name => name.slice(0, -5)).sort();
+  } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+}
+async function readPreset(name) {
+  if (!safePresetName(name)) throw new Error('配置文件名只能包含字母、数字、下划线、连字符或中文');
+  try { return normalizeCatalog(JSON.parse(await fsp.readFile(presetPath(name), 'utf8'))); }
+  catch (error) { if (error.code === 'ENOENT') throw new Error(`配置「${name}」不存在`); throw error; }
+}
+async function writePreset(name, catalog) {
+  if (!safePresetName(name)) throw new Error('配置文件名只能包含字母、数字、下划线、连字符或中文');
+  await fsp.mkdir(PRESETS_DIR, { recursive: true });
+  const file = presetPath(name);
+  let exists = false;
+  try { await fsp.access(file); exists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (exists) throw new Error(`配置「${name}」已存在，请换一个文件名`);
+  const payload = JSON.stringify(catalog, null, 2) + '\n';
+  await fsp.writeFile(file, payload, 'utf8');
+}
+async function writeDefault(catalog) {
+  const payload = JSON.stringify(catalog, null, 2) + '\n';
+  const tmp = BUILT_IN_LEVELS_PATH + '.tmp-' + process.pid;
+  await fsp.writeFile(tmp, payload, 'utf8');
+  await fsp.rename(tmp, BUILT_IN_LEVELS_PATH);
 }
 
 // ── Validation ──────────────────────────────────────────────────────────────
@@ -206,6 +240,24 @@ function validateLevels(data) {
       const initialCost = [...roadGrades].reduce((sum, [,grade]) => sum + ROAD_TYPES[grade].cost, 0);
       if (initialCost > level.budget) return `关卡「${level.id}」的初始道路需要 ${initialCost} 点，超过预算 ${level.budget}`;
     }
+    if (level.campaign !== undefined) {
+      if (!level.campaign || !Array.isArray(level.campaign.days) || level.campaign.days.length !== 5) return `关卡「${level.id}」的多日任务必须正好包含 5 天`;
+      for (let dayIndex = 0; dayIndex < level.campaign.days.length; dayIndex++) {
+        const day = level.campaign.days[dayIndex];
+        if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
+        if (!Number.isInteger(day.target) || day.target < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的目标无效`;
+        if (!Number.isInteger(day.maxIncome) || day.maxIncome < 0) return `关卡「${level.id}」第 ${dayIndex + 1} 天的最高收入无效`;
+        const dayLevel = { ...level, duration: day.duration, target: day.target, routes: day.routes };
+        delete dayLevel.campaign;
+        const dayError = validateLevels({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
+        if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
+      }
+      const firstDay = level.campaign.days[0];
+      if (level.duration !== firstDay.duration || level.target !== firstDay.target || JSON.stringify(level.routes) !== JSON.stringify(firstDay.routes)) return `关卡「${level.id}」的基础路线、时长和目标必须与第 1 天一致`;
+      const firstCells = new Set(firstDay.routes.flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)));
+      const futureCells = new Set(level.campaign.days.slice(1).flatMap(day => day.routes).flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)).filter(cell => !firstCells.has(cell)));
+      for (const edge of level.initialEdges || []) if (futureCells.has(edge[0]) || futureCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;
+    }
   }
   return '';
 }
@@ -273,6 +325,44 @@ async function handleApi(req, res, pathname, adminPassword) {
       } catch (writeError) {
         send(res, 500, { error: '写入失败：' + writeError.message });
       }
+    });
+    return true;
+  }
+  if (pathname === '/api/presets' && req.method === 'GET') {
+    try { send(res, 200, { presets: await listPresets() }); }
+    catch (error) { send(res, 500, { error: error.message }); }
+    return true;
+  }
+  if (pathname.startsWith('/api/presets/') && req.method === 'GET') {
+    try { send(res, 200, { catalog: await readPreset(pathname.slice('/api/presets/'.length)) }); }
+    catch (error) { send(res, 404, { error: error.message }); }
+    return true;
+  }
+  if (pathname.startsWith('/api/presets/') && req.method === 'PUT') {
+    const name = pathname.slice('/api/presets/'.length);
+    if (!safePresetName(name)) { send(res, 400, { error: '配置文件名只能包含字母、数字、下划线、连字符或中文' }); return true; }
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 1024 * 1024) req.destroy(); });
+    req.on('end', async () => {
+      let catalog;
+      try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+      const error = validateLevels(catalog);
+      if (error) return send(res, 400, { error });
+      try { await writePreset(name, catalog); send(res, 200, { ok: true, name }); }
+      catch (writeError) { send(res, 409, { error: writeError.message }); }
+    });
+    return true;
+  }
+  if (pathname === '/api/default' && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 1024 * 1024) req.destroy(); });
+    req.on('end', async () => {
+      let catalog;
+      try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+      const error = validateLevels(catalog);
+      if (error) return send(res, 400, { error });
+      try { await writeDefault(catalog); send(res, 200, { ok: true }); }
+      catch (writeError) { send(res, 500, { error: '写入失败：' + writeError.message }); }
     });
     return true;
   }
