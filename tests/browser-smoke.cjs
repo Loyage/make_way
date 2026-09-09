@@ -50,6 +50,9 @@ async function main() {
       await click(`.level-card[data-level-id="${LEVELS[i].id}"]`);
       assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
       assert.equal(await text('map-name'),LEVELS[i].name);
+      if(i>0)assert.equal(await text('toast'),LEVELS[i].description);
+      assert.equal(await text('mission-tip'),LEVELS[i].tip);
+      assert.equal(await evaluate('getComputedStyle(document.querySelector("#mission-tip")).whiteSpace'),'pre-line');
       const initial=new (require('../core.js').City)(LEVELS[i].id);
       assert.equal(await text('budget'),String(initial.remaining));
       assert.equal(await evaluate('document.querySelectorAll("#demand-list li").length'),LEVELS[i].routes.length);
@@ -66,6 +69,8 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#signal-yield-mode")!==null && document.querySelector("#signal-automatic")!==null'));
     assert.ok(await evaluate('document.querySelector("#signal-priority-list")!==null && document.querySelector("#signal-phase-list")!==null && document.querySelector("#add-signal-phase")!==null'));
     assert.ok(await evaluate('document.querySelector("#select-tool")!==null'));
+    for(const expected of ['2×','4×','0.5×','1×']){await click('#speed');assert.equal(await text('speed'),expected);}
+    assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');
     await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road between a building and road is not an endpoint');
@@ -96,12 +101,25 @@ async function main() {
     await drag(3,2,3,2);assert.ok((await text('road-detail')).includes('每方向'));
 
     await go(3);
+    assert.equal(await evaluate('document.querySelector("#cut-tool").hidden'),false);
+    assert.equal(await evaluate('document.querySelector("#cut-tool").disabled'),false);
+    assert.equal(await text('budget'),'0','cut-school pre-builds every road');
+    await click('#cut-tool');await drag(7,4,7,5);
+    assert.equal(await text('budget'),'0','scissors disconnect without refunding');
+
+    await go(4);
     await click('#road-tool');await drag(3,2,3,3);
     await click('#select-tool');await drag(3,3,3,3);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
     await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
 
-    await go(4);
+    await go(5);
+    assert.equal(await evaluate('document.querySelector("#campaign-progress").hidden'),false);
+    assert.equal(await evaluate('document.querySelectorAll(".campaign-day").length'),5);
+    assert.equal(await evaluate('document.querySelector("#legend-site").hidden'),false);
+    assert.ok((await text('campaign-day-title')).includes('第 1 天'));
+
+    await go(6);
     await click('#road-tool');await drag(5,3,5,10);
     assert.equal(await evaluate('document.querySelector("#select-tool").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),true);
@@ -126,7 +144,7 @@ async function main() {
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 8 progressive levels, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 10 progressive levels, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
