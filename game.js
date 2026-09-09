@@ -3,7 +3,7 @@
   const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
-  const SPEED_OPTIONS=[.5,1,2,4];
+  const SPEED_OPTIONS=[.5,1,2,4],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const levels = () => TrafficCore.LEVELS;
@@ -21,7 +21,7 @@
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
-  let designHistory = [], designHistoryIndex = -1, dragDowngrades = new Map();
+  let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   function storedDesign(levelId = city.level.id) {
@@ -54,7 +54,7 @@
     if(city.state!=='planning'){toast('运营期间不能撤销规划，请先停止运营');return;}
     if(index<0||index>=designHistory.length)return;
     const previous=designHistoryIndex,message=city.loadDesign(JSON.parse(designHistory[index]));if(message){toast(message);return;}
-    designHistoryIndex=index;dragging=false;lastCell=null;dragDraft=null;keyboardAnchor=null;busEditMode='draw';inspectedCell=null;dragDowngrades.clear();
+    designHistoryIndex=index;dragging=false;lastCell=null;dragDraft=null;keyboardAnchor=null;busEditMode='draw';inspectedCell=null;
     updateHistoryControls();updateUI();draw();toast(index<previous?'已撤销上一步规划':'已重做下一步规划');
   }
   let levelButtons = [], chapterButtons = [], visibleChapterIndex = 0;
@@ -101,7 +101,7 @@
       button.onclick=()=>{
         if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
         const message=campaign.replay(index);if(message){toast(message);return;}
-        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();dragDowngrades.clear();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
       };
       button.append(title,detail);list.append(button);
     });
@@ -152,7 +152,23 @@
       row.append(name, status); $('connection-list').append(row);
       return { row, status, routeIndex: ri };
     });
-    updateDesignControls();renderCampaignProgress();
+    updateDesignControls();renderCampaignProgress();buildAccessibleMap();
+  }
+  function accessibleCellLabel(cell) {
+    const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
+    let content=city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
+    if(city.roads.has(cell)){const policy=city.roadPolicies.get(cell);if(policy)content+=policy==='prefer'?'，汽车偏好':'，汽车禁行';content+=`，占用或驶入 ${city.load(cell).total} 辆`;}
+    return `第 ${p.y+1} 行第 ${p.x+1} 列，${content}${selection?.start===cell&&selection?.end===cell?'，已选择':''}`;
+  }
+  function buildAccessibleMap(){
+    const grid=$('accessible-map');if(!city||grid.dataset.level===`${city.level.id}:${city.width}:${city.height}`)return;
+    grid.dataset.level=`${city.level.id}:${city.width}:${city.height}`;grid.replaceChildren();grid.setAttribute('aria-rowcount',String(city.height));grid.setAttribute('aria-colcount',String(city.width));
+    for(let cell=0;cell<city.width*city.height;cell++){const button=document.createElement('button');button.type='button';button.setAttribute('role','gridcell');button.dataset.cell=String(cell);button.onclick=()=>{setTool('select');selection={start:cell,end:cell};keyboardCell=cell;keyboardMode=true;updateUI();draw();};button.onkeydown=event=>{if(!event.key.startsWith('Arrow'))return;event.preventDefault();const p=point(cell),x=Math.max(0,Math.min(city.width-1,p.x+(event.key==='ArrowLeft'?-1:event.key==='ArrowRight'?1:0))),y=Math.max(0,Math.min(city.height-1,p.y+(event.key==='ArrowUp'?-1:event.key==='ArrowDown'?1:0))),next=grid.querySelector(`[data-cell="${key(x,y)}"]`);next?.focus();next?.click();};grid.append(button);}
+  }
+  function updateAccessibleMap(){
+    const grid=$('accessible-map'),signature=`${city.state}:${Math.floor(city.elapsed*2)}:${city.cars.length}:${city.buses.reduce((sum,bus)=>sum+bus.passengers.length,0)}:${city.queues.join(',')}:${designHistory[designHistoryIndex]||''}:${selection?.start}:${selection?.end}`;
+    if(grid.dataset.signature===signature)return;grid.dataset.signature=signature;
+    for(const button of grid.children){const cell=Number(button.dataset.cell);button.setAttribute('aria-label',accessibleCellLabel(cell));button.tabIndex=-1;}
   }
   function requestLevel(id) {
     if (id === city.level.id) return;
@@ -178,6 +194,8 @@
     if (shouldResume) city.toggle();
     accumulator = 0;updateUI();
   }
+  function announceCell(cell){if(cell!==null)$('map-accessible-status').textContent=accessibleCellLabel(cell);}
+  function showTouchCoordinate(cell,visible){const badge=$('touch-coordinate');badge.hidden=!visible||cell===null;if(!badge.hidden){const p=point(cell);badge.textContent=`${p.x+1}, ${p.y+1}`;}}
   function toast(text) {
     if (!text) return;
     $('toast').textContent = text; $('toast').classList.add('visible');
@@ -194,7 +212,7 @@
       toast('公交线路在本关未开放'); return;
     }
     tool = value;if(value!=='bus')busEditMode='draw';keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;panLast=null;
-    $('road-inspector').hidden=tool!=='select';
+    $('road-inspector').hidden=tool!=='select';$('bus-controls').classList.toggle('drawer-open',tool==='bus');
     for (const name of ['view', 'select', 'road', 'cut', 'bus']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
@@ -207,6 +225,11 @@
     const a=point(selection.start),b=point(selection.end),cells=[];
     for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++) for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++) cells.push(key(x,y));
     return cells;
+  }
+  function selectedHomeTravelInfo() {
+    const cells=selectedCells();if(tool!=='select'||cells.length!==1)return null;
+    const homeIndex=city.homes.findIndex(home=>home.cell===cells[0]);
+    return homeIndex<0?null:city.homeTravelInfo(homeIndex);
   }
   function updateBusVisibilityControls() {
     const panel=$('bus-line-visibility'), ids=new Set(city.busLines.map(line=>line.id));
@@ -229,7 +252,7 @@
     for(const line of lines) {
       const card=document.createElement('div');card.className='bus-line-card';card.classList.toggle('active',line.id===city.activeBusLineId);card.style.borderColor=line.color;
       const title=document.createElement('strong');title.textContent=line.name;title.style.color=line.color;
-      const detail=document.createElement('span');detail.textContent=`${line.count} 辆 · ${line.stops.has(cell)?'本站已启用':'本站未启用'}`;
+      const stopStats=line.stats?.stops?.[cell],waiting=city.busStopDemand(cell,line.id),forecast=city.homes.reduce((sum,home)=>sum+(city.neighbors(home.cell).includes(cell)&&city.goals.some(goal=>goal.route===home.route&&city.busCanServe(home.cell,goal.cell,line))?home.passengers:0),0);const detail=document.createElement('span');detail.textContent=`${line.count} 辆 · ${line.stops.has(cell)?'本站已启用':'本站未启用'} · ${planning?'预计客流 '+forecast:'候车 '+waiting} 人${stopStats?` · 上 ${stopStats.boarded} / 下 ${stopStats.alighted} / 最大候车 ${stopStats.maxWaiting}`:''}`;
       const choose=document.createElement('button');choose.className='tool';choose.textContent=line.id===city.activeBusLineId?'当前线路':'管理线路';
       choose.onclick=()=>{city.selectBusLine(line.id);updateUI();draw();};
       const stop=document.createElement('button');stop.className='tool';stop.textContent=line.stops.has(cell)?'取消本站':'设为本站';stop.disabled=!planning;
@@ -237,8 +260,11 @@
       card.append(title,detail,choose,stop);panel.append(card);
     }
   }
+  function signalActionName(action){const [entry,turn]=action.split('-');return `${SIGNAL_ENTRY_NAMES[entry]}${SIGNAL_TURN_NAMES[turn]}`;}
   function applySignalSettings(settings, success='路口设置已更新') {
     if (!city.level.features.signals) { toast('红绿灯在本关未开放'); updateUI(); return false; }
+    const conflict=(settings.phases||[]).map(actions=>city.signalConflicts(actions)[0]).find(Boolean);
+    $('signal-conflict').textContent=conflict?`${signalActionName(conflict[0])}与${signalActionName(conflict[1])}会穿过同一冲突区，不能同时放行。`:'';
     const message=mutateDesign(()=>city.setSignal(inspectedCell,settings));
     if(message){$('signal-priority-list').dataset.signature='';$('signal-phase-list').dataset.signature='';}
     toast(message||success);updateUI();draw();return !message;
@@ -274,7 +300,7 @@
     if(phaseList.dataset.signature!==phaseSignature) {
       phaseList.dataset.signature=phaseSignature;phaseList.replaceChildren();
       signal.phases.forEach((phase,index)=>{
-        const card=document.createElement('section');card.className='signal-phase-card';
+        const card=document.createElement('section');card.className='signal-phase-card';card.classList.toggle('previewing',index===previewSignalPhaseIndex);card.onclick=event=>{if(event.target.closest('button,input'))return;previewSignalPhaseIndex=index;phaseList.dataset.signature='';updateUI();draw();};
         const heading=document.createElement('div');heading.className='signal-phase-heading';
         const title=document.createElement('strong');title.textContent=`阶段 ${index+1}`;
         const up=document.createElement('button'),down=document.createElement('button'),remove=document.createElement('button');
@@ -295,7 +321,7 @@
         card.append(actions);phaseList.append(card);
       });
     }
-    $('add-signal-phase').disabled=!editable||signal.phases.length>=8;
+    $('add-signal-phase').disabled=!editable||signal.phases.length>=8;$('suggest-signal-phases').disabled=!editable;
   }
   function updateInspector() {
     const cells=selectedCells(), n=cells.length===1?cells[0]:null;
@@ -306,6 +332,9 @@
     $('upgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)<ROAD_TYPES.length-1)||!city.level.features.grade||!planning;
     $('downgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)>0)||!city.level.features.grade||!planning;
     $('remove-road').disabled=!removable.length||!planning;
+    $('prefer-road').disabled=!roads.length||!planning;
+    $('avoid-road').disabled=!roads.length||!planning;
+    $('clear-road-policy').disabled=!roads.some(cell=>city.roadPolicies.has(cell))||!planning;
     $('build-road').disabled=!(n!==null&&!city.roads.has(n)&&!city.buildings.has(n)&&!city.pendingBuildings.has(n)&&(!city.water.has(n)||city.bridges.has(n))&&!city.trees.has(n))||!planning;
     $('upgrade-road').textContent=cells.length>1?'↑ 全部升级':'↑ 升级';
     $('downgrade-road').textContent=cells.length>1?'↓ 全部降级':'↓ 降级';
@@ -328,21 +357,25 @@
       if(singleRoad) {
         const type=city.roadType(n),load=city.load(n),phase=city.signalPhase(n);
         const turnLayout=['转向全部混行','左转专用，直行 / 右转混行','左转 / 直行 / 右转各用一条车道'][type.lanes-1];
-        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${type.name}：${type.speed} 格/秒 · 每方向 ${type.lanes} 车道 × 2 辆 · ${turnLayout} · 每格 ${type.cost} 点${city.bridges.has(n)?' · 位于桥梁':''}`;
+        const policy=city.roadPolicies.get(n),policyText=policy==='prefer'?' · 汽车优先选择':policy==='avoid'?' · 汽车禁行':'';
+        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${type.name}：${type.speed} 格/秒 · 每方向 ${type.lanes} 车道 × 2 辆 · ${turnLayout} · 每格 ${type.cost} 点${city.bridges.has(n)?' · 位于桥梁':''}${policyText}`;
         $('road-load').textContent=city.level.features.load?(signal?(signal.enabled?`冲突区预约 ${load.used} / 4 区 · 占用/驶入 ${load.total} 辆`:`逐车通行 · 路口占用 ${load.total} / 1 辆`):`每方向 ${type.lanes} 车道 × 前后 2 辆 · 最忙方向 ${load.used} / ${load.capacity} 辆`):(['running','paused'].includes(city.state)?`当前占用或驶入 ${load.total} 辆`:'');
         const names={off:signal?.yieldMode==='priority'?`方向优先 · ${signal.priority.map(entry=>SIGNAL_ENTRY_NAMES[entry].replace('侧入口','')).join(' → ')}`:'自动让行 · 35% 速度 · 先到先行','horizontal-straight':'横向直行绿灯','horizontal-left':'横向左转绿灯','vertical-straight':'纵向直行绿灯','vertical-left':'纵向左转绿灯','main-straight':'T 形路口主路双向直行','main-turn':'T 形路口主路转入支路','branch-turn':'T 形路口支路汇入主路',clearance:'直行 / 左转全红清空'};
         const custom=phase.stage==='custom'?`手动阶段 ${phase.index+1} · ${phase.actions.map(action=>{const [entry,turn]=action.split('-');return SIGNAL_ENTRY_NAMES[entry].replace('侧入口','')+SIGNAL_TURN_NAMES[turn];}).join('、')}`:'';
         $('signal-phase').textContent=!city.level.features.inspect?`本关专注于「${city.level.lesson}」，详细路况与信号在本关未开放。`:signal?`${custom||names[phase.stage]}${phase.axis==='off'?'':` · ${phase.remaining.toFixed(1)} 秒；右转须让行`}`:'非路口，无需红绿灯';
       } else if(homeIndex>=0) {
-        const home=city.homes[homeIndex];
+        const home=city.homes[homeIndex],travel=city.homeTravelInfo(homeIndex),counts=city.passengerBreakdown(homeIndex);
         $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) 住宅 · 总人口 ${home.passengers} 人 · 居民产生 ${home.generationRate} 人/秒 · 汽车出口由门口道路等级决定`;
         const serving=city.linesServingBuilding(n);
-        $('road-load').textContent=`剩余 ${home.passengers-city.departedByHome[homeIndex]} 人 · 已离开 ${city.departedByHome[homeIndex]} 人 · 当前等待 ${city.queues[homeIndex]} 人`;
-        $('signal-phase').textContent=`建筑可作为拖拽起点；向空地延伸时固定从支路开始。${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
+        $('road-load').textContent=`人口守恒：${counts.total} = 未产生 ${counts.ungenerated} + 等待 ${counts.waiting} + 汽车在途 ${counts.carTransit} + 公交在途 ${counts.busTransit} + 已抵达 ${counts.arrived}`;
+        const goalIndex=travel.carGoalIndex??travel.busGoalIndex,goal=goalIndex==null?null:city.goals[goalIndex],goalPoint=goal?point(goal.cell):null;
+        const assigned=travel.assignedGoalIndices.map(index=>{const assignedGoal=city.goals[index],assignedPoint=point(assignedGoal.cell);return `${assignedGoal.label} (${assignedPoint.x+1},${assignedPoint.y+1})`;}).join('、');
+        const bottleneck=travel.bottlenecks.length?`主要瓶颈：${city.roadType(travel.bottlenecks[0]).name} ${travel.bottlenecks.slice(0,3).map(cell=>{const position=point(cell);return `(${position.x+1},${position.y+1})`;}).join('、')}`:'';
+        $('signal-phase').textContent=travel.path?`${assigned?'当前已分配：'+assigned:`汽车预计目的地：${goal.label} (${goalPoint.x+1},${goalPoint.y+1})`} · 路径 ${travel.distance} 格 · 自由流约 ${travel.freeFlowTime.toFixed(1)} 秒${bottleneck?' · '+bottleneck:''}${travel.reason?' · '+travel.reason:''}`:`${travel.reason||'当前没有可用的小汽车路径'}${travel.busGoalIndex!=null?`；可由「${city.busLine(travel.busLineId).name}」送往 ${goal.label} (${goalPoint.x+1},${goalPoint.y+1})`:''}${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
       } else if(goalIndex>=0) {
-        const goal=city.goals[goalIndex];
+        const goal=city.goals[goalIndex],counts=city.goalBreakdown(goalIndex);
         $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) 接收建筑 · 容量 ${goal.input==null?'不限':goal.input+' 人'}`;
-        $('road-load').textContent=`剩余容量 ${goal.input==null?'不限':Math.max(0,goal.input-city.goalAssigned[goalIndex])+' 人'} · 已接收 ${city.byGoal[goalIndex]} 人 · 已分配 ${city.goalAssigned[goalIndex]} 人`;
+        $('road-load').textContent=`剩余容量 ${counts.remaining==null?'不限':counts.remaining+' 人'} · 已预约 ${counts.reserved} 人 · 已抵达 ${counts.arrived} 人`;
         const serving=city.linesServingBuilding(n);
         $('signal-phase').textContent=`建筑可作为拖拽起点；向空地延伸时固定从支路开始。${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
       } else {
@@ -383,7 +416,7 @@
     draw();
   }
   function drawSignalMarkings(n) {
-    const s=cellSize,p=point(n),signal=city.signals.get(n);
+    const s=cellSize,p=point(n),signal=city.signals.get(n),previewActions=city.state==='planning'&&n===inspectedCell&&signal.enabled&&signal.automatic===false?signal.phases[Math.min(previewSignalPhaseIndex,signal.phases.length-1)]:null;
     const links=new Set(city.links(n));
     const width=city.width,rightOf={1:width,[width]:-1,[-1]:-width,[-width]:1};
     // Paint into each incoming quadrant, in driving coordinates: x is forward,
@@ -410,7 +443,8 @@
         // A subtle keyline keeps painted markings readable on grass, asphalt
         // and bridges, without floating lamp boxes or lettering over the map.
         ctx.strokeStyle='#29433580';ctx.lineWidth=Math.max(1.8,s*.065);ctx.stroke();
-        ctx.strokeStyle=!signal.enabled||turn==='right'?'#f5f1d9':city.canEnter(n,entry,exit)?'#187b48':'#c33f39';
+        const action=city.movementAction(city.movement(entry,exit)),allowed=previewActions?previewActions.includes(action):city.canEnter(n,entry,exit);
+        ctx.strokeStyle=!signal.enabled||turn==='right'?'#f5f1d9':allowed?'#187b48':'#c33f39';
         ctx.lineWidth=Math.max(.9,s*.032);ctx.stroke();
       }
       ctx.restore();
@@ -449,6 +483,7 @@
     } else {
       buildingBubble(r.input==null?'∞':String(Math.max(0,r.input-city.goalAssigned[b.index])), (x+.53)*s,(y+.025)*s,s*.43,s*.27,'#fffef9ee',r.color,r.color);
     }
+    label(ROUTE_SYMBOLS[b.route%ROUTE_SYMBOLS.length],(x+.84)*s,(y+.82)*s,s*.16,r.color,'800');
     const serving=city.linesServingBuilding(b.cell);
     if(serving.length) {
       circle((x+.1)*s,(y+.11)*s,s*.09,'#f2bd4f');
@@ -506,6 +541,7 @@
       }
       ctx.setLineDash([]);
       if (grade && !city.signals.has(n)) label(grade === 1 ? 'Ⅱ' : 'Ⅲ', (x+.2)*s, (y+.22)*s, s*.18, '#f8fbef', '700');
+      const policy=city.roadPolicies.get(n);if(policy)label(policy==='prefer'?'★':'⊘',(x+.8)*s,(y+.2)*s,s*.18,policy==='prefer'?'#f4c04f':'#a4443f','800');
       if (city.level.features.load && $('show-load').checked) {
         const load = city.load(n);
         if (load.used) rounded(x*s+2,y*s+2,s-4,s-4,s*.12,null,load.ratio >= 1 ? '#c55e4c' : load.ratio >= .66 ? '#cb9144' : '#51966c');
@@ -531,6 +567,18 @@
       for(const n of busLine.stops) {
         const p=point(n);circle((p.x+.5)*s,(p.y+.5)*s,s*.11,'#fffef9');circle((p.x+.5)*s,(p.y+.5)*s,s*.067,'#f0b84f');
       }
+      ctx.restore();
+    }
+    const selectedTravel=selectedHomeTravelInfo();
+    if(selectedTravel?.path) {
+      const routeColor=city.routes[city.homes[selectedTravel.homeIndex].route].color;
+      ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.globalAlpha=.9;
+      for(let i=1;i<selectedTravel.path.length;i++) {
+        const a=point(selectedTravel.path[i-1]),b=point(selectedTravel.path[i]);
+        line((a.x+.5)*s,(a.y+.5)*s,(b.x+.5)*s,(b.y+.5)*s,'#fffef9',s*.16);
+        line((a.x+.5)*s,(a.y+.5)*s,(b.x+.5)*s,(b.y+.5)*s,routeColor,s*.075);
+      }
+      for(const cell of selectedTravel.bottlenecks) { const p=point(cell);circle((p.x+.5)*s,(p.y+.5)*s,s*.105,'#e0a24d');circle((p.x+.5)*s,(p.y+.5)*s,s*.055,'#fffef9'); }
       ctx.restore();
     }
     ctx.lineCap='butt';
@@ -562,6 +610,7 @@
       ctx.restore();
     }
     for(const bus of city.buses) {
+      if(bus.active===false)continue;
       const pose=city.pose(bus),length=BUS_LENGTH*s,width=BUS_WIDTH*s;
       ctx.save();ctx.translate(pose.x*s,pose.y*s);ctx.rotate(pose.angle);
       rounded(-length/2,-width/2+s*.025,length,width,s*.03,'#1f353244');
@@ -637,6 +686,8 @@
     $('bus-line-color').disabled=!planningBus||!busLine;
     $('bus-count').disabled=!planningBus||!busLine;
     $('bus-return-trip').disabled=!planningBus||!busLine||busClosed;
+    $('bus-return-stops').disabled=!planningBus||!busLine||!busLine.returnTrip;
+    $('bus-headway').disabled=!planningBus||!busLine||busLine.count<2;
     $('trim-bus').disabled=!planningBus||!busLine||busLine.route.length<2;
     const trimming=tool==='bus'&&busEditMode==='trim';
     $('trim-bus').classList.toggle('active',trimming);
@@ -647,11 +698,13 @@
     if(document.activeElement!==$('bus-line-name')) $('bus-line-name').value=busLine?.name||'';
     if(document.activeElement!==$('bus-line-color')) $('bus-line-color').value=busLine?.color||'#1686a0';
     if(document.activeElement!==$('bus-count')) $('bus-count').value=String(busLine?.count||1);
-    $('bus-return-trip').checked=Boolean(busLine?.returnTrip);
+    if(document.activeElement!==$('bus-headway')) $('bus-headway').value=String(busLine?.headway||4);
+    $('bus-return-trip').checked=Boolean(busLine?.returnTrip);$('bus-return-stops').checked=Boolean(busLine?.returnStops);
     const busPassengers=city.buses.reduce((sum,bus)=>sum+bus.passengers.length,0), planned=city.busLines.filter(line=>line.route.length);
     if(busLine?.route.length) {
       const routeState=busClosed?`${busLine.route.length-1} 段闭环`:busLine.returnTrip?`${busLine.route.length-1} 段往返 · 返程不停站`:`${busLine.route.length-1} 段 · 待闭环`;
-      $('bus-status').textContent=`${routeState} · ${busLine.count} 辆 · ${busLine.count*BUS_COST} 点${city.buses.length?` · 全网载客 ${busPassengers}/${city.buses.length*BUS_CAPACITY}`:''}`;
+      const activeBuses=city.buses.filter(bus=>bus.active!==false).length,report=city.busReports().find(item=>item.id===busLine.id);
+      $('bus-status').textContent=`${routeState}${busLine.returnStops?' · 双向停站':''} · ${busLine.count} 辆 / ${busLine.headway} 秒间隔 · ${busLine.count*BUS_COST} 点${city.buses.length?` · 已发 ${activeBuses} 辆 · 全网载客 ${busPassengers}/${activeBuses*BUS_CAPACITY||BUS_CAPACITY}`:''}${report&&city.state!=='planning'?` · 上车 ${report.boarded} / 下车 ${report.alighted} / 拒载 ${report.rejectedFull}`:''}`;
     } else $('bus-status').textContent=busLine?'当前线路尚未绘制':`尚无线路 · 本关上限 ${city.busLineLimit} 条`;
     if(planned.length>1) $('bus-status').textContent+=` · 已规划 ${planned.length}/${city.busLineLimit} 条`;
     updateBusVisibilityControls();
@@ -664,6 +717,7 @@
       row.classList.toggle('connected',city.routeConnected(i));status.textContent=city.routeConnected(i)?'已连接 ✓':'待连接';
     });
     updateInspector();
+    updateAccessibleMap();
     renderCampaignProgress();
     if(['won','lost'].includes(city.state)&&!resultShown) showResult();
   }
@@ -678,9 +732,14 @@
     $('result-description').textContent=campaign?`${won?'全部居民均已抵达':'仍有居民未抵达'}；本日收入 ${settlement.income} 点，由当日总人口送达比例与通勤满意度共同计算。${finalDay?'你仍可关闭报告，从进度条回到任一天重新运营。':'进入下一天后，新建筑可能落成，请先用收入改造交通。'}`:won?'所有居民均已抵达！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
     const summary=document.createElement('strong');summary.textContent=`已产生居民满意度 ${report.score}%`;
     const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
+    const population=city.passengerBreakdown(),conservation=document.createElement('div');conservation.className='population-conservation';
+    conservation.textContent=`总人口 ${population.total} = 未产生 ${population.ungenerated} + 住宅等待 ${population.waiting} + 汽车在途 ${population.carTransit} + 公交在途 ${population.busTransit} + 已抵达 ${population.arrived}`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
-    $('result-stats').replaceChildren(summary,meta,distribution);
+    const operations=document.createElement('div');operations.className='operation-report';
+    for(const bus of city.busReports().filter(item=>item.boarded||item.alighted||item.rejectedFull)){const row=document.createElement('p');row.textContent=`${bus.name}：上车 ${bus.boarded} · 下车 ${bus.alighted} · 平均载客率 ${Math.round(bus.averageLoadRate*100)}% · 满载拒载 ${bus.rejectedFull} · 周转 ${bus.cycles} 圈`;operations.append(row);}
+    for(const junction of city.junctionReports())for(const [entry,data] of Object.entries(junction.entries))if(data.maxQueue){const p=point(junction.cell),row=document.createElement('p');row.textContent=`路口 (${p.x+1},${p.y+1}) ${SIGNAL_ENTRY_NAMES[entry]}：平均等待 ${data.averageWait.toFixed(1)} 秒 · 最大队列 ${data.maxQueue} 辆`;operations.append(row);}
+    $('result-stats').replaceChildren(summary,meta,conservation,distribution,...(operations.childNodes.length?[operations]:[]));
     $('next-level').hidden = campaign?finalDay:!won||levels().indexOf(city.level)===levels().length-1;
     $('next-level').textContent=campaign?'进入下一天规划 ↗':'下一座小城 ↗';
     $('view-city').hidden=Boolean(campaign&&!finalDay);
@@ -694,7 +753,7 @@
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId);
     resetDesignHistory();
-    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';dragDowngrades.clear();
+    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
@@ -737,19 +796,7 @@
       path.push(next);lastCell=next;return;
     }
     if(path.length>1&&next===path[path.length-2]){path.pop();lastCell=next;return;}
-    if(dragDraft.kind===null) {
-      const start=path[0],edge=city.edges.get(start)?.has(next),startRoad=city.roads.has(start),nextRoad=city.roads.has(next);
-      const roadEndpoint=startRoad&&city.links(start).length<=1;
-      const sameGrade=nextRoad&&(city.roadGrades.get(next)||0)===(city.roadGrades.get(start)||0);
-      const buildingErase=city.buildings.has(start)&&city.links(start).length<=1&&edge&&nextRoad;
-      dragDraft.kind=buildingErase||(roadEndpoint&&edge&&sameGrade)?'erase':'build';
-      if(buildingErase)dragGrade=city.roadGrades.get(next)||0;
-    }
-    if(dragDraft.kind==='erase') {
-      const current=path[path.length-1],edge=city.edges.get(current)?.has(next);
-      const nextAllowed=city.buildings.has(next)||(city.roads.has(next)&&(city.roadGrades.get(next)||0)===dragGrade);
-      if(!edge||!nextAllowed){toast('拆除必须从端点沿同等级的既有道路拖动');return;}
-    }
+    if(dragDraft.kind===null) dragDraft.kind='build';
     path.push(next);lastCell=next;
   }
   function paint(n) {
@@ -779,17 +826,14 @@
       toast(closed?`公交闭环已完成 · ${line.route.length-1} 段`:line.returnTrip?`已追加线路 · ${line.route.length-1} 段，原路返回可运营`:`已追加线路 · ${line.route.length-1} 段，请从末端继续直至闭环`);
       return;
     }
-    const downgraded = kind==='build' ? [...new Set(path)].filter(n=>city.roads.has(n)&&(city.roadGrades.get(n)||0)>dragGrade).map(cell=>[cell,city.roadGrades.get(cell)||0]) : [];
     if(kind==='build') {
-      actions.push(...downgraded.map(([cell])=>({type:'edit',cell,erase:false,grade:dragGrade})));
-      for(let i=1;i<path.length;i++) actions.push({type:'connect',a:path[i-1],b:path[i],grade:dragGrade});
+      for(let i=1;i<path.length;i++) actions.push({type:'connect',a:path[i-1],b:path[i],grade:null});
     } else if(kind==='cut') for(let i=1;i<path.length;i++) actions.push({type:'cut',a:path[i-1],b:path[i]});
     else if(kind==='erase') {
       const cells=path.filter(n=>city.roads.has(n));
       actions=[...new Set(cells)].map(cell=>({type:'edit',cell,erase:true,grade:0}));
     }
     const message=city.transact(actions);recordDesignChange(before);
-    if(!message) for(const [cell,grade] of downgraded) dragDowngrades.set(cell,Math.max(grade,dragDowngrades.get(cell)||0));
     toast(message||(kind==='erase'?'已拆除所经道路，预算已返还':kind==='cut'?'已剪断所经连接':'规划已一次性应用'));
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
@@ -807,7 +851,7 @@
       pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:viewZoom,worldX:(center.x-viewX)/cellSize,worldY:(center.y-viewY)/cellSize};return;
     }
     if(tool==='view'){panLast=p;hover=null;return;}
-    keyboardAnchor=null;keyboardMode=false;dragging=true;hover=eventCell(e);if(hover===null)return;
+    keyboardAnchor=null;keyboardMode=false;dragging=true;hover=eventCell(e);showTouchCoordinate(hover,e.pointerType==='touch');if(hover===null)return;
     if(tool==='select'){selectionAnchor=hover;selection={start:hover,end:hover};updateUI();draw();return;}
     if(tool==='bus'){const problem=busDraftProblem(hover);if(problem){dragging=false;toast(problem);return;}}
     lastCell=hover;dragGrade=city.roads.has(hover)?city.roadGrades.get(hover)||0:0;
@@ -821,11 +865,11 @@
       viewX=center.x-pinch.worldX*cellSize;viewY=center.y-pinch.worldY*cellSize;draw();return;
     }
     if(tool==='view'&&panLast&&previous){moveView(p.x-previous.x,p.y-previous.y);panLast=p;draw();return;}
-    keyboardMode=false;hover=eventCell(e);if(!dragging||hover===null)return;
+    keyboardMode=false;hover=eventCell(e);announceCell(hover);showTouchCoordinate(hover,e.pointerType==='touch'&&dragging);if(!dragging||hover===null)return;
     if(tool==='select'){selection={start:selectionAnchor,end:hover};updateUI();draw();}else paint(hover);
   });
   const endPointer=e=>{
-    pointers.delete(e.pointerId);
+    pointers.delete(e.pointerId);if(!pointers.size)showTouchCoordinate(null,false);
     if(pinch){if(pointers.size<2){pinch=null;panLast=null;snapView();}draw();return;}
     if(tool==='view'){panLast=null;snapView();draw();return;}
     if(dragging&&tool!=='select')commitDrag();
@@ -833,7 +877,7 @@
   };
   canvas.addEventListener('pointerup',endPointer);canvas.addEventListener('pointercancel',endPointer);canvas.addEventListener('lostpointercapture',e=>{if(pointers.has(e.pointerId))endPointer(e);});
   canvas.addEventListener('pointerleave',()=>{if(!dragging&&tool!=='view')hover=null;});
-  $('view-tool').onclick=()=>setTool('view');
+  $('view-tool').onclick=()=>setTool('view');$('close-inspector').onclick=()=>setTool('view');$('close-bus-drawer').onclick=()=>setTool('view');
   $('select-tool').onclick=()=>setTool('select');
   $('road-tool').onclick=()=>setTool('road');
   $('cut-tool').onclick=()=>setTool('cut');
@@ -846,6 +890,7 @@
   $('bus-line-name').onchange=()=>{const message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value}));toast(message||'线路名称已更新');updateUI();draw();};
   $('bus-line-color').onchange=()=>{const message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{color:$('bus-line-color').value}));toast(message||'线路颜色已更新');updateUI();draw();};
   $('bus-count').onchange=()=>{const message=mutateDesign(()=>city.setBusCount(Number($('bus-count').value)));toast(message||`已配置 ${city.busCount} 辆公交车`);updateUI();draw();};
+  $('bus-headway').onchange=()=>{const headway=Number($('bus-headway').value),message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{headway}));toast(message||`已设置 ${headway} 秒发车间隔`);updateUI();};
   $('trim-bus').onclick=()=>{
     if(tool==='bus'&&busEditMode==='trim') {
       busEditMode='draw';dragging=false;dragDraft=null;lastCell=null;toast('已取消反向擦除，可以继续绘制线路');
@@ -854,13 +899,15 @@
     }
     updateUI();draw();
   };
-  $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{returnTrip:enabled}));toast(message||(enabled?'已开启原路返回；返程默认不停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
+  $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{returnTrip:enabled}));toast(message||(enabled?'已开启原路返回；可另行启用返程停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
+  $('bus-return-stops').onchange=()=>{const enabled=$('bus-return-stops').checked,message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{returnStops:enabled}));toast(message||(enabled?'返程现在也会上下客':'返程已恢复不停站'));updateUI();draw();};
   $('redraw-bus').onclick=()=>{const message=mutateDesign(()=>city.setBusRoute([]));if(message){toast(message);return;}busEditMode='draw';setTool('bus');toast('当前线路已清空，请从起点分段绘制');updateUI();draw();};
   $('delete-bus').onclick=()=>{const name=city.activeBusLine?.name,message=mutateDesign(()=>city.deleteBusLine());toast(message||`已删除${name?'「'+name+'」':''}并返还车辆预算`);updateUI();draw();};
   $('signal-enabled').onchange=()=>applySignalSettings({enabled:$('signal-enabled').checked},$('signal-enabled').checked?'已开启红绿灯':'已关闭红绿灯');
   $('signal-yield-mode').onchange=()=>applySignalSettings({yieldMode:$('signal-yield-mode').value},$('signal-yield-mode').value==='priority'?'已启用入口方向优先':'已启用自动让行');
   $('signal-automatic').onchange=()=>applySignalSettings({automatic:$('signal-automatic').checked},$('signal-automatic').checked?'已启用自动信号调度':'已启用手动信号调度');
   $('signal-cycle').onchange=()=>applySignalSettings({green:Number($('signal-cycle').value)},'绿灯周期已更新');
+  $('suggest-signal-phases').onclick=()=>{const phases=city.suggestSignalPhases(inspectedCell);previewSignalPhaseIndex=0;applySignalSettings({enabled:true,automatic:false,phases},'已按当前预计车流生成无冲突灯序');};
   $('add-signal-phase').onclick=()=>{
     const signal=city.signals.get(inspectedCell);if(!signal)return;
     applySignalSettings({phases:[...signal.phases.map(actions=>[...actions]),['north-straight']]},'已添加信号阶段');
@@ -880,6 +927,9 @@
     const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:false,grade:(city.roadGrades.get(cell)||0)-1}))));
     toast(message||`已降级 ${roads.length} 格道路`);updateUI();draw();
   };
+  $('prefer-road').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,'prefer'));toast(message||`已将 ${roads.length} 格设为汽车偏好道路`);updateUI();draw();};
+  $('avoid-road').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,'avoid'));toast(message||`已将 ${roads.length} 格设为小汽车禁行，公交仍可通行`);updateUI();draw();};
+  $('clear-road-policy').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,null));toast(message||'已清除选区道路引导');updateUI();draw();};
   $('remove-road').onclick=()=>{
     const roads=selectedCells().filter(n=>city.roads.has(n));if(!roads.length)return;
     const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:true,grade:0}))));
@@ -906,7 +956,7 @@
   $('confirm-load').onclick=()=>{
     const message=city.loadDesign(pendingDesign);pendingDesign=null;$('load-dialog').close();
     if(message){toast(message);return;}
-    speed=1;accumulator=0;resultShown=false;inspectedCell=null;dragDowngrades.clear();resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
+    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
   function beginOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
@@ -916,8 +966,7 @@
   }
   function toggleOperation() {
     if(city.state!=='planning'){beginOperation();return;}
-    const suspiciousDowngrades=[...dragDowngrades].filter(([cell,grade])=>city.roads.has(cell)&&(city.roadGrades.get(cell)||0)<grade).map(([cell])=>cell);
-    const report=city.preflightCheck({suspiciousDowngrades});
+    const report=city.preflightCheck();
     if(!report.issues.length){toast(`运营前检查通过 · 理论可送达 ${report.maxDeliverable} / ${report.target} 人`);beginOperation();return;}
     $('preflight-summary').textContent=`发现 ${report.issues.length} 项提示；当前理论最多可送达 ${report.maxDeliverable} / ${report.target} 人。`;
     const rows=report.issues.map(issue=>{
@@ -941,13 +990,15 @@
   $('cancel-reset').onclick=()=>closePausedDialog($('reset-dialog'));
   $('confirm-reset').onclick=()=>{delete $('reset-dialog').dataset.resumeOperation;reset();};
   $('play-again').onclick=()=>reset();$('view-city').onclick=()=> $('result-dialog').close();
+  for(const button of document.querySelectorAll('.mobile-info-tabs button'))button.onclick=()=>{for(const item of document.querySelectorAll('.mobile-info-tabs button'))item.classList.toggle('active',item===button);for(const panel of document.querySelectorAll('[data-info-panel]'))panel.classList.toggle('mobile-active',panel.dataset.infoPanel===button.dataset.mobilePanel);};
+  document.querySelector('[data-info-panel="mission"]').classList.add('mobile-active');
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};
   for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();dragDowngrades.clear();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{
@@ -979,7 +1030,7 @@
     if(e.key.startsWith('Arrow')){
       e.preventDefault();keyboardMode=true;
       if(e.key==='ArrowLeft')x--;if(e.key==='ArrowRight')x++;if(e.key==='ArrowUp')y--;if(e.key==='ArrowDown')y++;
-      keyboardCell=key(Math.max(0,Math.min(city.width-1,x)),Math.max(0,Math.min(city.height-1,y)));
+      keyboardCell=key(Math.max(0,Math.min(city.width-1,x)),Math.max(0,Math.min(city.height-1,y)));announceCell(keyboardCell);
       if(keyboardAnchor!==null&&keyboardAnchor!==keyboardCell) {
         extendDraft(keyboardCell);keyboardAnchor=lastCell;keyboardCell=lastCell;updateUI();draw();
       }

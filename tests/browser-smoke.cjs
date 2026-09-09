@@ -62,27 +62,28 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#bus-controls").hidden'),false);
     assert.ok(await evaluate('document.querySelector("#bus-line-select")'));
     assert.ok(await evaluate('document.querySelector("#new-bus-line")!==null && document.querySelector("#trim-bus")!==null && document.querySelector("#redraw-bus")!==null && document.querySelector("#delete-bus")!==null'));
-    assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-line-visibility")!==null'));
+    assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
     await go(0);
     assert.equal(await evaluate('document.querySelector("#road-grade")'),null);
     assert.ok(await evaluate('document.querySelector("#signal-yield-mode")!==null && document.querySelector("#signal-automatic")!==null'));
-    assert.ok(await evaluate('document.querySelector("#signal-priority-list")!==null && document.querySelector("#signal-phase-list")!==null && document.querySelector("#add-signal-phase")!==null'));
+    assert.ok(await evaluate('document.querySelector("#signal-priority-list")!==null && document.querySelector("#signal-phase-list")!==null && document.querySelector("#add-signal-phase")!==null && document.querySelector("#suggest-signal-phases")!==null'));
     assert.ok(await evaluate('document.querySelector("#select-tool")!==null'));
+    assert.equal(await evaluate('document.querySelectorAll("#accessible-map [role=gridcell]").length'),192);
+    assert.ok(await evaluate('document.querySelector("#accessible-map [role=gridcell]").getAttribute("aria-label").includes("第 1 行第 1 列")'));
     for(const expected of ['2×','4×','0.5×','1×']){await click('#speed');assert.equal(await text('speed'),expected);}
     assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');
     await click('#undo-design');assert.equal(await text('budget'),'36','undo restores the previous planning design');
     await click('#redo-design');assert.equal(await text('budget'),'33','redo reapplies the reverted planning design');
-    await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road between a building and road is not an endpoint');
-    await drag(2,3,3,3);assert.equal(await text('budget'),'34','a single-exit building acts as the endpoint and retracts');
-    await drag(2,3,3,3);assert.equal(await text('budget'),'33','a building should rebuild toward empty land as a local road');
+    await drag(3,3,4,3);assert.equal(await text('budget'),'33','dragging over roads only preserves or adds connections');
+    await drag(2,3,3,3);assert.equal(await text('budget'),'33','dragging from a building never retracts roads');
     await dragThrough([[5,3],[6,3],[5,3],[4,3]]);
-    assert.equal(await text('budget'),'33','returning to the origin cancels the extension without changing drag intent');
-    await drag(4,3,5,3);assert.equal(await text('budget'),'35','endpoint retraction must remove the final dragged road too');
-    await click('#save-design');await drag(5,3,6,3);assert.equal(await text('budget'),'33');
-    await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'35');
+    assert.equal(await text('budget'),'33','returning along the preview cancels new construction');
+    await click('#select-tool');await drag(5,3,5,3);await click('#remove-road');assert.equal(await text('budget'),'34','explicit removal refunds the selected road');
+    await click('#save-design');await click('#road-tool');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
+    await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'34');
 
     await click('.level-card:nth-child(2)');
     assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');
