@@ -20,6 +20,7 @@
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
+  let designHistory = [], designHistoryIndex = -1;
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   function storedDesign(levelId = city.level.id) {
@@ -30,6 +31,30 @@
   function updateDesignControls() {
     designAvailable=storedDesign()!==null;
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
+  }
+  function designSnapshot() { return JSON.stringify(city.serializeDesign()); }
+  function updateHistoryControls() {
+    const planning=city?.state==='planning';
+    $('undo-design').disabled=!planning||designHistoryIndex<=0;
+    $('redo-design').disabled=!planning||designHistoryIndex>=designHistory.length-1;
+  }
+  function resetDesignHistory() {
+    designHistory=city?[designSnapshot()]:[];designHistoryIndex=designHistory.length-1;updateHistoryControls();
+  }
+  function recordDesignChange(before) {
+    const after=designSnapshot();if(before===after){updateHistoryControls();return false;}
+    if(designHistory[designHistoryIndex]!==before)designHistory[designHistoryIndex]=before;
+    designHistory=designHistory.slice(0,designHistoryIndex+1);designHistory.push(after);
+    if(designHistory.length>61)designHistory.shift();
+    designHistoryIndex=designHistory.length-1;updateHistoryControls();return true;
+  }
+  function mutateDesign(action) { const before=designSnapshot(),message=action();recordDesignChange(before);return message; }
+  function restoreDesign(index) {
+    if(city.state!=='planning'){toast('运营期间不能撤销规划，请先停止运营');return;}
+    if(index<0||index>=designHistory.length)return;
+    const previous=designHistoryIndex,message=city.loadDesign(JSON.parse(designHistory[index]));if(message){toast(message);return;}
+    designHistoryIndex=index;dragging=false;lastCell=null;dragDraft=null;keyboardAnchor=null;busEditMode='draw';inspectedCell=null;
+    updateHistoryControls();updateUI();draw();toast(index<previous?'已撤销上一步规划':'已重做下一步规划');
   }
   let levelButtons = [], chapterButtons = [], visibleChapterIndex = 0;
   function showChapter(chapterIndex) {
@@ -75,7 +100,7 @@
       button.onclick=()=>{
         if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
         const message=campaign.replay(index);if(message){toast(message);return;}
-        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
       };
       button.append(title,detail);list.append(button);
     });
@@ -207,13 +232,13 @@
       const choose=document.createElement('button');choose.className='tool';choose.textContent=line.id===city.activeBusLineId?'当前线路':'管理线路';
       choose.onclick=()=>{city.selectBusLine(line.id);updateUI();draw();};
       const stop=document.createElement('button');stop.className='tool';stop.textContent=line.stops.has(cell)?'取消本站':'设为本站';stop.disabled=!planning;
-      stop.onclick=()=>{const enabled=!line.stops.has(cell),message=city.setBusStop(cell,enabled,line.id);toast(message||(enabled?'已设置公交站':'已取消公交站'));updateUI();draw();};
+      stop.onclick=()=>{const enabled=!line.stops.has(cell),message=mutateDesign(()=>city.setBusStop(cell,enabled,line.id));toast(message||(enabled?'已设置公交站':'已取消公交站'));updateUI();draw();};
       card.append(title,detail,choose,stop);panel.append(card);
     }
   }
   function applySignalSettings(settings, success='路口设置已更新') {
     if (!city.level.features.signals) { toast('红绿灯在本关未开放'); updateUI(); return false; }
-    const message=city.setSignal(inspectedCell,settings);
+    const message=mutateDesign(()=>city.setSignal(inspectedCell,settings));
     if(message){$('signal-priority-list').dataset.signature='';$('signal-phase-list').dataset.signature='';}
     toast(message||success);updateUI();draw();return !message;
   }
@@ -639,6 +664,7 @@
     ctx.restore();
   }
   function updateUI() {
+    updateHistoryControls();
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
     const deliveryTotal=campaign?city.homes.reduce((sum,home)=>sum+home.passengers,0):city.target;
     $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';
@@ -730,6 +756,7 @@
     const switching=Boolean(city&&levelId!==city.level.id);
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId);
+    resetDesignHistory();
     speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
@@ -800,16 +827,17 @@
   }
   function commitDrag() {
     if(!dragDraft||dragDraft.path.length<2)return;
-    const {path,kind}=dragDraft;let actions=[];
+    const before=designSnapshot(),{path,kind}=dragDraft;let actions=[];
     if(kind==='bus-trim') {
       const message=city.trimBusRoute(path),line=city.activeBusLine;
       if(message){toast(message);return;}
-      toast(`已擦除尾部 ${path.length-1} 段${line.route.length?'，可继续反向擦除或接着绘制':'，线路已清空并返还车辆预算'}`);
+      recordDesignChange(before);toast(`已擦除尾部 ${path.length-1} 段${line.route.length?'，可继续反向擦除或接着绘制':'，线路已清空并返还车辆预算'}`);
       return;
     }
     if(kind==='bus') {
       const message=city.appendBusRoute(path),line=city.activeBusLine;
       if(message){toast(message);return;}
+      recordDesignChange(before);
       const closed=line.route.length>=3&&line.route[0]===line.route[line.route.length-1];
       toast(closed?`公交闭环已完成 · ${line.route.length-1} 段`:line.returnTrip?`已追加线路 · ${line.route.length-1} 段，原路返回可运营`:`已追加线路 · ${line.route.length-1} 段，请从末端继续直至闭环`);
       return;
@@ -822,7 +850,7 @@
       const cells=path.filter(n=>city.roads.has(n));
       actions=[...new Set(cells)].map(cell=>({type:'edit',cell,erase:true,grade:0}));
     }
-    const message=city.transact(actions);
+    const message=city.transact(actions);recordDesignChange(before);
     toast(message||(kind==='erase'?'已拆除所经道路，预算已返还':kind==='cut'?'已剪断所经连接':'规划已一次性应用'));
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
@@ -874,10 +902,10 @@
   $('zoom-out').onclick=()=>{setZoom(viewZoom/1.25);draw();};
   $('zoom-reset').onclick=()=>{resetView();draw();};
   $('bus-line-select').onchange=()=>{busEditMode='draw';toast(city.selectBusLine($('bus-line-select').value));updateUI();draw();};
-  $('new-bus-line').onclick=()=>{busEditMode='draw';const message=city.createBusLine();toast(message||'已新建公交线路，可以分段绘制');updateUI();draw();};
-  $('bus-line-name').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value});toast(message||'线路名称已更新');updateUI();draw();};
-  $('bus-line-color').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{color:$('bus-line-color').value});toast(message||'线路颜色已更新');updateUI();draw();};
-  $('bus-count').onchange=()=>{const message=city.setBusCount(Number($('bus-count').value));toast(message||`已配置 ${city.busCount} 辆公交车`);updateUI();draw();};
+  $('new-bus-line').onclick=()=>{busEditMode='draw';const message=mutateDesign(()=>city.createBusLine());toast(message||'已新建公交线路，可以分段绘制');updateUI();draw();};
+  $('bus-line-name').onchange=()=>{const message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value}));toast(message||'线路名称已更新');updateUI();draw();};
+  $('bus-line-color').onchange=()=>{const message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{color:$('bus-line-color').value}));toast(message||'线路颜色已更新');updateUI();draw();};
+  $('bus-count').onchange=()=>{const message=mutateDesign(()=>city.setBusCount(Number($('bus-count').value)));toast(message||`已配置 ${city.busCount} 辆公交车`);updateUI();draw();};
   $('trim-bus').onclick=()=>{
     if(tool==='bus'&&busEditMode==='trim') {
       busEditMode='draw';dragging=false;dragDraft=null;lastCell=null;toast('已取消反向擦除，可以继续绘制线路');
@@ -886,9 +914,9 @@
     }
     updateUI();draw();
   };
-  $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=city.updateBusLine(city.activeBusLineId,{returnTrip:enabled});toast(message||(enabled?'已开启原路返回；返程默认不停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
-  $('redraw-bus').onclick=()=>{const message=city.setBusRoute([]);if(message){toast(message);return;}busEditMode='draw';setTool('bus');toast('当前线路已清空，请从起点分段绘制');updateUI();draw();};
-  $('delete-bus').onclick=()=>{const name=city.activeBusLine?.name,message=city.deleteBusLine();toast(message||`已删除${name?'「'+name+'」':''}并返还车辆预算`);updateUI();draw();};
+  $('bus-return-trip').onchange=()=>{const enabled=$('bus-return-trip').checked,message=mutateDesign(()=>city.updateBusLine(city.activeBusLineId,{returnTrip:enabled}));toast(message||(enabled?'已开启原路返回；返程默认不停站':'已关闭原路返回；运营前须完成闭环'));updateUI();draw();};
+  $('redraw-bus').onclick=()=>{const message=mutateDesign(()=>city.setBusRoute([]));if(message){toast(message);return;}busEditMode='draw';setTool('bus');toast('当前线路已清空，请从起点分段绘制');updateUI();draw();};
+  $('delete-bus').onclick=()=>{const name=city.activeBusLine?.name,message=mutateDesign(()=>city.deleteBusLine());toast(message||`已删除${name?'「'+name+'」':''}并返还车辆预算`);updateUI();draw();};
   $('signal-enabled').onchange=()=>applySignalSettings({enabled:$('signal-enabled').checked},$('signal-enabled').checked?'已开启红绿灯':'已关闭红绿灯');
   $('signal-yield-mode').onchange=()=>applySignalSettings({yieldMode:$('signal-yield-mode').value},$('signal-yield-mode').value==='priority'?'已启用入口方向优先':'已启用自动让行');
   $('signal-automatic').onchange=()=>applySignalSettings({automatic:$('signal-automatic').checked},$('signal-automatic').checked?'已启用自动信号调度':'已启用手动信号调度');
@@ -899,24 +927,26 @@
   };
   $('build-road').onclick=()=>{
     const cells=selectedCells();if(cells.length!==1)return;
-    const message=city.transact([{type:'edit',cell:cells[0],erase:false,grade:0}]);
+    const message=mutateDesign(()=>city.transact([{type:'edit',cell:cells[0],erase:false,grade:0}]));
     toast(message||'已建设一格支路；拖拽可建立连接');updateUI();draw();
   };
   $('upgrade-road').onclick=()=>{
     const roads=selectedCells().filter(n=>city.roads.has(n)&&(city.roadGrades.get(n)||0)<ROAD_TYPES.length-1);if(!roads.length)return;
-    const message=city.transact(roads.map(cell=>({type:'edit',cell,erase:false,grade:(city.roadGrades.get(cell)||0)+1})));
+    const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:false,grade:(city.roadGrades.get(cell)||0)+1}))));
     toast(message||`已升级 ${roads.length} 格道路`);updateUI();draw();
   };
   $('downgrade-road').onclick=()=>{
     const roads=selectedCells().filter(n=>city.roads.has(n)&&(city.roadGrades.get(n)||0)>0);if(!roads.length)return;
-    const message=city.transact(roads.map(cell=>({type:'edit',cell,erase:false,grade:(city.roadGrades.get(cell)||0)-1})));
+    const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:false,grade:(city.roadGrades.get(cell)||0)-1}))));
     toast(message||`已降级 ${roads.length} 格道路`);updateUI();draw();
   };
   $('remove-road').onclick=()=>{
     const roads=selectedCells().filter(n=>city.roads.has(n));if(!roads.length)return;
-    const message=city.transact(roads.map(cell=>({type:'edit',cell,erase:true,grade:0})));
+    const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:true,grade:0}))));
     toast(message||`已拆除 ${roads.length} 格道路，建设预算已返还`);updateUI();draw();
   };
+  $('undo-design').onclick=()=>restoreDesign(designHistoryIndex-1);
+  $('redo-design').onclick=()=>restoreDesign(designHistoryIndex+1);
   $('save-design').onclick=()=>{
     try {
       localStorage.setItem(STORAGE_PREFIX+city.level.id,JSON.stringify(city.serializeDesign()));
@@ -936,7 +966,7 @@
   $('confirm-load').onclick=()=>{
     const message=city.loadDesign(pendingDesign);pendingDesign=null;$('load-dialog').close();
     if(message){toast(message);return;}
-    speed=1;accumulator=0;resultShown=false;inspectedCell=null;updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
+    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
   function toggleOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
@@ -961,12 +991,16 @@
   for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{
-    if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(document.querySelector('dialog[open]'))return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+    const modifier=e.ctrlKey||e.metaKey,keyName=e.key.toLowerCase();
+    if(modifier&&keyName==='z'){e.preventDefault();restoreDesign(designHistoryIndex+(e.shiftKey?1:-1));return;}
+    if(modifier&&keyName==='y'){e.preventDefault();restoreDesign(designHistoryIndex+1);return;}
+    if(modifier||e.altKey)return;
     if(e.key==='1')setTool('view');if(e.key==='2')setTool('select');if(e.key==='3')setTool('road');if(e.key==='4')setTool('cut');if(e.key==='5'){busEditMode='draw';setTool('bus');}
     if(e.key==='Escape'){
       const wasTrimming=tool==='bus'&&busEditMode==='trim',hadDraft=Boolean(dragDraft);
@@ -1054,6 +1088,7 @@
         } else if (overrideResponse.status !== 404) console.warn(`忽略 levels.json：请求失败（${overrideResponse.status}）`);
       } catch (error) { TrafficCore.setLevels(builtInCatalog);console.warn('忽略 levels.json：' + error.message); }
       city = new City(TrafficCore.LEVELS[0].id);
+      resetDesignHistory();
       buildLevelButtons();
       configureLevel();resize();setTool('view');updateUI();requestAnimationFrame(frame);
     } catch (error) {

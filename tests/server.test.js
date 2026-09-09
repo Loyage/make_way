@@ -38,6 +38,7 @@ test('index contains no embedded level metadata', async t => {
   }
   assert.match(html,/id="level-summary"><\/small>/);
   assert.match(html,/id="mission-title"><\/h2>/);
+  assert.match(html,/id="undo-design"/);assert.match(html,/id="redo-design"/);
   const manual=(await request(port,'/manual.html')).body;
   assert.match(manual,/慢行小城游戏指南/);
   assert.match(manual,/拖拽起点与第一步情况表/);

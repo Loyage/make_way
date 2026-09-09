@@ -73,6 +73,8 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');
+    await click('#undo-design');assert.equal(await text('budget'),'36','undo restores the previous planning design');
+    await click('#redo-design');assert.equal(await text('budget'),'33','redo reapplies the reverted planning design');
     await drag(3,3,4,3);assert.equal(await text('budget'),'33','a road between a building and road is not an endpoint');
     await drag(2,3,3,3);assert.equal(await text('budget'),'34','a single-exit building acts as the endpoint and retracts');
     await drag(2,3,3,3);assert.equal(await text('budget'),'33','a building should rebuild toward empty land as a local road');
