@@ -36,7 +36,7 @@ test('one to three buses consume budget and survive design round trips', () => {
   assert.equal(source.setBusStop(stopCell,false),'');assert.equal(source.isBusStop(stopCell),false);
   assert.equal(source.remaining,0);
   const design=source.serializeDesign(),target=new City('bus-school');
-  assert.equal(design.version,7);assert.equal(target.loadDesign(design),'');
+  assert.equal(design.version,8);assert.equal(target.loadDesign(design),'');
   assert.deepEqual(target.busRoute,route);assert.equal(target.busCount,3);assert.equal(target.isBusStop(stopCell),false);assert.deepEqual(target.serializeDesign(),design);
   const legacy=JSON.parse(JSON.stringify(design));legacy.version=4;for(const line of legacy.busLines)delete line.returnTrip;
   const migrated=new City('bus-school');assert.equal(migrated.loadDesign(legacy),'');assert.equal(migrated.activeBusLine.returnTrip,false);
@@ -60,6 +60,9 @@ test('an open line can return over the same road and skips every stop on the ret
   city.serviceBusStop(bus);assert.equal(bus.passengers.length,1,'the return trip must not unload at stops');
   bus.routePosition=outboundPosition;bus.needsStop=true;city.serviceBusStop(bus);
   assert.equal(bus.passengers.length,0);assert.equal(city.byGoal[goalIndex],1);
+  city.stop();assert.equal(city.updateBusLine(line.id,{returnStops:true}),'');city.toggle();
+  const returning={lineId:line.id,cell:goalRoad,routePosition:returnPosition,passengers:[passenger],dwell:0,needsStop:true};city.serviceBusStop(returning);
+  assert.equal(returning.passengers.length,0,'enabled return stops unload passengers in the return direction');
 });
 
 test('road cells become stops for adjacent buildings and can be toggled per line', () => {
@@ -94,6 +97,16 @@ test('a bus skips homes whose destination is off-line or already full', () => {
   assert.equal(full.generated[0],0);
 });
 
+test('bus headways, return stops and operating reports are configurable', () => {
+  const city=new City('bus-school'),ring=loop(city),outbound=[...ring.slice(31,-1),...ring.slice(0,8)];
+  assert.equal(city.setBusCount(2),'');assert.equal(city.setBusRoute(outbound),'');
+  assert.equal(city.updateBusLine(city.activeBusLineId,{returnTrip:true,returnStops:true,headway:4}),'');
+  assert.equal(city.toggle(),'');assert.equal(city.buses.filter(bus=>bus.active).length,1);
+  run(city,3);assert.equal(city.buses.filter(bus=>bus.active).length,1);run(city,3);assert.equal(city.buses.filter(bus=>bus.active).length,2);
+  const report=city.busReports()[0];assert.ok(report.averageLoadRate>=0);assert.ok(report.boarded>=0);
+  city.stop();const design=city.serializeDesign(),copy=new City('bus-school');assert.equal(copy.loadDesign(design),'');
+  assert.equal(copy.activeBusLine.headway,4);assert.equal(copy.activeBusLine.returnStops,true);
+});
 test('the bus lesson requires public transport and is winnable with one bus', () => {
   const carsOnly=new City('bus-school');carsOnly.toggle();run(carsOnly,60);
   assert.equal(carsOnly.state,'lost');assert.ok(carsOnly.delivered<carsOnly.target);

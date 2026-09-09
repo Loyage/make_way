@@ -33,5 +33,28 @@
     }
     return null;
   }
-  return { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, key, point, neighbors, findPath };
+  function findWeightedPath(roads, start, goal, edges = null, cost = () => 1, width = WIDTH, height = HEIGHT) {
+    if (start === goal) return [start];
+    const distances = new Map([[start, 0]]), previous = new Map(), heap = [[0,start]];
+    const push = item => { heap.push(item);let index=heap.length-1;while(index){const parent=Math.floor((index-1)/2),a=heap[parent],b=heap[index];if(a[0]<b[0]||a[0]===b[0]&&a[1]<=b[1])break;[heap[parent],heap[index]]=[b,a];index=parent;} };
+    const pop = () => {const first=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let index=0;while(true){let child=index*2+1;if(child>=heap.length)break;if(child+1<heap.length&&(heap[child+1][0]<heap[child][0]||heap[child+1][0]===heap[child][0]&&heap[child+1][1]<heap[child][1]))child++;const a=heap[index],b=heap[child];if(a[0]<b[0]||a[0]===b[0]&&a[1]<=b[1])break;[heap[index],heap[child]]=[b,a];index=child;}}return first;};
+    while (heap.length) {
+      const [best,current] = pop();
+      if (best > (distances.get(current) ?? Infinity) + 1e-9) continue;
+      if (current === goal) break;
+      const links = edges ? (edges.get(current) || []) : neighbors(current, width, height);
+      for (const next of links) {
+        if (next !== goal && !roads.has(next)) continue;
+        const step = cost(current, next);
+        if (!Number.isFinite(step) || step < 0) continue;
+        const candidate = best + step;
+        if (candidate + 1e-9 < (distances.get(next) ?? Infinity)) { distances.set(next, candidate); previous.set(next, current); push([candidate,next]); }
+      }
+    }
+    if (!distances.has(goal)) return null;
+    const path = [goal];
+    while (path[0] !== start) path.unshift(previous.get(path[0]));
+    return path;
+  }
+  return { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, key, point, neighbors, findPath, findWeightedPath };
 });

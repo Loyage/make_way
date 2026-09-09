@@ -47,6 +47,12 @@ test('cannot exceed road budget', () => {
   for(let n=0;n<WIDTH*HEIGHT;n++) city.edit(n);
   assert.equal(city.remaining,0);assert.equal(city.roads.size,BUDGET);
 });
+test('construction-only connections preserve existing grades and create branch roads',()=>{
+  const city=new City(),a=key(0,0),b=key(1,0),c=key(2,0);city.trees.delete(a);city.trees.delete(b);city.trees.delete(c);
+  assert.equal(city.edit(a,false,2),'');assert.equal(city.edit(b,false,1),'');
+  assert.equal(city.connect(a,b,null),'');assert.equal(city.roadGrades.get(a),2);assert.equal(city.roadGrades.get(b),1);
+  assert.equal(city.connect(b,c,null),'');assert.equal(city.roadGrades.get(b),1);assert.equal(city.roadGrades.get(c),0);
+});
 test('multi-step map transactions commit or roll back atomically', () => {
   const city=new City(),before=city.serializeDesign();
   const blocked=key(7,1),a=key(0,0),b=key(1,0);
@@ -60,6 +66,20 @@ test('BFS finds shortest four-way route and never traverses unrelated buildings'
   assert.deepEqual(findPath(roads,0,key(3,0)),[0,1,2,3]);
   assert.equal(findPath(roads,0,key(4,0)),null);
   assert.equal(findPath(new Set([key(1,1)]),0,key(2,1)),null);
+});
+test('travel explanations and passenger breakdowns stay consistent', () => {
+  const city=new City();
+  assert.match(city.homeTravelInfo(0).reason,/没有明确连接道路出口/);
+  connect(city);
+  const info=city.homeTravelInfo(0);assert.ok(info.path.length>1);assert.ok(Number.isInteger(info.carGoalIndex));
+  assert.equal(info.distance,info.path.length-1);assert.ok(info.freeFlowTime>0);assert.ok(info.bottlenecks.length>0);
+  assert.deepEqual(city.passengerBreakdown(),{total:city.target,ungenerated:city.target,waiting:0,carTransit:0,busTransit:0,arrived:0});
+  city.toggle();
+  for(let i=0;i<200&&city.state==='running';i++){
+    city.step(.05);const counts=city.passengerBreakdown();
+    assert.equal(counts.total,counts.ungenerated+counts.waiting+counts.carTransit+counts.busTransit+counts.arrived);
+  }
+  const goal=city.goalBreakdown(0);assert.equal(goal.arrived+goal.reserved,city.goalAssigned[0]);
 });
 test('a starter plan connects all routes and wins within the time limit', () => {
   const city = new City();connect(city);
@@ -97,6 +117,7 @@ test('operation locks every planning mutation while running or paused', () => {
     ()=>city.connect(edge[0],edge[1]),
     ()=>city.cut(edge[0],edge[1]),
     ()=>city.setSignal(edge[0],true,2),
+    ()=>city.setRoadPolicy([edge[0]],'prefer'),
     ()=>city.createBusLine(),
     ()=>city.updateBusLine('line-1',{name:'锁定测试'}),
     ()=>city.deleteBusLine('line-1'),
@@ -124,11 +145,11 @@ test('stopping operation keeps the design and resets all simulation progress', (
 test('designs round-trip with road grades and signals while invalid data is atomic', () => {
   const source=new City();connect(source);
   const path=[...source.paths[0]],junction=path[1];
-  source.edit(path[2],false,2);
+  source.edit(path[2],false,2);assert.equal(source.setRoadPolicy([path[2]],'prefer'),'');
   source.connect(junction,key(point(junction).x,point(junction).y-1));
   assert.equal(source.setSignal(junction,{enabled:true,green:6,automatic:false,yieldMode:'priority',priority:['west','south','east','north'],phases:[['north-straight'],['west-left','east-left']]}),'');
   const design=source.serializeDesign(), target=new City();target.edit(key(1,1));target.toggle();run(target,1);target.stop();
-  assert.equal(design.version,7);assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');
+  assert.equal(design.version,8);assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');
   assert.deepEqual(target.serializeDesign(),design);assert.equal(target.state,'planning');assert.equal(target.elapsed,0);
   const legacy=JSON.parse(JSON.stringify(design));legacy.version=5;
   for(const signal of legacy.signals)for(const field of ['automatic','yieldMode','priority','phases'])delete signal[field];

@@ -65,6 +65,16 @@ test('occupied or reserved roads cannot be downgraded or demolished, upgrades re
   assert.ok(city.edit(n,false,0));assert.ok(city.edit(n,true));assert.equal(city.roadType(n),ROAD_TYPES[1]);
   assert.equal(city.edit(n,false,2),'');assert.equal(city.roadType(n),ROAD_TYPES[2]);
 });
+test('private cars choose free-flow travel time and honor road guidance',()=>{
+  const city=street(),home=key(1,5),goal=key(9,5);city.runtimeBudget=100;
+  for(let x=1;x<=9;x++)city.edit(key(x,4),false,2);
+  city.connect(home,key(1,4),2);for(let x=1;x<9;x++)city.connect(key(x,4),key(x+1,4),2);city.connect(key(9,4),goal,2);
+  assert.equal(city.bestGoalPath(0).path[1],key(1,4),'longer fast road should beat the short slow road');
+  const fastCells=Array.from({length:9},(_,i)=>key(i+1,4));assert.equal(city.setRoadPolicy(fastCells,'avoid'),'');
+  assert.equal(city.bestGoalPath(0).path[1],key(2,5),'car bans should force the alternative while preserving roads');
+  assert.equal(city.setRoadPolicy(fastCells,null),'');assert.equal(city.setRoadPolicy([key(2,5)],'prefer'),'');
+  const design=city.serializeDesign();assert.deepEqual(design.roadPolicies,[{cell:key(2,5),policy:'prefer'}]);
+});
 test('faster road grades actually improve vehicle travel speed',()=>{
   const slow=street(),fast=street();
   for(const n of fast.roads)fast.edit(n,false,2);
@@ -87,6 +97,13 @@ test('junctions are automatically added/removed and surviving signal settings pe
   city.edit(n-WIDTH,true);assert.equal(city.signals.has(n),false);
   city.connect(n,n-WIDTH);assert.deepEqual(city.signals.get(n),defaults);
   assert.ok(city.setSignal(n,true,0));assert.ok(city.setSignal(n,true,NaN));assert.ok(city.setSignal(0,true,2));
+});
+test('signal suggestions remain conflict-free and junction reports track each entrance',()=>{
+  const {city,n}=cross(),phases=city.suggestSignalPhases(n);assert.ok(phases.length);
+  assert.ok(phases.every(actions=>city.signalConflicts(actions).length===0));
+  assert.ok(city.signalConflicts(['north-straight','west-straight']).length);
+  const west=car(n-1);city.cars=[west];city.toggle();for(let i=0;i<30;i++)city.step(.05);
+  const report=city.junctionReports().find(item=>item.cell===n);assert.ok(report);assert.ok(report.entries.west.maxQueue>=1);
 });
 test('junction control supports entrance priority and safe custom signal phases',()=>{
   const {city,n}=cross();
