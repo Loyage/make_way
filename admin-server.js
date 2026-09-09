@@ -152,7 +152,6 @@ function validateLevels(data) {
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || height < MIN_MAP_SIZE || height > MAX_MAP_SIZE) return `关卡「${level.id}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`;
     if (!Number.isInteger(level.budget) || level.budget < 1) return `关卡「${level.id}」的预算无效`;
     if (!Number.isFinite(level.duration) || level.duration < 1) return `关卡「${level.id}」的时长无效`;
-    if (!Number.isInteger(level.target) || level.target < 1) return `关卡「${level.id}」的目标无效`;
     // features
     const features = level.features || {};
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals']) {
@@ -209,12 +208,13 @@ function validateLevels(data) {
         buildingRoute.set(g.cell, ri);
       }
     }
+    const population = level.routes.reduce((sum, route) => sum + route.homes.reduce((total, home) => total + home.passengers, 0), 0);
     const deliverable = level.routes.reduce((sum, route) => {
       const passengers = route.homes.reduce((total, home) => total + home.passengers, 0);
       const capacity = route.goals.some(goal => goal.input == null) ? Infinity : route.goals.reduce((total, goal) => total + goal.input, 0);
       return sum + Math.min(passengers, capacity);
     }, 0);
-    if (level.target > deliverable) return `关卡「${level.id}」的目标 ${level.target} 超过最多可送达人数 ${deliverable}`;
+    if (population > deliverable) return `关卡「${level.id}」的住宅总人口 ${population} 超过目的地最多可接收人数 ${deliverable}`;
     // homes/goals must not sit on water or trees
     const forbidden = new Set([...level.water, ...level.trees]);
     for (const route of level.routes) {
@@ -249,15 +249,14 @@ function validateLevels(data) {
       for (let dayIndex = 0; dayIndex < level.campaign.days.length; dayIndex++) {
         const day = level.campaign.days[dayIndex];
         if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
-        if (!Number.isInteger(day.target) || day.target < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的目标无效`;
         if (!Number.isInteger(day.maxIncome) || day.maxIncome < 0) return `关卡「${level.id}」第 ${dayIndex + 1} 天的最高收入无效`;
-        const dayLevel = { ...level, duration: day.duration, target: day.target, routes: day.routes };
+        const dayLevel = { ...level, duration: day.duration, routes: day.routes };
         delete dayLevel.campaign;
         const dayError = validateLevels({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
         if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
       }
       const firstDay = level.campaign.days[0];
-      if (level.duration !== firstDay.duration || level.target !== firstDay.target || JSON.stringify(level.routes) !== JSON.stringify(firstDay.routes)) return `关卡「${level.id}」的基础路线、时长和目标必须与第 1 天一致`;
+      if (level.duration !== firstDay.duration || JSON.stringify(level.routes) !== JSON.stringify(firstDay.routes)) return `关卡「${level.id}」的基础路线和时长必须与第 1 天一致`;
       const firstCells = new Set(firstDay.routes.flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)));
       const futureCells = new Set(level.campaign.days.slice(1).flatMap(day => day.routes).flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)).filter(cell => !firstCells.has(cell)));
       for (const edge of level.initialEdges || []) if (futureCells.has(edge[0]) || futureCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;

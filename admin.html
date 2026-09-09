@@ -76,7 +76,7 @@
             <div class="field-grid nums">
               <label>预算（点）<input id="f-budget" type="number" min="1" step="1"></label>
               <label>时长（秒）<input id="f-duration" type="number" min="1" step="1"></label>
-              <label>目标（人）<input id="f-target" type="number" min="1" step="1"></label>
+              <label>总目标（自动）<input id="f-population" type="number" readonly aria-label="住宅总人口，自动作为关卡目标"></label>
               <label>地图宽度（格）<input id="f-map-width" type="number" min="8" max="64" step="1"></label>
               <label>地图高度（格）<input id="f-map-height" type="number" min="8" max="64" step="1"></label>
               <button id="apply-map-size" class="tool" type="button">应用地图尺寸</button>
@@ -96,11 +96,11 @@
             <summary>多日任务</summary>
             <div class="campaign-toggle"><label><input id="f-campaign" type="checkbox"> 启用连续五日任务</label></div>
             <div id="campaign-editor" hidden>
-              <p class="section-hint">每天拥有独立的路线、人口、运营时长、运输目标与最高收入。切换日期后，下方「路线与建筑」和地图会编辑该日内容；地形、初始道路和总预算由五天共用。</p>
+              <p class="section-hint">每天拥有独立的路线、人口、运营时长与最高收入；当日目标自动等于当日所有住宅人口之和。切换日期后，下方「路线与建筑」和地图会编辑该日内容；地形、初始道路和总预算由五天共用。</p>
               <div id="campaign-days" class="campaign-days" role="tablist" aria-label="任务日期"></div>
               <div class="field-grid nums campaign-fields">
                 <label>当日时长（秒）<input id="f-day-duration" type="number" min="1" step="1"></label>
-                <label>当日运输目标（人）<input id="f-day-target" type="number" min="1" step="1"></label>
+                <label>当日目标（自动）<input id="f-day-population" type="number" readonly aria-label="当日住宅总人口，自动作为当日目标"></label>
                 <label>当日最高收入（点）<input id="f-day-income" type="number" min="0" step="1"></label>
               </div>
               <div class="campaign-actions"><button id="copy-prev-day" class="tool">复制前一天配置</button><button id="copy-next-day" class="tool">复制到下一天</button></div>
@@ -160,7 +160,7 @@
                 </div>
               </section>
             </div>
-            <div class="canvas-wrap"><canvas id="map" class="view-mode" tabindex="0" aria-label="关卡地图编辑器；观察模式可拖动，滚轮可缩放"></canvas></div>
+            <div class="canvas-wrap"><canvas id="map" class="view-mode" tabindex="0" aria-label="关卡地图编辑器；观察模式可拖动，按住 Ctrl 滚动可缩放"></canvas></div>
             <div class="legend">
               <span><i class="sw water"></i>水面</span>
               <span><i class="sw bridge"></i>桥梁</span>

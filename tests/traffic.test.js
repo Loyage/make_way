@@ -7,6 +7,7 @@ function street() {
   const city = new City('neighborhood');
   city.water.clear(); city.trees.clear(); city.bridges.clear(); city.roads.clear();
   city.setRoutes([{ name: 'test', color: '#638d69', light: '#dae6cb', homes: [{ cell: key(1,5), rate: 1, passengers: 0 }], goals: [{ cell: key(9,5), label: '工坊' }] }]);
+  city.deadlineMode=true;
   for(let x=1;x<9;x++) assert.equal(city.connect(key(x,5),key(x+1,5)),'');
   return city;
 }

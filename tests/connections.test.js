@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {City,key,WIDTH}=require('../core.js');
-function plain(){const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();c.edges.clear();c.setRoutes([{name:'占位',color:'#638d69',light:'#dae6cb',homes:[{cell:key(0,11),generationRate:1,passengers:0}],goals:[{cell:key(15,11),label:'占位'}]}]);return c;}
+function plain(){const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();c.edges.clear();c.setRoutes([{name:'占位',color:'#638d69',light:'#dae6cb',homes:[{cell:key(0,11),generationRate:1,passengers:0}],goals:[{cell:key(15,11),label:'占位'}]}]);c.deadlineMode=true;return c;}
 function cross(){const c=plain(),n=key(6,5);c.setRoutes([
   {name:'a',color:'#638d69',light:'#dae6cb',homes:[{cell:key(3,5),rate:1,passengers:0}],goals:[{cell:key(9,5),label:'工坊'}]},
   {name:'b',color:'#d19157',light:'#f2dfbf',homes:[{cell:key(6,2),rate:1,passengers:0}],goals:[{cell:key(6,8),label:'市场'}]}

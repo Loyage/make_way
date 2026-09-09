@@ -114,11 +114,11 @@
     $('chapter-name').textContent = chapter?.name||level.english;
     $('map-name').textContent = level.name;
     document.querySelector('.map-size').textContent = `${city.width} × ${city.height}`;
-    const population=city.homes.reduce((sum,home)=>sum+home.passengers,0);
-    $('target-label').textContent = `目标 ${city.target}`;
-    $('target-unit').textContent = `/ ${campaign?population:city.target} 人`;
+    const population=city.target;
+    $('target-label').textContent = '全部居民';
+    $('target-unit').textContent = `/ ${population} 人`;
     $('mission-title').textContent = level.title;
-    $('mission-description').textContent = campaign?`第 ${campaign.dayIndex+1} 天：在 ${city.duration} 秒内尽量完成 ${city.target} 人的通勤。当日总人口送达比例与满意度共同决定收入，结算后可改造路网。`:`在 ${city.duration} 秒内送达 ${city.target} 人，建设与公交预算共 ${city.budget} 点。${level.description}`;
+    $('mission-description').textContent = campaign?`第 ${campaign.dayIndex+1} 天：在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地。当日总人口送达比例与满意度共同决定收入，结算后可改造路网。`:`在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地，建设与公交预算共 ${city.budget} 点。${level.description}`;
     $('mission-tip-meta').textContent = campaign?`五日运营 · 当日最高收入 ${campaign.days[campaign.dayIndex].maxIncome} 点`:`第 ${number} 课 · ${level.lesson}`;
     $('mission-tip').textContent = level.tip;
     const demand = $('demand-list');demand.replaceChildren();
@@ -666,7 +666,7 @@
   function updateUI() {
     updateHistoryControls();
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
-    const deliveryTotal=campaign?city.homes.reduce((sum,home)=>sum+home.passengers,0):city.target;
+    const deliveryTotal=city.target;
     $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';
     const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
     $('timer').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
@@ -738,9 +738,9 @@
     const settlement=campaign?campaign.settlement(report.score):null,finalDay=campaign&&campaign.dayIndex===campaign.days.length-1;
     $('result-icon').textContent=won?'✳':'⌁';
     $('result-title').textContent=campaign?finalDay?'五天运营，城市因你而成长。':`第 ${campaign.dayIndex+1} 天运营结算`:won?'这座小城，因你而畅通。':'再给小城一个好计划。';
-    $('result-description').textContent=campaign?`${won?'完成':'未完成'}当日目标；本日收入 ${settlement.income} 点，由当日总人口送达比例与通勤满意度共同计算。${finalDay?'你仍可关闭报告，从进度条回到任一天重新运营。':'进入下一天后，新建筑可能落成，请先用收入改造交通。'}`:won?'目标达成！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
+    $('result-description').textContent=campaign?`${won?'全部居民均已抵达':'仍有居民未抵达'}；本日收入 ${settlement.income} 点，由当日总人口送达比例与通勤满意度共同计算。${finalDay?'你仍可关闭报告，从进度条回到任一天重新运营。':'进入下一天后，新建筑可能落成，请先用收入改造交通。'}`:won?'所有居民均已抵达！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
     const summary=document.createElement('strong');summary.textContent=`已产生居民满意度 ${report.score}%`;
-    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${campaign?settlement.population:city.target} 人${campaign?` · 当日目标 ${city.target} 人`:''} · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
+    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
     $('result-stats').replaceChildren(summary,meta,distribution);
@@ -855,7 +855,8 @@
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
   canvas.addEventListener('wheel',e=>{
-    e.preventDefault();const p=eventPoint(e),factor=Math.exp(-e.deltaY*.0015);setZoom(viewZoom*factor,p.x,p.y);draw();
+    if(!e.ctrlKey)return;
+    e.preventDefault();const p=eventPoint(e),factor=Math.exp(-e.deltaY*.004);setZoom(viewZoom*factor,p.x,p.y);draw();
   },{passive:false});
   canvas.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;
@@ -1077,7 +1078,7 @@
             try {
               for(const level of levels()) {
                 for(const field of ['name','english','difficulty','title','description','tip','lesson']) if(typeof level[field]!=='string'||!level[field].trim()) throw new Error(`关卡 ${level.id} 缺少 ${field}`);
-                if(!level.features||!Array.isArray(level.routes)||!Number.isFinite(level.budget)||!Number.isFinite(level.duration)||!Number.isFinite(level.target)) throw new Error(`关卡 ${level.id} 缺少运行参数`);
+                if(!level.features||!Array.isArray(level.routes)||!Number.isFinite(level.budget)||!Number.isFinite(level.duration)) throw new Error(`关卡 ${level.id} 缺少运行参数`);
                 new City(level.id);if(level.campaign)new CampaignSession(level.id);
               }
             } catch(error) {

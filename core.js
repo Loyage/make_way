@@ -45,7 +45,8 @@
   const initialCatalog = typeof module !== 'undefined' && module.exports ? require('./built-in-levels.json') : null;
   if (initialCatalog) setLevels(initialCatalog);
   // Default scenario and convenience exports are retained for Node consumers.
-  const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, target: 0, routes: [] };
+  const { budget: BUDGET, duration: DURATION, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, routes: [] };
+  const TARGET = (ROUTES || []).reduce((sum, route) => sum + routeHomes(route).reduce((routeSum, home) => routeSum + home.passengers, 0), 0);
   function neighbors(n, width = WIDTH, height = HEIGHT) {
     const { x, y } = point(n, width), out = [];
     if (x > 0) out.push(n - 1);
@@ -168,7 +169,6 @@
       this.routes = (options.routes || this.level.routes).map(normalizeRoute);
       this.runtimeBudget = options.budget;
       this.runtimeDuration = options.duration;
-      this.runtimeTarget = options.target;
       this.deadlineMode = Boolean(options.deadlineMode);
       this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site }]));
       this.water = new Set(this.level.water);
@@ -197,7 +197,7 @@
     }
     get budget() { return this.runtimeBudget ?? this.level.budget; }
     get duration() { return this.runtimeDuration ?? this.level.duration; }
-    get target() { return this.runtimeTarget ?? this.level.target; }
+    get target() { return this.homes.reduce((sum, home) => sum + home.passengers, 0); }
     get busLineLimit() { return Number.isInteger(this.level.busLineLimit) ? this.level.busLineLimit : 1; }
     busLine(lineId = this.activeBusLineId) { return this.busLines.find(line => line.id === lineId) || null; }
     get activeBusLine() { return this.busLine(); }
@@ -671,7 +671,7 @@
         || design.version===7&&(design.width!==this.width||design.height!==this.height)
         || design.version<7&&(this.width!==WIDTH||this.height!==HEIGHT)) return '存档格式无效、地图尺寸不匹配或不属于当前关卡';
       const candidate = new City(this.level.id, {
-        routes: this.routes, budget: this.budget, duration: this.duration, target: this.target,
+        routes: this.routes, budget: this.budget, duration: this.duration,
         deadlineMode: this.deadlineMode, pendingBuildings: [...this.pendingBuildings.values()]
       }), seenRoads = new Set(), seenSignals = new Set();
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
@@ -1013,7 +1013,7 @@
       this.level = LEVELS.find(level => level.id === levelId);
       if (!this.level?.campaign || !Array.isArray(this.level.campaign.days) || this.level.campaign.days.length !== 5) throw new RangeError(`Level is not a five-day campaign: ${levelId}`);
       this.days = this.level.campaign.days;
-      if (this.days.some(day => !day || !Number.isFinite(day.duration) || day.duration <= 0 || !Number.isInteger(day.target) || day.target <= 0
+      if (this.days.some(day => !day || !Number.isFinite(day.duration) || day.duration <= 0
         || !Number.isInteger(day.maxIncome) || day.maxIncome < 0 || !Array.isArray(day.routes) || !day.routes.length)) throw new RangeError(`Invalid campaign day: ${levelId}`);
       this.dayIndex = 0;
       this.results = [];
@@ -1034,7 +1034,7 @@
     }
     createCity(dayIndex, budget, design = null) {
       const day = this.days[dayIndex];
-      const city = new City(this.level.id, { routes: day.routes, budget, duration: day.duration, target: day.target, deadlineMode: true, pendingBuildings: this.pendingBuildings(dayIndex) });
+      const city = new City(this.level.id, { routes: day.routes, budget, duration: day.duration, deadlineMode: true, pendingBuildings: this.pendingBuildings(dayIndex) });
       if (design) { const message = city.loadDesign(design); if (message) throw new Error(message); }
       return city;
     }

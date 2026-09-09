@@ -25,7 +25,6 @@
           },
           "budget": 36,
           "duration": 90,
-          "target": 100,
           "water": [
             102,
             103,
@@ -67,7 +66,7 @@
                 {
                   "cell": 69,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -85,7 +84,7 @@
                 {
                   "cell": 121,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -117,7 +116,6 @@
           },
           "budget": 27,
           "duration": 60,
-          "target": 54,
           "water": [],
           "bridges": [],
           "trees": [
@@ -151,7 +149,7 @@
                 {
                   "cell": 34,
                   "generationRate": 1,
-                  "passengers": 55
+                  "passengers": 54
                 }
               ],
               "goals": [
@@ -294,7 +292,6 @@
           },
           "budget": 60,
           "duration": 65,
-          "target": 580,
           "water": [],
           "bridges": [],
           "trees": [],
@@ -307,7 +304,7 @@
                 {
                   "cell": 34,
                   "generationRate": 1,
-                  "passengers": 55
+                  "passengers": 53
                 }
               ],
               "goals": [
@@ -325,7 +322,7 @@
                 {
                   "cell": 82,
                   "generationRate": 4,
-                  "passengers": 220
+                  "passengers": 211
                 }
               ],
               "goals": [
@@ -343,7 +340,7 @@
                 {
                   "cell": 130,
                   "generationRate": 6,
-                  "passengers": 330
+                  "passengers": 316
                 }
               ],
               "goals": [
@@ -541,7 +538,6 @@
           },
           "budget": 52,
           "duration": 65,
-          "target": 374,
           "water": [],
           "bridges": [],
           "trees": [],
@@ -554,7 +550,7 @@
                 {
                   "cell": 82,
                   "generationRate": 4,
-                  "passengers": 220
+                  "passengers": 187
                 }
               ],
               "goals": [
@@ -572,7 +568,7 @@
                 {
                   "cell": 23,
                   "generationRate": 4,
-                  "passengers": 220
+                  "passengers": 187
                 }
               ],
               "goals": [
@@ -609,8 +605,7 @@
             "bus": false
           },
           "budget": 108,
-          "duration": 120,
-          "target": 200,
+          "duration": 130,
           "water": [],
           "bridges": [],
           "trees": [
@@ -642,7 +637,7 @@
                 {
                   "cell": 34,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -660,7 +655,7 @@
                 {
                   "cell": 157,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -678,7 +673,7 @@
                 {
                   "cell": 114,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -696,7 +691,7 @@
                 {
                   "cell": 125,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 50
                 }
               ],
               "goals": [
@@ -859,7 +854,6 @@
           },
           "budget": 34,
           "duration": 55,
-          "target": 42,
           "water": [],
           "bridges": [],
           "trees": [
@@ -889,7 +883,7 @@
                 {
                   "cell": 17,
                   "generationRate": 1,
-                  "passengers": 50
+                  "passengers": 42
                 }
               ],
               "goals": [
@@ -904,7 +898,6 @@
             "days": [
               {
                 "duration": 55,
-                "target": 42,
                 "maxIncome": 18,
                 "routes": [
                   {
@@ -915,7 +908,7 @@
                       {
                         "cell": 17,
                         "generationRate": 1,
-                        "passengers": 50
+                        "passengers": 42
                       }
                     ],
                     "goals": [
@@ -929,7 +922,6 @@
               },
               {
                 "duration": 65,
-                "target": 250,
                 "maxIncome": 20,
                 "routes": [
                   {
@@ -940,7 +932,7 @@
                       {
                         "cell": 17,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 200
                       }
                     ],
                     "goals": [
@@ -958,7 +950,7 @@
                       {
                         "cell": 49,
                         "generationRate": 1,
-                        "passengers": 55
+                        "passengers": 50
                       }
                     ],
                     "goals": [
@@ -972,7 +964,6 @@
               },
               {
                 "duration": 65,
-                "target": 455,
                 "maxIncome": 22,
                 "routes": [
                   {
@@ -983,7 +974,7 @@
                       {
                         "cell": 17,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 202
                       }
                     ],
                     "goals": [
@@ -1001,7 +992,7 @@
                       {
                         "cell": 49,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 202
                       }
                     ],
                     "goals": [
@@ -1019,7 +1010,7 @@
                       {
                         "cell": 81,
                         "generationRate": 1,
-                        "passengers": 55
+                        "passengers": 51
                       }
                     ],
                     "goals": [
@@ -1033,7 +1024,6 @@
               },
               {
                 "duration": 65,
-                "target": 660,
                 "maxIncome": 24,
                 "routes": [
                   {
@@ -1044,7 +1034,7 @@
                       {
                         "cell": 17,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 203
                       }
                     ],
                     "goals": [
@@ -1062,7 +1052,7 @@
                       {
                         "cell": 49,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 203
                       }
                     ],
                     "goals": [
@@ -1080,7 +1070,7 @@
                       {
                         "cell": 81,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 203
                       }
                     ],
                     "goals": [
@@ -1098,7 +1088,7 @@
                       {
                         "cell": 113,
                         "generationRate": 1,
-                        "passengers": 55
+                        "passengers": 51
                       }
                     ],
                     "goals": [
@@ -1112,7 +1102,6 @@
               },
               {
                 "duration": 65,
-                "target": 865,
                 "maxIncome": 26,
                 "routes": [
                   {
@@ -1123,7 +1112,7 @@
                       {
                         "cell": 17,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 204
                       }
                     ],
                     "goals": [
@@ -1141,7 +1130,7 @@
                       {
                         "cell": 49,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 204
                       }
                     ],
                     "goals": [
@@ -1159,7 +1148,7 @@
                       {
                         "cell": 81,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 204
                       }
                     ],
                     "goals": [
@@ -1177,7 +1166,7 @@
                       {
                         "cell": 113,
                         "generationRate": 4,
-                        "passengers": 220
+                        "passengers": 204
                       }
                     ],
                     "goals": [
@@ -1195,7 +1184,7 @@
                       {
                         "cell": 145,
                         "generationRate": 1,
-                        "passengers": 55
+                        "passengers": 49
                       }
                     ],
                     "goals": [
@@ -1235,8 +1224,7 @@
             "bus": false
           },
           "budget": 110,
-          "duration": 95,
-          "target": 228,
+          "duration": 130,
           "water": [],
           "bridges": [],
           "trees": [
@@ -1258,7 +1246,7 @@
                 {
                   "cell": 65,
                   "generationRate": 1,
-                  "passengers": 70
+                  "passengers": 46
                 }
               ],
               "goals": [
@@ -1276,7 +1264,7 @@
                 {
                   "cell": 126,
                   "generationRate": 1,
-                  "passengers": 70
+                  "passengers": 46
                 }
               ],
               "goals": [
@@ -1294,12 +1282,12 @@
                 {
                   "cell": 21,
                   "generationRate": 1,
-                  "passengers": 70
+                  "passengers": 46
                 },
                 {
                   "cell": 22,
                   "generationRate": 1,
-                  "passengers": 70
+                  "passengers": 46
                 }
               ],
               "goals": [
@@ -1323,7 +1311,7 @@
                 {
                   "cell": 170,
                   "generationRate": 1,
-                  "passengers": 70
+                  "passengers": 44
                 }
               ],
               "goals": [
@@ -1506,7 +1494,6 @@
           },
           "budget": 24,
           "duration": 90,
-          "target": 110,
           "water": [],
           "bridges": [],
           "trees": [
@@ -1532,12 +1519,12 @@
                 {
                   "cell": 50,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 55
                 },
                 {
                   "cell": 130,
                   "generationRate": 1,
-                  "passengers": 60
+                  "passengers": 55
                 }
               ],
               "goals": [
@@ -1573,8 +1560,7 @@
             "bus": false
           },
           "budget": 150,
-          "duration": 100,
-          "target": 700,
+          "duration": 190,
           "water": [
             7,
             23,
@@ -1629,7 +1615,7 @@
                 {
                   "cell": 34,
                   "generationRate": 6,
-                  "passengers": 330
+                  "passengers": 247
                 }
               ],
               "goals": [
@@ -1647,12 +1633,12 @@
                 {
                   "cell": 157,
                   "generationRate": 4,
-                  "passengers": 220
+                  "passengers": 165
                 },
                 {
                   "cell": 174,
                   "generationRate": 1,
-                  "passengers": 55
+                  "passengers": 41
                 }
               ],
               "goals": [
@@ -1676,7 +1662,7 @@
                 {
                   "cell": 163,
                   "generationRate": 4,
-                  "passengers": 220
+                  "passengers": 165
                 }
               ],
               "goals": [
@@ -1694,7 +1680,7 @@
                 {
                   "cell": 76,
                   "generationRate": 1,
-                  "passengers": 55
+                  "passengers": 41
                 }
               ],
               "goals": [
@@ -1712,7 +1698,7 @@
                 {
                   "cell": 98,
                   "generationRate": 1,
-                  "passengers": 55
+                  "passengers": 41
                 }
               ],
               "goals": [
@@ -1744,7 +1730,6 @@
           },
           "budget": 82,
           "duration": 45,
-          "target": 88,
           "water": [],
           "bridges": [],
           "trees": [
@@ -1766,7 +1751,7 @@
                 {
                   "cell": 50,
                   "generationRate": 6,
-                  "passengers": 45
+                  "passengers": 44
                 }
               ],
               "goals": [
@@ -1785,7 +1770,7 @@
                 {
                   "cell": 125,
                   "generationRate": 6,
-                  "passengers": 45
+                  "passengers": 44
                 }
               ],
               "goals": [

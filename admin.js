@@ -40,6 +40,8 @@
   const currentRoute = () => activeRoutes()[activeRoute] || null;
   const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
   const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
+  const routePopulation = routes => routes.reduce((sum,route)=>sum+(route.homes||[]).reduce((total,home)=>total+Number(home.passengers||0),0),0);
+  function removeLegacyTargets(data){for(const level of data.chapters.flatMap(chapter=>chapter.levels)){delete level.target;for(const day of level.campaign?.days||[])delete day.target;}return data;}
   const cellToXY = n => ({ x: n % mapWidth() - Math.floor(mapWidth()/2), y: Math.floor((mapHeight()-1)/2) - Math.floor(n / mapWidth()) });
   const xyToCell = (x, y) => { const col=x+Math.floor(mapWidth()/2),row=Math.floor((mapHeight()-1)/2)-y;return Number.isInteger(x)&&Number.isInteger(y)&&col>=0&&col<mapWidth()&&row>=0&&row<mapHeight()?keyCoord(col,row):null; };
   function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
@@ -82,7 +84,7 @@
   function scheduleValidation(){clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateCatalog(false),400);}
   async function loadLevels() {
     const data = await api('/api/levels');
-    catalog = data.catalog;
+    catalog = removeLegacyTargets(data.catalog);
     currentChapterIndex = 0;
     currentLevelIndex = chapters()[0]?.levels.length ? 0 : null;
     stopSimulation(false);resetHistory('已从磁盘载入');
@@ -118,7 +120,7 @@
   // ── Tool hint (keeps toolbar labels + status bar in sync with the active
   //    home/goal of the active route) ─────────────────────────────────────
   const TOOL_HINTS = {
-    view: '观察（拖动查看，滚轮缩放）', water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木',
+    view: '观察（拖动查看，Ctrl + 滚动缩放）', water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木',
     road: '初始道路（拖动连接相邻格）', erase: '擦除地形/断开道路'
   };
   function updateToolHint() {
@@ -188,7 +190,7 @@
     $('f-difficulty').value = level.difficulty; $('f-lesson').value = level.lesson;
     $('f-title').value = level.title; $('f-description').value = level.description;
     $('f-tip').value = level.tip;
-    $('f-budget').value = level.budget; $('f-duration').value = level.duration; $('f-target').value = level.target;
+    $('f-budget').value = level.budget; $('f-duration').value = level.duration; $('f-population').value = routePopulation(level.routes);
     $('f-bus-line-limit').value = level.busLineLimit ?? 1;
     $('f-map-width').value = mapWidth();$('f-map-height').value = mapHeight();
     document.querySelector('.coord-legend').textContent=`坐标系：地图中心为原点 (0,0)，向右为 +x，向上为 +y；x 范围 ${-Math.floor(mapWidth()/2)}～${mapWidth()-Math.floor(mapWidth()/2)-1}，y 范围 ${Math.floor((mapHeight()-1)/2)-mapHeight()+1}～${Math.floor((mapHeight()-1)/2)}。`;
@@ -201,20 +203,22 @@
   function renderCampaign() {
     const level=current(),enabled=Boolean(level?.campaign);
     $('f-campaign').checked=enabled;$('campaign-editor').hidden=!enabled;
-    $('f-duration').disabled=enabled;$('f-target').disabled=enabled;
+    $('f-duration').disabled=enabled;
     if(!enabled)return;
     if(!Array.isArray(level.campaign.days)||level.campaign.days.length!==5)return;
     activeCampaignDay=Math.min(activeCampaignDay,4);
     level.routes=level.campaign.days[0].routes;
-    level.duration=level.campaign.days[0].duration;level.target=level.campaign.days[0].target;
+    level.duration=level.campaign.days[0].duration;
     const tabs=$('campaign-days');tabs.replaceChildren();
     level.campaign.days.forEach((day,index)=>{const button=document.createElement('button');button.type='button';button.className='tool'+(index===activeCampaignDay?' active':'');button.textContent=`第 ${index+1} 天`;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(index===activeCampaignDay));button.onclick=()=>{activeCampaignDay=index;activeRoute=0;activeHome=0;activeGoal=0;renderCampaign();renderRoutes();draw();};tabs.append(button);});
-    const day=level.campaign.days[activeCampaignDay];$('f-day-duration').value=day.duration;$('f-day-target').value=day.target;$('f-day-income').value=day.maxIncome;
+    const day=level.campaign.days[activeCampaignDay];$('f-day-duration').value=day.duration;$('f-day-population').value=routePopulation(day.routes);$('f-day-income').value=day.maxIncome;
     $('copy-prev-day').disabled=activeCampaignDay===0;$('copy-next-day').disabled=activeCampaignDay===4;
   }
   function renderRoutes() {
     const list = $('route-list'); list.replaceChildren();
-    const level = current(),routes=activeRoutes();
+    const level = current(),routes=activeRoutes(),population=routePopulation(routes);
+    $('f-population').value=level?.campaign?routePopulation(level.campaign.days[0].routes):population;
+    if(level?.campaign)$('f-day-population').value=population;
     routes.forEach((route, ri) => {
       if (!Array.isArray(route.homes)) route.homes = [];
       if (!Array.isArray(route.goals)) route.goals = [];
@@ -335,7 +339,7 @@
     chapter.levels.push({
       id, name: '新关卡', english: 'NEW LEVEL', difficulty: '自定义', title: '未命名关卡', width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT,
       description: '请在此填写关卡任务说明。', tip: '请在此填写给玩家的规划提示。', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
-      busLineLimit: 3, budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
+      busLineLimit: 3, budget: 100, duration: 90, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
         homes: [{ cell: 2 * DEFAULT_WIDTH + 2, generationRate: 1, passengers: 60 }],
         goals: [{ cell: 8 * DEFAULT_WIDTH + 12, label: '目的地' }]
@@ -451,71 +455,39 @@
     canvas.width=Math.round(viewportWidth*dpr);canvas.height=Math.round(viewportHeight*dpr);
     if(first)resetView();else{cellSize=Math.min(viewportWidth/mapWidth(),viewportHeight/mapHeight())*viewZoom;snapView();}draw();
   }
+  function line(x1,y1,x2,y2,color,width){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
+  function circle(x,y,r,color){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
+  function rounded(x,y,w,h,r,fill,stroke=null){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=Math.max(1,cellSize*.025);ctx.stroke();}}
+  function label(text,x,y,size,color,weight='500'){ctx.font=`${weight} ${size}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=color;ctx.fillText(text,x,y);}
   function draw() {
     const level=current();if(!level)return;
-    const dpr=Math.min(window.devicePixelRatio||1,2),s=cellSize,w=mapWidth()*s,h=mapHeight()*s;
+    const dpr=Math.min(window.devicePixelRatio||1,2),s=cellSize,w=mapWidth()*s,h=mapHeight()*s,water=new Set(level.water),bridges=new Set(level.bridges);
+    const buildings=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell))),roads=new Map(),links=new Map();
+    for(const [a,b,grade] of level.initialEdges||[]){if(!buildings.has(a))roads.set(a,grade);if(!buildings.has(b))roads.set(b,grade);if(!links.has(a))links.set(a,[]);if(!links.has(b))links.set(b,[]);links.get(a).push(b);links.get(b).push(a);}
     ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewportWidth,viewportHeight);ctx.save();ctx.translate(viewX,viewY);ctx.fillStyle='#eaf0df';ctx.fillRect(0,0,w,h);
-    for(let y=0;y<mapHeight();y++)for(let x=0;x<mapWidth();x++){ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);}
-    // terrain
-    for (const n of level.water) { const { x, y } = point(n); ctx.fillStyle = '#bbd9d8'; ctx.fillRect(x * s, y * s, s, s); }
-    for (const n of level.trees) { const { x, y } = point(n); ctx.fillStyle = '#a9c398'; ctx.beginPath(); ctx.arc((x + .5) * s, (y + .5) * s, s * .3, 0, Math.PI * 2); ctx.fill(); }
-    // initial roads
-    for (const [a, b, grade] of level.initialEdges || []) {
-      const pa = point(a), pb = point(b);
-      const color = ['#b3bfa7', '#8da79c', '#708b9b'][grade] || '#b3bfa7';
-      const width = [.3, .54, .78][grade] || .3;
-      ctx.strokeStyle = color; ctx.lineWidth = s * width; ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo((pa.x + .5) * s, (pa.y + .5) * s);
-      ctx.lineTo((pb.x + .5) * s, (pb.y + .5) * s);
-      ctx.stroke();
+    for(let y=0;y<mapHeight();y++)for(let x=0;x<mapWidth();x++){
+      const n=keyCoord(x,y);if((x*7+y*11)%13===0){ctx.fillStyle='#e3ebd7';ctx.fillRect(x*s,y*s,s,s);}ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);
+      if((x*3+y*7)%9===0&&!water.has(n)&&!roads.has(n)&&!buildings.has(n)){line((x+.2)*s,(y+.72)*s,(x+.23)*s,(y+.64)*s,'#cedcbd',1);line((x+.27)*s,(y+.74)*s,(x+.3)*s,(y+.67)*s,'#cedcbd',1);}
     }
-    // buildings
-    activeRoutes().forEach((route) => {
-      (route.homes || []).forEach(h => drawBuilding(h.cell, route.color, true));
-      (route.goals || []).forEach(g => drawBuilding(g.cell, route.color, false));
-    });
-    if(level.campaign){
-      const active=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell))),sites=new Map();
-      for(let day=activeCampaignDay+1;day<level.campaign.days.length;day++)for(const route of level.campaign.days[day].routes)for(const building of [...route.homes,...route.goals])if(!active.has(building.cell)&&!sites.has(building.cell))sites.set(building.cell,day-activeCampaignDay);
-      for(const [cell,days] of sites)drawSite(cell,days);
-    }
-    // highlight the active home/goal of the active route
-    const route = currentRoute();
-    if (route) {
-      const ch = route.homes?.[activeHome];
-      const cg = route.goals?.[activeGoal];
-      if (ch) markActive(ch.cell, route.color);
-      if (cg) markActive(cg.cell, route.color);
-    }
-    // bridges over water
-    for (const n of level.bridges) { const { x, y } = point(n); ctx.fillStyle = '#708b9b'; ctx.fillRect((x + .15) * s, (y + .5) * s, s * .7, s * .3); }
+    for(const n of water){const{x,y}=point(n);ctx.fillStyle='#bbd9d8';ctx.fillRect(x*s,y*s,s,s);line((x+.2)*s,(y+.28)*s,(x+.55)*s,(y+.28)*s,'#d5e9e4',1.5);line((x+.55)*s,(y+.68)*s,(x+.85)*s,(y+.68)*s,'#a9cece',1.5);if(x===0||!water.has(n-1))line(x*s,y*s,x*s,(y+1)*s,'#d1e3cf',s*.08);if(x===mapWidth()-1||!water.has(n+1))line((x+1)*s,y*s,(x+1)*s,(y+1)*s,'#d1e3cf',s*.08);}
+    for(const n of bridges){const{x,y}=point(n),horizontal=(x>0&&bridges.has(n-1))||(x<mapWidth()-1&&bridges.has(n+1));rounded(x*s+(horizontal?0:s*.15),y*s+(horizontal?s*.15:0),horizontal?s:s*.7,horizontal?s*.7:s,s*.06,'#d7d8cb');}
+    ctx.lineCap='butt';
+    for(const [n,grade] of roads){const{x,y}=point(n),cx=(x+.5)*s,cy=(y+.5)*s,type=[{color:'#b3bfa7',width:.3},{color:'#8da79c',width:.54},{color:'#708b9b',width:.78}][grade]||{color:'#b3bfa7',width:.3};rounded(cx-s*type.width/2,cy-s*type.width/2,s*type.width,s*type.width,s*.12,type.color);for(const v of links.get(n)||[]){const p=point(v);line(cx,cy,cx+(p.x-x)*s*.51,cy+(p.y-y)*s*.51,type.color,s*type.width);}ctx.setLineDash([s*.09,s*.08]);for(const v of links.get(n)||[]){const p=point(v);line(cx,cy,cx+(p.x-x)*s*.5,cy+(p.y-y)*s*.5,'#eaf0dfb0',s*.025);}ctx.setLineDash([]);if(grade)label(grade===1?'Ⅱ':'Ⅲ',(x+.2)*s,(y+.22)*s,s*.18,'#f8fbef','700');}
+    for(const n of bridges){const{x,y}=point(n),horizontal=(x>0&&bridges.has(n-1))||(x<mapWidth()-1&&bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;if(horizontal){line(x*s,cy-s*.38,(x+1)*s,cy-s*.38,'#8d9b89',s*.04);line(x*s,cy+s*.38,(x+1)*s,cy+s*.38,'#8d9b89',s*.04);}else{line(cx-s*.38,y*s,cx-s*.38,(y+1)*s,'#8d9b89',s*.04);line(cx+s*.38,y*s,cx+s*.38,(y+1)*s,'#8d9b89',s*.04);}}
+    for(const n of level.trees){const{x,y}=point(n),cx=(x+.5)*s,cy=(y+.48)*s;circle(cx+s*.04,cy+s*.16,s*.25,'#cddcbc');line(cx,cy,cx,cy+s*.31,'#a5b18d',s*.055);circle(cx-s*.1,cy,s*.19,'#a9c398');circle(cx+s*.1,cy+s*.015,s*.19,'#9ab88a');circle(cx,cy-s*.13,s*.19,'#b3cba1');}
+    activeRoutes().forEach(route=>{(route.homes||[]).forEach(home=>drawBuilding(home,route,true));(route.goals||[]).forEach(goal=>drawBuilding(goal,route,false));});
+    if(level.campaign){const active=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell))),sites=new Map();for(let day=activeCampaignDay+1;day<level.campaign.days.length;day++)for(const route of level.campaign.days[day].routes)for(const building of [...route.homes,...route.goals])if(!active.has(building.cell)&&!sites.has(building.cell))sites.set(building.cell,day-activeCampaignDay);for(const [cell,days] of sites)drawSite(cell,days);}
+    const route=currentRoute();if(route){const home=route.homes?.[activeHome],goal=route.goals?.[activeGoal];if(home)markActive(home.cell,route.color);if(goal)markActive(goal.cell,route.color);}
     if(simulationCity)drawSimulationVehicles();
-    // hover highlight
-    if (hover !== null) {
-      const { x, y } = point(hover);
-      ctx.strokeStyle = tool === 'erase' ? '#c68b56' : '#6d936b'; ctx.lineWidth = 2;
-      ctx.strokeRect(x * s + 1, y * s + 1, s - 2, s - 2);
-    }
-    ctx.restore();
+    if(hover!==null){const{x,y}=point(hover);ctx.strokeStyle=tool==='erase'?'#c68b56':'#6d936b';ctx.lineWidth=2;ctx.strokeRect(x*s+1,y*s+1,s-2,s-2);}ctx.restore();
   }
   function drawSite(n,days) {
     const s=cellSize,{x,y}=point(n),cx=(x+.5)*s,cy=(y+.5)*s;ctx.save();ctx.fillStyle='#a6aaa4';ctx.strokeStyle='#777d78';ctx.lineWidth=1.5;ctx.setLineDash([3,2]);ctx.fillRect(cx-s*.24,cy-s*.2,s*.48,s*.4);ctx.strokeRect(cx-s*.28,cy-s*.24,s*.56,s*.48);ctx.setLineDash([]);ctx.fillStyle='#fff';ctx.font=`700 ${s*.24}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(days),cx,cy);ctx.restore();
   }
-  function drawBuilding(n, color, isHome) {
-    const s = cellSize; const { x, y } = point(n);
-    const cx = (x + .5) * s, cy = (y + .5) * s;
-    ctx.fillStyle = color;
-    if (isHome) {
-      ctx.beginPath(); ctx.moveTo(cx - s * .22, cy + s * .05); ctx.lineTo(cx, cy - s * .26); ctx.lineTo(cx + s * .22, cy + s * .05); ctx.closePath(); ctx.fill();
-      ctx.fillRect(cx - s * .17, cy + s * .02, s * .34, s * .3);
-      ctx.fillStyle = '#fffef9'; ctx.font = `600 ${s * .2}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('⌂', cx, cy + s * .12);
-    } else {
-      ctx.fillRect(cx - s * .24, cy - s * .22, s * .48, s * .44);
-      ctx.fillStyle = '#fffef9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('▣', cx, cy);
-    }
+  function drawBuilding(building,route,isHome){
+    const s=cellSize,{x,y}=point(building.cell),cx=(x+.5)*s,cy=(y+.5)*s;rounded(x*s+s*.1,y*s+s*.15,s*.8,s*.8,s*.16,'#8d9a7d22');rounded(x*s+s*.08,y*s+s*.07,s*.84,s*.84,s*.17,route.light);
+    if(isHome){const rate=building.generationRate??building.rate??1;if(rate===6){rounded(cx-s*.22,cy-s*.36,s*.44,s*.64,s*.025,route.color);for(let floor=0;floor<4;floor++)for(let col=0;col<2;col++)rounded(cx-s*.14+col*s*.17,cy-s*.28+floor*s*.13,s*.09,s*.07,0,route.light);}else{const width=rate===4?.32:.23;ctx.beginPath();ctx.moveTo(cx-s*width,cy-s*.03);ctx.lineTo(cx,cy-s*.29);ctx.lineTo(cx+s*width,cy-s*.03);ctx.closePath();ctx.fillStyle=route.color;ctx.fill();rounded(cx-s*width*.8,cy-s*.05,s*width*1.6,s*.31,s*.025,route.color);rounded(cx-s*.055,cy+s*.08,s*.11,s*.18,s*.01,route.light);}rounded((x+.53)*s,(y+.025)*s,s*.43,s*.27,s*.135,route.color);label(String(building.passengers),(x+.745)*s,(y+.16)*s,s*.14,'#fffef9','700');rounded((x+.055)*s,(y+.7)*s,s*.43,s*.235,s*.09,route.light,route.color);label(`+${rate}/s`,(x+.27)*s,(y+.815)*s,s*.125,route.color,'700');}
+    else{rounded(cx-s*.26,cy-s*.25,s*.52,s*.49,s*.055,route.color);rounded(cx-s*.19,cy-s*.19,s*.38,s*.12,s*.025,route.light);for(let j=0;j<3;j++)rounded(cx-s*.18+j*s*.13,cy-s*.005,s*.075,s*.11,s*.01,route.light);rounded(cx-s*.045,cy+s*.12,s*.09,s*.12,s*.01,route.light);rounded((x+.53)*s,(y+.025)*s,s*.43,s*.27,s*.135,'#fffef9ee',route.color);label(building.input==null?'∞':String(building.input),(x+.745)*s,(y+.16)*s,s*.14,route.color,'700');}
   }
   function markActive(n, color) {
     const s = cellSize; const { x, y } = point(n);
@@ -526,10 +498,9 @@
     ctx.strokeRect((x + .08) * s, (y + .08) * s, s * .84, s * .84);
     ctx.restore();
   }
-  function drawSimulationVehicles() {
-    for(const car of [...simulationCity.cars,...simulationCity.buses]){
-      const pose=simulationCity.pose(car),color=simulationCity.routes[car.route]?.color||'#345e40';ctx.save();ctx.translate(pose.x*cellSize,pose.y*cellSize);ctx.rotate(pose.angle);ctx.fillStyle=color;ctx.strokeStyle='#fffef9';ctx.lineWidth=Math.max(1,cellSize*.04);ctx.fillRect(-cellSize*.18,-cellSize*.1,cellSize*.36,cellSize*.2);ctx.strokeRect(-cellSize*.18,-cellSize*.1,cellSize*.36,cellSize*.2);ctx.restore();
-    }
+  function drawSimulationVehicles(){
+    const s=cellSize;for(const car of simulationCity.cars){const pose=simulationCity.pose(car),length=TrafficCore.VEHICLE_LENGTH*s,width=TrafficCore.VEHICLE_WIDTH*s;ctx.save();ctx.translate(pose.x*s,pose.y*s);ctx.rotate(pose.angle);rounded(-length/2,-width/2+s*.015,length,width,s*.025,'#344c3333');rounded(-length/2,-width/2,length,width,s*.025,simulationCity.routes[car.route].color);rounded(length*.1,-width*.36,length*.2,width*.72,s*.01,'#f5f6e9bb');ctx.restore();}
+    for(const bus of simulationCity.buses){const pose=simulationCity.pose(bus),length=TrafficCore.BUS_LENGTH*s,width=TrafficCore.BUS_WIDTH*s;ctx.save();ctx.translate(pose.x*s,pose.y*s);ctx.rotate(pose.angle);rounded(-length/2,-width/2+s*.025,length,width,s*.03,'#1f353244');rounded(-length/2,-width/2,length,width,s*.035,simulationCity.busLine(bus.lineId)?.color||'#126f89','#fffef9');rounded(-length*.31,-width*.34,length*.45,width*.68,s*.012,'#d9eef0');rounded(length*.18,-width*.34,length*.19,width*.68,s*.012,'#f2bd4f');label('BUS',0,0,s*.07,'#fffef9','800');ctx.restore();}
   }
   function updateSimulationUI() {
     const city=simulationCity,stateNames={planning:'未开始',running:'运行中',paused:'已暂停',won:'已达标',lost:'未达标'};
@@ -549,7 +520,7 @@
     const level=current();if(!level)return false;
     try {
       const copy=JSON.parse(JSON.stringify(catalog)),problem=TrafficCore.setLevels(copy);if(problem)throw new Error(problem);
-      const day=level.campaign?.days?.[activeCampaignDay];simulationCity=new TrafficCore.City(level.id,day?{routes:day.routes,duration:day.duration,target:day.target}:{});simulationLevelId=level.id;simulationDay=activeCampaignDay;simulationCity.toggle();simulationAccumulator=0;simulationLast=0;updateSimulationUI();return true;
+      const day=level.campaign?.days?.[activeCampaignDay];simulationCity=new TrafficCore.City(level.id,day?{routes:day.routes,duration:day.duration}:{});simulationLevelId=level.id;simulationDay=activeCampaignDay;simulationCity.toggle();simulationAccumulator=0;simulationLast=0;updateSimulationUI();return true;
     } catch(error){stopSimulation(false);toast('无法开始仿真：'+error.message);return false;}
   }
   function toggleSimulation() {
@@ -589,7 +560,7 @@
     const name = $('preset-select').value;
     if (!name) { toast('请先选择一个配置'); return; }
     if (dirty && !confirm('有未保存更改，确定载入所选配置并放弃这些更改吗？')) return;
-    try { const data = await api('/api/presets/' + encodeURIComponent(name)); catalog = data.catalog; currentChapterIndex = 0; currentLevelIndex = chapters()[0]?.levels.length ? 0 : null; activeCampaignDay = 0; activeRoute = 0; activeHome = 0; activeGoal = 0; stopSimulation(false);resetHistory(`已载入配置「${name}」`);renderAll();toast(`已载入配置「${name}」`); }
+    try { const data = await api('/api/presets/' + encodeURIComponent(name)); catalog = removeLegacyTargets(data.catalog); currentChapterIndex = 0; currentLevelIndex = chapters()[0]?.levels.length ? 0 : null; activeCampaignDay = 0; activeRoute = 0; activeHome = 0; activeGoal = 0; stopSimulation(false);resetHistory(`已载入配置「${name}」`);renderAll();toast(`已载入配置「${name}」`); }
     catch (err) { toast('载入失败：' + err.message); }
   };
   $('overwrite-default').onclick = async () => {
@@ -614,17 +585,17 @@
     const level=current();if(!level)return;
     if($('f-campaign').checked){
       const routes=JSON.parse(JSON.stringify(level.routes));
-      level.campaign={days:Array.from({length:5},(_,index)=>({duration:level.duration,target:level.target,maxIncome:18+index*2,routes:JSON.parse(JSON.stringify(routes))}))};
+      level.campaign={days:Array.from({length:5},(_,index)=>({duration:level.duration,maxIncome:18+index*2,routes:JSON.parse(JSON.stringify(routes))}))};
       activeCampaignDay=0;level.routes=level.campaign.days[0].routes;
     }else{
-      level.routes=JSON.parse(JSON.stringify(level.campaign.days[0].routes));level.duration=level.campaign.days[0].duration;level.target=level.campaign.days[0].target;delete level.campaign;activeCampaignDay=0;
+      level.routes=JSON.parse(JSON.stringify(level.campaign.days[0].routes));level.duration=level.campaign.days[0].duration;delete level.campaign;activeCampaignDay=0;
     }
     activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderEditor();
   };
-  for(const id of ['f-day-duration','f-day-target','f-day-income'])$(id).onchange=()=>{
+  for(const id of ['f-day-duration','f-day-income'])$(id).onchange=()=>{
     const level=current(),day=level?.campaign?.days?.[activeCampaignDay];if(!day)return;
-    const prop=id==='f-day-duration'?'duration':id==='f-day-target'?'target':'maxIncome';day[prop]=Number($(id).value);
-    if(activeCampaignDay===0){level.duration=day.duration;level.target=day.target;}markDirty();
+    const prop=id==='f-day-duration'?'duration':'maxIncome';day[prop]=Number($(id).value);
+    if(activeCampaignDay===0)level.duration=day.duration;markDirty();
   };
   $('copy-prev-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===0)return;level.campaign.days[activeCampaignDay]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay-1]));activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
   $('copy-next-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===4)return;level.campaign.days[activeCampaignDay+1]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay]));activeCampaignDay++;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
@@ -636,7 +607,7 @@
   for (const [elId, prop] of Object.entries(textFields)) {
     $(elId).onchange = () => { const l = current(); if (l) { l[prop] = $(elId).value; markDirty(); renderLevelNav(); $('editor-title').textContent = l.name; } };
   }
-  for (const elId of ['f-budget', 'f-duration', 'f-target']) {
+  for (const elId of ['f-budget', 'f-duration']) {
     $(elId).onchange = () => { const l = current(); const prop = elId.replace('f-', ''); if (l) { l[prop] = Number($(elId).value); markDirty(); } };
   }
   $('f-bus-line-limit').onchange = () => { const l = current(); if (l) { l.busLineLimit = Number($('f-bus-line-limit').value); markDirty(); } };
@@ -658,7 +629,7 @@
 
   // Canvas interaction
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
-  canvas.addEventListener('wheel',e=>{e.preventDefault();const p=eventPoint(e);setZoom(viewZoom*Math.exp(-e.deltaY*.0015),p.x,p.y);draw();},{passive:false});
+  canvas.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();const p=eventPoint(e);setZoom(viewZoom*Math.exp(-e.deltaY*.004),p.x,p.y);draw();},{passive:false});
   canvas.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;e.preventDefault();canvas.setPointerCapture(e.pointerId);
     const p=eventPoint(e);pointers.set(e.pointerId,p);

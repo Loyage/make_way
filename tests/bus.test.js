@@ -96,9 +96,9 @@ test('a bus skips homes whose destination is off-line or already full', () => {
 
 test('the bus lesson requires public transport and is winnable with one bus', () => {
   const carsOnly=new City('bus-school');carsOnly.toggle();run(carsOnly,60);
-  assert.equal(carsOnly.state,'lost');assert.ok(carsOnly.delivered<carsOnly.level.target);
+  assert.equal(carsOnly.state,'lost');assert.ok(carsOnly.delivered<carsOnly.target);
   const withBus=new City('bus-school');assert.equal(withBus.setBusRoute(loop(withBus)),'');withBus.toggle();run(withBus,60);
-  assert.equal(withBus.state,'won');assert.ok(withBus.delivered>=withBus.level.target);
+  assert.equal(withBus.state,'won');assert.ok(withBus.delivered>=withBus.target);
 });
 
 test('buses respect resident generation and deliver eligible passengers in batches', () => {
@@ -112,7 +112,7 @@ test('buses respect resident generation and deliver eligible passengers in batch
   assert.ok(city.departedByHome.every((count,i)=>count<=city.homes[i].passengers));
   assert.ok(city.goalAssigned.every((count,i)=>city.goals[i].input==null||count<=city.goals[i].input));
   run(city,40);
-  assert.equal(city.state,'won');assert.ok(city.delivered>=city.level.target);
+  assert.equal(city.state,'won');assert.ok(city.delivered>=city.target);
   assert.ok(city.arrivals.some(event=>event.vehicle==='bus'));
   assert.ok(city.byRoute.every(count=>count>0));
 });

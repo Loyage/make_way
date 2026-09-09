@@ -43,8 +43,8 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.match(validateLevels(badEdge),/initialEdges/);
   const badBusLimit=JSON.parse(JSON.stringify(good));first(badBusLimit).busLineLimit=9;
   assert.match(validateLevels(badBusLimit),/busLineLimit/);
-  const impossible=JSON.parse(JSON.stringify(good));first(impossible).target=999999;
-  assert.match(validateLevels(impossible),/最多可送达/);
+  const impossible=JSON.parse(JSON.stringify(good));first(impossible).routes[0].goals.forEach(goal=>goal.input=1);
+  assert.match(validateLevels(impossible),/住宅总人口.*最多可接收/);
   const fractional=JSON.parse(JSON.stringify(good));first(fractional).routes[0].homes[0].passengers=1.5;
   assert.match(validateLevels(fractional),/passengers/);
   const roadOnTree=JSON.parse(JSON.stringify(good)),roadLevel=first(roadOnTree),roadCell=roadLevel.trees[0];roadLevel.initialEdges=[[roadCell,roadCell+1,0]];
@@ -60,9 +60,9 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.match(validateLevels(crossRoute),/重叠/);
   const badDays=JSON.parse(JSON.stringify(good)),campaignLevel=badDays.chapters[0].levels.find(level=>level.id==='growing-city');campaignLevel.campaign.days.pop();
   assert.match(validateLevels(badDays),/正好包含 5 天/);
-  const impossibleDay=JSON.parse(JSON.stringify(good)),dayLevel=impossibleDay.chapters[0].levels.find(level=>level.id==='growing-city');dayLevel.campaign.days[2].target=999999;
-  assert.match(validateLevels(impossibleDay),/第 3 天.*最多可送达/);
-  const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].target++;
+  const impossibleDay=JSON.parse(JSON.stringify(good)),dayLevel=impossibleDay.chapters[0].levels.find(level=>level.id==='growing-city');dayLevel.campaign.days[2].routes[0].goals.forEach(goal=>goal.input=1);
+  assert.match(validateLevels(impossibleDay),/第 3 天.*最多可接收/);
+  const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].duration++;
   assert.match(validateLevels(mismatchedFirst),/必须与第 1 天一致/);
 });
 
@@ -123,7 +123,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.ok(catalog.chapters.flatMap(chapter=>chapter.levels).length>=6);
   const valid=await request(port,'/api/validate','POST',JSON.stringify(catalog),{Cookie:cookie.split(';')[0]});
   assert.equal(valid.status,200);
-  const invalid=JSON.parse(JSON.stringify(catalog));invalid.chapters[0].levels[0].target=999999;
+  const invalid=JSON.parse(JSON.stringify(catalog));invalid.chapters[0].levels[0].routes[0].goals.forEach(goal=>goal.input=1);
   assert.equal((await request(port,'/api/validate','POST',JSON.stringify(invalid),{Cookie:cookie.split(';')[0]})).status,400);
 
   // Static assets are served.

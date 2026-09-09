@@ -50,7 +50,7 @@ test('input caps spread demand across destinations even when spawn outpaces deli
     goals:[{cell:key(5,1),label:'工坊',input:20},{cell:key(9,3),label:'市场'}]
   }]);
   line(c,1,3,5,3,0);line(c,5,3,5,1,0);line(c,5,3,9,3,0);
-  c.level={...c.level,duration:60,target:60};
+  c.level={...c.level,duration:60};
   c.toggle();for(let i=0;i<1200;i++)c.step(.05);
   assert.ok(c.goalAssigned[0]<=20,'first goal is capped at its input');
   assert.ok(c.goalAssigned[1]>0,'overflow is assigned to the next reachable goal');
@@ -60,7 +60,7 @@ test('finite demand is visible before starting and respects each building rate',
   for(const level of LEVELS){
     const c=new City(level.id);c.edges.clear();c.refreshPaths();
     for(const h of c.homes){assert.ok([1,4,6].includes(h.generationRate));assert.ok(Number.isInteger(h.passengers)&&h.passengers>0);assert.ok(h.passengers/h.generationRate<=level.duration);}
-    assert.ok(level.target<=c.homes.reduce((sum,h)=>sum+h.passengers,0));
+    assert.equal(c.target,c.homes.reduce((sum,h)=>sum+h.passengers,0));
     assert.deepEqual(c.generated,c.homes.map(()=>0));
     c.toggle();for(let i=0;i<200;i++)c.step(.05);
     assert.deepEqual(c.generated,c.homes.map(h=>Math.min(h.passengers,10*h.generationRate)));
@@ -73,7 +73,7 @@ test('finite demand is visible before starting and respects each building rate',
 function straight(grade,rate,seconds=120) {
   const c=new City('neighborhood');c.trees.clear();
   c.setRoutes([{ name:'test', color:'#638d69', light:'#dae6cb', homes:[{cell:key(1,5),rate,passengers:rate*seconds}], goals:[{cell:key(14,5),label:'工坊'}] }]);
-  c.level={...c.level,budget:100,duration:seconds,target:rate*seconds+1};
+  c.level={...c.level,budget:100,duration:seconds};
   c.resetOperation();line(c,1,5,14,5,grade);return c;
 }
 test('private-car departure depends on the doorway road grade, not carRate metadata',()=>{

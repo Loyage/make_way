@@ -36,7 +36,7 @@ for (const level of LEVELS) {
         }
       }
     }
-    assert.equal(city.state,'won',`${city.delivered}/${level.target}, roads ${level.budget-city.remaining}, deliveries ${city.byRoute}`);
+    assert.equal(city.state,'won',`${city.delivered}/${city.target}, roads ${level.budget-city.remaining}, deliveries ${city.byRoute}`);
     assert.ok(city.byRoute.every(n=>n>0));assert.ok(city.remaining>=0);
   });
   test(`${level.name}: isolated demand loses at its own deadline`, () => {
@@ -81,8 +81,8 @@ test('five-day campaign pays for quality, reveals construction, and replays chec
   campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
   assert.equal(campaign.city.state,'running','campaign days always run to the deadline');
   campaign.city.state='won';
-  const result=campaign.advance(100);assert.equal(result.population,50);assert.equal(result.delivered,42);assert.equal(result.income,16);assert.equal(campaign.dayIndex,1);
-  assert.equal(campaign.city.budget,50);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
+  const result=campaign.advance(100);assert.equal(result.population,42);assert.equal(result.delivered,42);assert.equal(result.income,18);assert.equal(campaign.dayIndex,1);
+  assert.equal(campaign.city.budget,52);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
   assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);
   assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
 });
