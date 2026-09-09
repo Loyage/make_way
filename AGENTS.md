@@ -13,30 +13,31 @@
 
 - `index.html`：页面结构、控件、对话框和脚本加载顺序
 - `style.css`：桌面端和移动端响应式样式
-- `built-in-levels.json`：按 `chapters[].levels[]` 组织的默认章节与 16 × 12 网格关卡数据
-- `core.js`：与 DOM 无关的地图、道路、寻路、容量、信号灯和车辆模拟
+- `built-in-levels.json`：默认章节路径总清单；`levels/<章节>/chapter.json` 保存本章关卡路径，每关独立 JSON
+- `level-catalog.js`：浏览器 / Node 共用的分层关卡加载、旧格式兼容与管理员分关写入
+- `core-geometry.js` / `core-bus.js` / `core.js` / `core-campaign.js`：网格寻路、公交、道路容量、车辆模拟与五日任务
 - `game.js`：Canvas 绘制、输入事件、界面状态与 `localStorage` 设计存档
 - `server.js`：零依赖、只读、资源白名单式 HTTP 服务
-- `admin-server.js`：管理员面板服务（需密码、默认绑定所有网卡、读写 levels.json）
+- `admin-server.js` / `level-validation.js`：管理员面板 HTTP 服务与关卡数据校验
 - `admin.html` / `admin.css` / `admin.js`：管理员面板界面，风格与游戏一致
-- `levels.json`：管理员编辑生成的可选关卡数据库（被 .gitignore 忽略）
+- `levels.json` / `levels.local/`：管理员生成的可选覆盖清单与分关数据（被 .gitignore 忽略）
 - `tests/*.test.js`：Node 内置测试运行器执行的逻辑、关卡和服务器测试
 - `tests/browser-smoke.cjs`：通过 CDP 执行的可选浏览器集成测试
 - `deploy/`：systemd 用户服务安装脚本及 NixOS 网络配置示例
 
 ## 架构约束
 
-1. `core.js` 必须先于 `game.js` 加载。`game.js` 启动时先读取 `built-in-levels.json` 的章节目录，再尝试读取可选的 `levels.json` 覆盖层，然后才能创建 `City`。章节使用 `chapters[].levels[]` 嵌套结构，`TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平关卡列表；旧版扁平数组仍须兼容迁移。保持 `index.html` 底部脚本顺序不变。
-2. `core.js` 同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore`，Node 测试使用 `module.exports`。Node 端从 `built-in-levels.json` 读取默认数据；修改模块边界时须兼容两种环境。
+1. 浏览器脚本顺序为 `level-catalog.js`、`core-geometry.js`、`core-bus.js`、`core.js`、`core-campaign.js`、其余游戏模块、`game.js`。启动时先递归读取 `built-in-levels.json` 清单，再尝试可选的 `levels.json` 覆盖清单，然后才能创建 `City`。加载后 `TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平列表。
+2. 核心和关卡加载器同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore` / `TrafficLevelCatalog`，Node 测试使用 `module.exports`。修改模块边界时须兼容两种环境。
 3. 模拟逻辑应留在 `core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `game.js`。
 4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。
 5. 关卡定义会被递归冻结。每个 `City` 实例必须拥有独立的可变状态，不得修改或在实例间共享可变关卡数据。
 6. 道路连接由 `City.edges` 显式表示。相邻道路格不会自动连接；建筑出口和桥梁岸边也必须显式连接。任何建设、剪断、拆除或存档修改都应维护该规则并调用/触发路径刷新。
 7. 模拟必须保持确定性。测试通常以 `city.step(0.05)` 推进；不要把核心规则绑定到墙钟时间、动画帧率或随机数。
 8. 车辆的当前格、下一格、车道/前后位置和路口冲突区都可能是占用或预约。改动通行规则时，同时检查容量、拆除保护、出口预约、信号相位与自动避让。
-9. `server.js` 只暴露 `PUBLIC_FILES` 中的游戏资源和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
+9. `server.js` 只暴露 `PUBLIC_FILES`、`levels/` / `levels.local/` 下的 JSON 和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
 10. HTTP 服务启动时会把资源读入内存。部署后更新前端文件需要重启服务。
-11. 管理员面板（`admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入的 `levels.json` 是可选覆盖层，`game.js` 通过 `setLevels()` 在运行时加载，缺省时回落到 `built-in-levels.json`。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
+11. 管理员面板（`admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入 `levels.json` 清单与 `levels.local/` 分关数据，缺省时回落到默认清单。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
 
 ## 编码约定
 
@@ -54,8 +55,12 @@
 无需安装依赖。常用检查：
 
 ```sh
-node -e "JSON.parse(require('node:fs').readFileSync('built-in-levels.json'))"
+node -e "require('./level-catalog.js').loadCatalogSync(require('node:path').resolve('built-in-levels.json'))"
+node --check level-catalog.js
+node --check core-geometry.js
+node --check core-bus.js
 node --check core.js
+node --check core-campaign.js
 node --check game.js
 node --check server.js
 node --check admin-server.js

@@ -2,7 +2,7 @@
  * and Chromium exposing a local DevTools endpoint on port 9333. */
 'use strict';
 const assert = require('node:assert/strict');
-const CATALOG = require('../built-in-levels.json');
+const CATALOG = require('../level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
 const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 

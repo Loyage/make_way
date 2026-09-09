@@ -1,25 +1,20 @@
 /* Shared, DOM-free simulation. Browser callers load level JSON before creating a City. */
 (function (root) {
   'use strict';
-  const WIDTH = 16, HEIGHT = 12, MIN_MAP_SIZE = 8, MAX_MAP_SIZE = 64;
-  const key = (x, y, width = WIDTH) => y * width + x;
-  const point = (n, width = WIDTH) => ({ x: n % width, y: Math.floor(n / width) });
+  const isNode = typeof module !== 'undefined' && module.exports;
+  const geometry = isNode ? require('./core-geometry.js') : root.TrafficGeometry;
+  const installBusMethods = isNode ? require('./core-bus.js') : root.TrafficBus.installBusMethods;
+  const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, key, point, neighbors, findPath } = geometry;
   function deepFreeze(value) {
     if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
     return value;
   }
+  const catalogTools = typeof module !== 'undefined' && module.exports ? require('./level-catalog.js') : root.TrafficLevelCatalog;
   let LEVELS = [], CHAPTERS = [], api = null;
-  function legacyCatalog(list) {
-    if (list.length === 8 || list.length === 9 || list.length === 10) { const split = list.length - 4; return { version: 1, chapters: [
-      { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: list.slice(0,split) },
-      { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: list.slice(split) }
-    ] }; }
-    return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: list }] };
-  }
   // Replace the active chapter catalog. Legacy flat level arrays are migrated
   // in memory so existing levels.json overrides remain usable.
   function setLevels(data) {
-    const catalog = Array.isArray(data) ? legacyCatalog(data) : data;
+    const catalog = catalogTools.normalizeCatalog(data);
     if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.chapters) || !catalog.chapters.length) return '章节数据必须包含非空 chapters 数组';
     const chapterIds = new Set(), levelIds = new Set(), chapters = [];
     for (const chapter of catalog.chapters) {
@@ -42,36 +37,12 @@
     if (api) { api.CHAPTERS = CHAPTERS;api.LEVELS = LEVELS; }
     return '';
   }
-  const initialCatalog = typeof module !== 'undefined' && module.exports ? require('./built-in-levels.json') : null;
+  const initialCatalog = typeof module !== 'undefined' && module.exports
+    ? require('./level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, 'built-in-levels.json')) : null;
   if (initialCatalog) setLevels(initialCatalog);
   // Default scenario and convenience exports are retained for Node consumers.
   const { budget: BUDGET, duration: DURATION, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, routes: [] };
   const TARGET = (ROUTES || []).reduce((sum, route) => sum + routeHomes(route).reduce((routeSum, home) => routeSum + home.passengers, 0), 0);
-  function neighbors(n, width = WIDTH, height = HEIGHT) {
-    const { x, y } = point(n, width), out = [];
-    if (x > 0) out.push(n - 1);
-    if (x < width - 1) out.push(n + 1);
-    if (y > 0) out.push(n - width);
-    if (y < height - 1) out.push(n + width);
-    return out;
-  }
-  function findPath(roads, start, goal, edges = null, width = WIDTH, height = HEIGHT) {
-    if (start === goal) return [start];
-    const queue = [start], prev = new Map([[start, null]]);
-    for (let i = 0; i < queue.length; i++) {
-      for (const n of edges ? (edges.get(queue[i]) || []) : neighbors(queue[i], width, height)) {
-        if (prev.has(n) || (n !== goal && !roads.has(n))) continue;
-        prev.set(n, queue[i]);
-        if (n === goal) {
-          const path = [n];
-          while (path[0] !== start) path.unshift(prev.get(path[0]));
-          return path;
-        }
-        queue.push(n);
-      }
-    }
-    return null;
-  }
   // A route may list one or many origins (homes) and one or many destinations
   // (goals). Each home carries its own resident generation rate and population;
   // private cars leave as soon as the connected doorway road has room. Legacy
@@ -198,31 +169,6 @@
     get budget() { return this.runtimeBudget ?? this.level.budget; }
     get duration() { return this.runtimeDuration ?? this.level.duration; }
     get target() { return this.homes.reduce((sum, home) => sum + home.passengers, 0); }
-    get busLineLimit() { return Number.isInteger(this.level.busLineLimit) ? this.level.busLineLimit : 1; }
-    busLine(lineId = this.activeBusLineId) { return this.busLines.find(line => line.id === lineId) || null; }
-    get activeBusLine() { return this.busLine(); }
-    busRouteCells(line) {
-      if (!line?.route.length) return [];
-      return line.route[0] === line.route[line.route.length - 1] ? line.route.slice(0, -1) : [...line.route];
-    }
-    busOperatingRoute(line) {
-      if (!line?.route.length) return [];
-      const closed = line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1];
-      return line.returnTrip && !closed ? [...line.route, ...line.route.slice(0, -1).reverse()] : [...line.route];
-    }
-    busLineProblem() {
-      for (const line of this.busLines) {
-        if (!line.route.length) continue;
-        const closed = line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1];
-        if (!line.returnTrip && !closed) return `「${line.name}」尚未闭环，请从线路末端继续绘制`;
-        if (line.route.length < 2) return `「${line.name}」至少需要经过两格道路`;
-        if (new Set(this.busRouteCells(line)).size < line.count) return `「${line.name}」经过的不同道路格不能少于公交车数量`;
-      }
-      return '';
-    }
-    // Compatibility aliases keep older integrations focused on the selected line.
-    get busRoute() { return this.activeBusLine?.route || []; }
-    get busCount() { return this.activeBusLine?.count || 1; }
     key(x, y) { return key(x, y, this.width); }
     point(n) { return point(n, this.width); }
     neighbors(n) { return neighbors(n, this.width, this.height); }
@@ -347,134 +293,6 @@
       if (problem) return problem;
       if (current.enabled !== candidate.enabled && this.occupants(n).length) return '请等路口车辆通过后再切换控制方式';
       this.signals.set(n, candidate);
-      return '';
-    }
-    createBusLine(name, color) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '公交线路在本关未开放';
-      if (this.busLines.length >= this.busLineLimit) return `本关最多可规划 ${this.busLineLimit} 条公交线路`;
-      const number = this.busLines.length + 1, lineName = name === undefined ? `公交 ${number} 号线` : typeof name === 'string' ? name.trim() : '';
-      const lineColor = color === undefined ? BUS_LINE_COLORS[(number - 1) % BUS_LINE_COLORS.length] : color;
-      if (!lineName || lineName.length > 20) return '线路名称须为 1 至 20 个字符';
-      if (typeof lineColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(lineColor)) return '线路颜色无效';
-      const id = `line-${this.nextBusLineId++}`;
-      this.busLines.push({ id, name: lineName, color: lineColor.toLowerCase(), route: [], count: 1, stops: new Set(), returnTrip: false });
-      this.activeBusLineId = id;
-      return '';
-    }
-    ensureBusLine() {
-      if (this.activeBusLine) return '';
-      return this.createBusLine();
-    }
-    selectBusLine(lineId) {
-      if (!this.busLine(lineId)) return '公交线路不存在';
-      this.activeBusLineId = lineId;
-      return '';
-    }
-    updateBusLine(lineId, settings) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      const line = this.busLine(lineId);
-      if (!line || !settings || typeof settings !== 'object') return '公交线路不存在';
-      const candidate = { name: line.name, color: line.color, returnTrip: line.returnTrip };
-      if (settings.name !== undefined) {
-        const name = typeof settings.name === 'string' ? settings.name.trim() : '';
-        if (!name || name.length > 20) return '线路名称须为 1 至 20 个字符';
-        candidate.name = name;
-      }
-      if (settings.color !== undefined) {
-        if (typeof settings.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(settings.color)) return '线路颜色无效';
-        candidate.color = settings.color.toLowerCase();
-      }
-      if (settings.returnTrip !== undefined) {
-        if (typeof settings.returnTrip !== 'boolean') return '原路返回设置无效';
-        if (settings.returnTrip && line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1]) return '线路已经闭环，无需开启原路返回';
-        candidate.returnTrip = settings.returnTrip;
-      }
-      Object.assign(line, candidate);
-      return '';
-    }
-    deleteBusLine(lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      const index = this.busLines.findIndex(line => line.id === lineId);
-      if (index < 0) return '公交线路不存在';
-      this.busLines.splice(index, 1);
-      this.activeBusLineId = this.busLines[index]?.id || this.busLines[index - 1]?.id || null;
-      return '';
-    }
-    setBusRoute(path, lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '公交线路在本关未开放';
-      if (!Array.isArray(path)) return '公交线路无效';
-      if (!lineId) { const message = this.ensureBusLine(); if (message) return message; lineId = this.activeBusLineId; }
-      const line = this.busLine(lineId);
-      if (!line) return '公交线路不存在';
-      if (!path.length) { line.route = []; line.stops.clear(); return ''; }
-      if (path.length < 2) return '公交线路每段至少需要经过两格道路';
-      if (path.some(n => !Number.isInteger(n) || !this.roads.has(n))) return '公交线路只能经过已有道路';
-      for (let i = 1; i < path.length; i++) if (!this.edges.get(path[i - 1])?.has(path[i])) return '公交线路必须沿已经连通的道路绘制';
-      if (!line.route.length && this.remaining < line.count * BUS_COST) return `公交车辆需要 ${line.count * BUS_COST} 点预算`;
-      line.route = [...path];
-      if (line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1]) line.returnTrip = false;
-      line.stops = new Set(this.busRouteCells(line).filter(cell => this.neighbors(cell).some(n => this.buildings.has(n))));
-      return '';
-    }
-    appendBusRoute(path, lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '公交线路在本关未开放';
-      if (!Array.isArray(path) || path.length < 2) return '本段公交线路至少需要经过两格道路';
-      const line = this.busLine(lineId);
-      if (!line?.route.length) return this.setBusRoute(path, lineId);
-      if (line.route[0] === line.route[line.route.length - 1]) return '线路已经闭环；如需修改，请先反向擦除尾段';
-      if (path[0] !== line.route[line.route.length - 1]) return '请从当前线路末端继续绘制';
-      const previousStops = new Set(line.stops), previousCells = new Set(this.busRouteCells(line));
-      const message = this.setBusRoute([...line.route, ...path.slice(1)], lineId);
-      if (message) return message;
-      for (const cell of previousCells) if (!previousStops.has(cell)) line.stops.delete(cell);
-      return '';
-    }
-    trimBusRoute(path, lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '公交线路在本关未开放';
-      if (!Array.isArray(path) || path.length < 2) return '请从线路末端反向擦除至少一段';
-      const line = this.busLine(lineId);
-      if (!line?.route.length) return '当前线路尚未绘制';
-      const reversed = line.route.slice().reverse();
-      if (path.some((cell, index) => cell !== reversed[index])) return '只能从线路末端沿原路径反向擦除';
-      const previousStops = new Set(line.stops), remaining = line.route.slice(0, line.route.length - path.length + 1);
-      const message = this.setBusRoute(remaining.length >= 2 ? remaining : [], lineId);
-      if (message) return message;
-      for (const cell of this.busRouteCells(line)) if (!previousStops.has(cell)) line.stops.delete(cell);
-      return '';
-    }
-    setBusCount(count, lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '公交线路在本关未开放';
-      if (!Number.isInteger(count) || count < 1 || count > 3) return '每条线路可配置 1 至 3 辆公交车';
-      if (!lineId) { const message = this.ensureBusLine(); if (message) return message; lineId = this.activeBusLineId; }
-      const line = this.busLine(lineId);
-      if (!line) return '公交线路不存在';
-      if (line.route.length && this.remaining < (count - line.count) * BUS_COST) return `增加公交车辆需要 ${(count - line.count) * BUS_COST} 点预算`;
-      line.count = count;
-      return '';
-    }
-    busStopPositions(buildingCell, lineId = this.activeBusLineId) {
-      const line = this.busLine(lineId);
-      if (!line || !this.buildings.has(buildingCell)) return [];
-      const positions = [];
-      const limit = line.route[0] === line.route[line.route.length - 1] ? line.route.length - 1 : line.route.length;
-      for (let i = 0; i < limit; i++) if (line.stops.has(line.route[i]) && this.neighbors(buildingCell).includes(line.route[i])) positions.push(i);
-      return positions;
-    }
-    linesAtCell(cell) { return this.busLines.filter(line => this.busRouteCells(line).includes(cell)); }
-    linesServingBuilding(cell) { return this.busLines.filter(line => this.busStopPositions(cell, line.id).length); }
-    isBusStop(cell, lineId = this.activeBusLineId) { return Boolean(this.busLine(lineId)?.stops.has(cell)); }
-    canSetBusStop(cell, lineId = this.activeBusLineId) { return this.busRouteCells(this.busLine(lineId)).includes(cell); }
-    setBusStop(cell, enabled, lineId = this.activeBusLineId) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      const line = this.busLine(lineId);
-      if (!this.level.features.bus || !line?.route.length) return '请先规划公交线路';
-      if (!this.canSetBusStop(cell, lineId) || typeof enabled !== 'boolean') return '公交站只能设置在线路经过的道路格';
-      if (enabled) line.stops.add(cell); else line.stops.delete(cell);
       return '';
     }
     automaticSignalPhases(n) {
@@ -754,130 +572,6 @@
       this.resetOperation();
       return '';
     }
-    busGoalFor(home, routePosition, lineId) {
-      const line = this.busLine(lineId), closed = line.route[0] === line.route[line.route.length - 1], segments = line.route.length - 1;
-      let selected = null, distance = Infinity;
-      for (let gi = 0; gi < this.goals.length; gi++) {
-        const goal = this.goals[gi];
-        if (goal.route !== home.route || goal.input != null && this.goalAssigned[gi] >= goal.input) continue;
-        for (const position of this.busStopPositions(goal.cell, lineId)) {
-          const forward = closed ? (position - routePosition + segments) % segments || segments : position - routePosition;
-          if (forward > 0 && forward < distance) { selected = gi; distance = forward; }
-        }
-      }
-      return selected;
-    }
-    finishBusPassenger(passenger) {
-      const goal = this.goals[passenger.goalIndex];
-      this.delivered++;
-      this.byRoute[passenger.route]++;
-      this.byGoal[passenger.goalIndex]++;
-      const commuteTime = Math.max(0, this.elapsed - passenger.commuteStarted);
-      this.commuteTimes.push(commuteTime);
-      this.arrivals.push({ route: passenger.route, goal: goal.cell, goalIndex: passenger.goalIndex, time: this.elapsed, commuteTime, vehicle: 'bus' });
-    }
-    serviceBusStop(bus) {
-      const line = this.busLine(bus.lineId);
-      let moved = 0;
-      const closed = line?.route[0] === line?.route[line.route.length - 1];
-      const outbound = closed || !line?.returnTrip || bus.routePosition < line.route.length;
-      if (!outbound || !line?.stops.has(bus.cell)) { bus.needsStop = false; return; }
-      const leaving = bus.passengers.filter(passenger => this.neighbors(passenger.goal).includes(bus.cell));
-      if (leaving.length) {
-        bus.passengers = bus.passengers.filter(passenger => !leaving.includes(passenger));
-        for (const passenger of leaving) this.finishBusPassenger(passenger);
-        moved += leaving.length;
-      }
-      for (let hi = 0; hi < this.homes.length && bus.passengers.length < BUS_CAPACITY; hi++) {
-        const home = this.homes[hi];
-        if (!this.neighbors(home.cell).includes(bus.cell)) continue;
-        while (bus.passengers.length < BUS_CAPACITY && this.queues[hi] > 0) {
-          const goalIndex = this.busGoalFor(home, bus.routePosition, bus.lineId);
-          if (goalIndex === null) break;
-          this.queues[hi]--;
-          const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
-          this.goalAssigned[goalIndex]++;
-          this.departedByHome[hi]++;
-          bus.passengers.push({ route: home.route, homeIndex: hi, goal: this.goals[goalIndex].cell, goalIndex, commuteStarted });
-          moved++;
-        }
-      }
-      bus.dwell = moved / BUS_BOARDING_RATE;
-      bus.needsStop = false;
-    }
-    spawnBuses() {
-      this.buses = [];
-      const used = new Set();
-      for (const line of this.busLines) {
-        const route = this.busOperatingRoute(line);
-        if (route.length < 3) continue;
-        const segments = route.length - 1;
-        for (let i = 0; i < line.count; i++) {
-          let routePosition = Math.floor(i * segments / line.count);
-          let attempts = 0;
-          while (used.has(route[routePosition]) && attempts++ < segments) routePosition = (routePosition + 1) % segments;
-          const cell = route[routePosition];used.add(cell);
-          const heading = route[routePosition + 1] - cell;
-          this.buses.push({ id: `${line.id}-bus-${i + 1}`, lineId: line.id, type: 'bus', routePosition, cell, next: null, heading, cellHeading: heading,
-            lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0, dwell: 0, needsStop: true, passengers: [] });
-        }
-      }
-    }
-    stepBus(bus, dt) {
-      const line = this.busLine(bus.lineId), route = this.busOperatingRoute(line);
-      if (route.length < 3) return;
-      if (bus.needsStop) this.serviceBusStop(bus);
-      if (bus.dwell > 0) { bus.dwell = Math.max(0, bus.dwell - dt); return; }
-      const segments = route.length - 1;
-      if (bus.next === null) {
-        const nextPosition = bus.routePosition + 1, nextRoad = route[nextPosition];
-        const routeAt = offset => {
-          const position = nextPosition + offset;
-          return position <= segments ? route[position] : route[1 + (position - segments - 1) % segments];
-        };
-        const heading = nextRoad - bus.cell;
-        const internal = !this.signals.has(bus.cell) && bus.cellSlot === 0;
-        const target = internal ? bus.cell : nextRoad;
-        const slot = internal || this.signals.has(target) ? 1 : 0;
-        const followingPosition = nextPosition >= segments ? 1 : nextPosition + 1;
-        const exitHeading = route[followingPosition] - nextRoad;
-        const junction = internal ? nextRoad : routeAt(1), junctionExit = internal ? routeAt(1) : routeAt(2);
-        const turn = this.signals.has(junction) ? this.movement(junction - target, junctionExit - junction).turn : null;
-        const preferred = turn ? this.turnLane(target, turn) : bus.cellLane || 0;
-        const lane = this.laneFor(target, heading, bus, slot, exitHeading, preferred, turn !== null);
-        if (lane < 0 || !internal && !this.canEnter(target, heading, exitHeading)) { bus.blocked += dt; return; }
-        if (!internal && this.signals.has(target)) {
-          const afterTarget = route[followingPosition];
-          const afterExit = followingPosition >= segments ? route[1] - afterTarget : route[followingPosition + 1] - afterTarget;
-          if (this.laneFor(afterTarget, exitHeading, bus, 0, afterExit) < 0) { bus.blocked += dt; return; }
-        }
-        bus.next = target;
-        bus.nextSlot = slot;
-        bus.nextMovement = this.signals.has(target) ? { ...this.movement(heading, exitHeading), exitCell: route[followingPosition] } : null;
-        bus.heading = heading;
-        bus.lane = lane;
-        bus.blocked = 0;
-        bus.advancingRoute = !internal;
-        bus.distance = internal ? .5 : this.signals.has(bus.cell) || this.signals.has(target) ? .75 : .5;
-      }
-      const speeds = [bus.cell,bus.next].filter(n => this.roads.has(n)).map(n => this.roadType(n).speed);
-      const yielding = [bus.cell,bus.next].some(n => this.signals.has(n) && !this.signals.get(n).enabled);
-      bus.progress += dt * Math.min(...speeds) * BUS_SPEED_MULTIPLIER * (yielding ? .35 : 1) / (bus.distance || 1);
-      if (bus.progress < 1) return;
-      bus.cell = bus.next;
-      bus.cellHeading = bus.heading;
-      bus.cellLane = bus.lane;
-      bus.cellSlot = bus.nextSlot ?? 0;
-      bus.cellMovement = bus.nextMovement;
-      bus.nextMovement = null;
-      bus.next = null;
-      bus.progress = 0;
-      if (bus.advancingRoute) {
-        bus.routePosition++;
-        if (bus.routePosition >= segments) bus.routePosition = 0;
-        bus.needsStop = true;
-      }
-    }
     toggle() {
       if (this.state === 'planning') {
         const problem = this.busLineProblem();
@@ -1003,72 +697,10 @@
       else if (this.elapsed >= this.duration) this.state = this.delivered >= this.target ? 'won' : 'lost';
     }
   }
-  function campaignIncome(delivered, population, satisfaction, maxIncome) {
-    const deliveryRatio = Math.min(1, Math.max(0, delivered) / Math.max(1, population));
-    const satisfactionRatio = Math.min(1, Math.max(0, satisfaction) / 100);
-    return Math.round(Math.max(0, maxIncome) * (deliveryRatio * 0.7 + satisfactionRatio * 0.3));
-  }
-  class CampaignSession {
-    constructor(levelId) {
-      this.level = LEVELS.find(level => level.id === levelId);
-      if (!this.level?.campaign || !Array.isArray(this.level.campaign.days) || this.level.campaign.days.length !== 5) throw new RangeError(`Level is not a five-day campaign: ${levelId}`);
-      this.days = this.level.campaign.days;
-      if (this.days.some(day => !day || !Number.isFinite(day.duration) || day.duration <= 0
-        || !Number.isInteger(day.maxIncome) || day.maxIncome < 0 || !Array.isArray(day.routes) || !day.routes.length)) throw new RangeError(`Invalid campaign day: ${levelId}`);
-      this.dayIndex = 0;
-      this.results = [];
-      this.checkpoints = [];
-      this.city = this.createCity(0, this.level.budget);
-    }
-    pendingBuildings(dayIndex = this.dayIndex) {
-      const active = new Set(this.days[dayIndex].routes.flatMap(route => [...routeHomes(route).map(home => home.cell), ...routeGoals(route).map(goal => goal.cell)]));
-      const sites = new Map();
-      for (let future = dayIndex + 1; future < this.days.length; future++) {
-        for (const route of this.days[future].routes) {
-          for (const [kind, buildings] of [['home', routeHomes(route)], ['goal', routeGoals(route)]]) for (const building of buildings) {
-            if (!active.has(building.cell) && !sites.has(building.cell)) sites.set(building.cell, { cell: building.cell, kind, daysUntil: future - dayIndex });
-          }
-        }
-      }
-      return [...sites.values()];
-    }
-    createCity(dayIndex, budget, design = null) {
-      const day = this.days[dayIndex];
-      const city = new City(this.level.id, { routes: day.routes, budget, duration: day.duration, deadlineMode: true, pendingBuildings: this.pendingBuildings(dayIndex) });
-      if (design) { const message = city.loadDesign(design); if (message) throw new Error(message); }
-      return city;
-    }
-    beginDay() {
-      if (this.city.state !== 'planning') return this.city.toggle();
-      const design = this.city.serializeDesign(), message = this.city.toggle();
-      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: JSON.parse(JSON.stringify(design)) };
-      return message;
-    }
-    settlement(satisfaction) {
-      const day = this.days[this.dayIndex], population = this.city.homes.reduce((sum, home) => sum + home.passengers, 0);
-      return { day: this.dayIndex + 1, delivered: this.city.delivered, population, target: this.city.target, satisfaction, income: campaignIncome(this.city.delivered, population, satisfaction, day.maxIncome) };
-    }
-    advance(satisfaction) {
-      if (!['won','lost'].includes(this.city.state)) throw new Error('当天运营尚未结束');
-      const result = this.settlement(satisfaction);
-      this.results[this.dayIndex] = result;
-      if (this.dayIndex === this.days.length - 1) return result;
-      const design = this.city.serializeDesign(), budget = this.city.budget + result.income;
-      this.dayIndex++;
-      this.city = this.createCity(this.dayIndex, budget, design);
-      return result;
-    }
-    replay(dayIndex) {
-      if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex >= this.checkpoints.length || !this.checkpoints[dayIndex]) return '这一天还没有可回溯的运营前存档';
-      const checkpoint = this.checkpoints[dayIndex];
-      this.dayIndex = dayIndex;
-      this.results = this.results.slice(0, dayIndex);
-      this.checkpoints = this.checkpoints.slice(0, dayIndex + 1);
-      this.city = this.createCity(dayIndex, checkpoint.budget, checkpoint.design);
-      return '';
-    }
-  }
-  api = { City, CampaignSession, campaignIncome, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.TrafficCore = api;
+  installBusMethods(City, { BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, BUS_LINE_COLORS });
+  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, routeHomes, routeGoals, WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+    Object.assign(api, require('./core-campaign.js')(api));
+  } else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -57,4 +57,4 @@ systemctl --user --no-pager status traffic-game-admin.service
 printf '\nAdmin service installed. Panel: http://127.0.0.1:8080 (password: %s)\n' "$PASSWORD"
 printf 'Panel is bound to all interfaces ([::]:8080); use the password to restrict access.\n'
 printf 'Health gate check: curl --noproxy "*" -o /dev/null -w "%%{http_code}\\n" http://127.0.0.1:8080/\n'
-printf 'The admin panel writes levels.json in the project root; restart traffic-game.service afterwards.\n'
+printf 'The admin panel writes the levels.json manifest and levels.local/ data; restart traffic-game.service afterwards.\n'

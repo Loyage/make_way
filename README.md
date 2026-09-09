@@ -1,6 +1,6 @@
 # 慢行小城 · Make Way
 
-原生 HTML / CSS / JavaScript 交通规划小游戏。2 个教学章节下包含 9 个循序渐进且可自由选择的关卡，其中包括一关连续五日的城市运营挑战；无构建步骤、无第三方依赖、无外部字体或图片请求。
+原生 HTML / CSS / JavaScript 交通规划小游戏。2 个教学章节下包含 10 个循序渐进且可自由选择的关卡，其中包括一关连续五日的城市运营挑战；无构建步骤、无第三方依赖、无外部字体或图片请求。
 
 ## 本机游玩与网络访问
 
@@ -30,7 +30,7 @@ bash deploy/install-service.sh
 
 ## 管理员面板
 
-项目附带一个**需要密码**的管理员面板，用于创建章节和关卡、编辑地图与章节式关卡数据库，并以 `levels.json` 持久化。面板绑定所有网卡的 **8080** 端口，凭密码进入，未登录无法读写。配置可另存为命名文件、随时载入，也可把当前配置直接覆盖为新的默认配置。
+项目附带一个**需要密码**的管理员面板，用于创建章节和关卡、编辑地图与章节式关卡数据库，并以 `levels.json` 清单和 `levels.local/` 分关文件持久化。面板绑定所有网卡的 **8080** 端口，凭密码进入，未登录无法读写。配置可另存为命名文件、随时载入，也可把当前配置直接覆盖为新的默认配置。
 
 直接启动：
 
@@ -46,7 +46,7 @@ ADMIN_PASSWORD=你的密码 node admin-server.js
 bash deploy/install-admin-service.sh
 ```
 
-面板支持：新建、编辑和删除空章节，在章节下新建 / 复制 / 删除关卡、把关卡移动到其他章节，或用 ↑ / ↓ 按钮调整关卡在章节内的顺序（顺序即游戏内的第几课）；还可编辑关卡元数据、预算、时长与功能开关（含公交线路），增删路线（每条路线可含多个住宅与目的地，各自带居民产生率、总人口与可选输入上限），以及在地图上绘制水面、桥梁、树木、建筑和初始道路。每关地图宽高可分别设为 8～64 格；调整已有地图时内容保持相对中心位置，越界地形和道路会裁剪（会裁掉建筑时拒绝调整）。建筑坐标用两个数字表示：地图中心为原点 (0,0)，向右为 +x、向上为 +y。启用「连续五日任务」后，可逐日编辑独立的运营时长、最高收入、路线与建筑；每日运输目标自动等于当日住宅总人口，也可复制前一天配置；地图会预览后续日期的灰色工地。包含关卡的章节必须先移空才能删除。保存会写入项目根目录的 `levels.json`；「另存为配置」会以指定文件名写入 `level-presets/`（不能重名），「覆盖默认配置」会改写 `built-in-levels.json`。
+面板支持：新建、编辑和删除空章节，在章节下新建 / 复制 / 删除关卡、把关卡移动到其他章节，或用 ↑ / ↓ 按钮调整关卡在章节内的顺序（顺序即游戏内的第几课）；还可编辑关卡元数据、预算、时长与功能开关（含公交线路），增删路线（每条路线可含多个住宅与目的地，各自带居民产生率、总人口与可选输入上限），以及在地图上绘制水面、桥梁、树木、建筑和初始道路。每关地图宽高可分别设为 8～64 格；调整已有地图时内容保持相对中心位置，越界地形和道路会裁剪（会裁掉建筑时拒绝调整）。建筑坐标用两个数字表示：地图中心为原点 (0,0)，向右为 +x、向上为 +y。启用「连续五日任务」后，可逐日编辑独立的运营时长、最高收入、路线与建筑；每日运输目标自动等于当日住宅总人口，也可复制前一天配置；地图会预览后续日期的灰色工地。包含关卡的章节必须先移空才能删除。保存会把每关分别写入 `levels.local/<章节>/`，项目根目录的 `levels.json` 只保存章节清单路径；「另存为配置」会以单文件快照写入 `level-presets/`（不能重名），「覆盖默认配置」会重建 `levels/` 并更新 `built-in-levels.json` 清单。
 
 为方便反复调关，编辑器还提供最多 60 步撤销 / 重做（`Ctrl/Command + Z`、`Ctrl/Command + Shift + Z`）、全配置自动校验，以及按中心坐标整体平移地图内容。整体平移会同时移动地形、初始道路、基础路线和五日任务中各日建筑，任何内容越界时整次操作都会取消。地图下方的「初始道路仿真」直接使用游戏的 `core.js` 引擎，可按当前日期以 1× / 2× / 4× / 0.5× 运行，观察送达量、时间、在途车辆和住宅等待人数；仿真只测试关卡中预铺的初始道路，不修改关卡数据，开始编辑时会自动停止。
 
@@ -56,7 +56,7 @@ bash deploy/install-admin-service.sh
 systemctl --user restart traffic-game.service
 ```
 
-`built-in-levels.json` 是受版本控制的默认章节与关卡数据库，采用 `chapters[].levels[]` 嵌套结构；`levels.json` 存在且合法时游戏自动优先加载它。旧版扁平关卡数组会在读取时自动迁移为章节结构。管理员生成的 `levels.json` 已被 `.gitignore` 忽略，属于本地覆盖数据。JavaScript 只负责读取、校验和使用这些 JSON 数据，不再内嵌关卡定义。
+`built-in-levels.json` 是默认关卡总清单，只保存 `levels/<章节>/chapter.json` 路径；章节清单再保存本章各关 JSON 的相对路径，每一关独立存放。`levels.json` 存在且合法时游戏自动优先加载它，管理员生成的具体关卡位于 `levels.local/`，二者均被 `.gitignore` 忽略。加载器仍兼容旧版扁平数组和旧版整库 JSON，便于迁移已有配置。
 
 ## 两章十关渐进式小城
 
@@ -166,6 +166,12 @@ systemctl --user restart traffic-game.service
 
 ```sh
 node --test tests/*.test.js
+node --check level-catalog.js
+node --check core-geometry.js
+node --check core-bus.js
+node --check core.js
+node --check core-campaign.js
+node --check game-canvas.js
 node --check game.js
 node --check server.js
 ```
@@ -179,14 +185,22 @@ index.html                  中文界面、关卡选择、弹窗
 manual.html                 操作方法、车辆出行与交通模拟规则的游戏指南
 admin-manual.html           管理员关卡编辑、校验、仿真与发布操作手册
 style.css                   响应式样式
-built-in-levels.json         2 个章节、9 个默认关卡、五日需求与渐进功能配置
-levels.json                  管理员生成的可选本地覆盖数据
-core.js                     DOM 无关的地图、容量与模拟引擎
+built-in-levels.json         默认章节路径总清单
+levels/<章节>/chapter.json   单章元数据与关卡路径清单
+levels/<章节>/<关卡>.json    每关独立的地图、需求与功能配置
+levels.json + levels.local/  管理员生成的可选本地覆盖清单与分关数据
+level-catalog.js             浏览器/Node 共用的分层关卡加载与写入
+core-geometry.js             网格坐标、邻接与寻路工具
+core-bus.js                  公交线路配置、站点与车辆运行逻辑
+core.js + core-campaign.js   DOM 无关的道路/汽车引擎与多日运营模块
 game-results.js             结算页通勤满意度统计
 game-effects.js             到达正向反馈粒子效果
+game-canvas.js              Canvas 基础图元与公交线路绘制
+game-bootstrap.js           默认/覆盖关卡加载与运行时校验
 game.js                     Canvas 绘图、输入与界面编排
 server.js                   零依赖只读 HTTP 服务
-admin-server.js              管理员面板服务（需密码）
+admin-server.js              管理员面板 HTTP 与鉴权服务（需密码）
+level-validation.js          管理员关卡结构与玩法数据校验
 admin.html / admin.css / admin.js  管理员面板界面
 tests/*.test.js             自动化测试
 tests/browser-smoke.cjs      可选浏览器集成测试

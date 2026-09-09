@@ -1,0 +1,364 @@
+{
+  "id": "growing-city",
+  "name": "五日新城",
+  "english": "FIVE DAYS OF GROWTH",
+  "difficulty": "章节挑战",
+  "title": "经营五天，让道路跟上城市生长。",
+  "description": "连续完成五天通勤运营。每日结算会按送达比例与满意度发放收入，用来在下一天规划前改造路网；灰色工地会标出未来落成的住宅和目的地。",
+  "tip": "新客流先适合支路，次日会增长为 4 人/秒；一边接通新街区，一边用昨日收入升级旧通道。",
+  "lesson": "持续运营与城市成长",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 34,
+  "duration": 55,
+  "water": [],
+  "bridges": [],
+  "trees": [
+    38,
+    39,
+    40,
+    41,
+    70,
+    71,
+    72,
+    73,
+    102,
+    103,
+    104,
+    105,
+    134,
+    135,
+    136,
+    137
+  ],
+  "routes": [
+    {
+      "name": "松林住宅 → 工坊",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 17,
+          "generationRate": 1,
+          "passengers": 42
+        }
+      ],
+      "goals": [
+        {
+          "cell": 30,
+          "label": "工坊"
+        }
+      ]
+    }
+  ],
+  "campaign": {
+    "days": [
+      {
+        "duration": 55,
+        "maxIncome": 18,
+        "routes": [
+          {
+            "name": "松林住宅 → 工坊",
+            "color": "#638d69",
+            "light": "#dae6cb",
+            "homes": [
+              {
+                "cell": 17,
+                "generationRate": 1,
+                "passengers": 42
+              }
+            ],
+            "goals": [
+              {
+                "cell": 30,
+                "label": "工坊"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "duration": 65,
+        "maxIncome": 20,
+        "routes": [
+          {
+            "name": "松林住宅 → 工坊",
+            "color": "#638d69",
+            "light": "#dae6cb",
+            "homes": [
+              {
+                "cell": 17,
+                "generationRate": 4,
+                "passengers": 200
+              }
+            ],
+            "goals": [
+              {
+                "cell": 30,
+                "label": "工坊"
+              }
+            ]
+          },
+          {
+            "name": "日落住宅 → 市场",
+            "color": "#d19157",
+            "light": "#f2dfbf",
+            "homes": [
+              {
+                "cell": 49,
+                "generationRate": 1,
+                "passengers": 50
+              }
+            ],
+            "goals": [
+              {
+                "cell": 62,
+                "label": "市场"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "duration": 65,
+        "maxIncome": 22,
+        "routes": [
+          {
+            "name": "松林住宅 → 工坊",
+            "color": "#638d69",
+            "light": "#dae6cb",
+            "homes": [
+              {
+                "cell": 17,
+                "generationRate": 4,
+                "passengers": 202
+              }
+            ],
+            "goals": [
+              {
+                "cell": 30,
+                "label": "工坊"
+              }
+            ]
+          },
+          {
+            "name": "日落住宅 → 市场",
+            "color": "#d19157",
+            "light": "#f2dfbf",
+            "homes": [
+              {
+                "cell": 49,
+                "generationRate": 4,
+                "passengers": 202
+              }
+            ],
+            "goals": [
+              {
+                "cell": 62,
+                "label": "市场"
+              }
+            ]
+          },
+          {
+            "name": "丁香住宅 → 书店",
+            "color": "#9582b4",
+            "light": "#e7dff0",
+            "homes": [
+              {
+                "cell": 81,
+                "generationRate": 1,
+                "passengers": 51
+              }
+            ],
+            "goals": [
+              {
+                "cell": 94,
+                "label": "书店"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "duration": 65,
+        "maxIncome": 24,
+        "routes": [
+          {
+            "name": "松林住宅 → 工坊",
+            "color": "#638d69",
+            "light": "#dae6cb",
+            "homes": [
+              {
+                "cell": 17,
+                "generationRate": 4,
+                "passengers": 203
+              }
+            ],
+            "goals": [
+              {
+                "cell": 30,
+                "label": "工坊"
+              }
+            ]
+          },
+          {
+            "name": "日落住宅 → 市场",
+            "color": "#d19157",
+            "light": "#f2dfbf",
+            "homes": [
+              {
+                "cell": 49,
+                "generationRate": 4,
+                "passengers": 203
+              }
+            ],
+            "goals": [
+              {
+                "cell": 62,
+                "label": "市场"
+              }
+            ]
+          },
+          {
+            "name": "丁香住宅 → 书店",
+            "color": "#9582b4",
+            "light": "#e7dff0",
+            "homes": [
+              {
+                "cell": 81,
+                "generationRate": 4,
+                "passengers": 203
+              }
+            ],
+            "goals": [
+              {
+                "cell": 94,
+                "label": "书店"
+              }
+            ]
+          },
+          {
+            "name": "海风住宅 → 学校",
+            "color": "#578fa4",
+            "light": "#d3e7ed",
+            "homes": [
+              {
+                "cell": 113,
+                "generationRate": 1,
+                "passengers": 51
+              }
+            ],
+            "goals": [
+              {
+                "cell": 126,
+                "label": "学校"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "duration": 65,
+        "maxIncome": 26,
+        "routes": [
+          {
+            "name": "松林住宅 → 工坊",
+            "color": "#638d69",
+            "light": "#dae6cb",
+            "homes": [
+              {
+                "cell": 17,
+                "generationRate": 4,
+                "passengers": 204
+              }
+            ],
+            "goals": [
+              {
+                "cell": 30,
+                "label": "工坊"
+              }
+            ]
+          },
+          {
+            "name": "日落住宅 → 市场",
+            "color": "#d19157",
+            "light": "#f2dfbf",
+            "homes": [
+              {
+                "cell": 49,
+                "generationRate": 4,
+                "passengers": 204
+              }
+            ],
+            "goals": [
+              {
+                "cell": 62,
+                "label": "市场"
+              }
+            ]
+          },
+          {
+            "name": "丁香住宅 → 书店",
+            "color": "#9582b4",
+            "light": "#e7dff0",
+            "homes": [
+              {
+                "cell": 81,
+                "generationRate": 4,
+                "passengers": 204
+              }
+            ],
+            "goals": [
+              {
+                "cell": 94,
+                "label": "书店"
+              }
+            ]
+          },
+          {
+            "name": "海风住宅 → 学校",
+            "color": "#578fa4",
+            "light": "#d3e7ed",
+            "homes": [
+              {
+                "cell": 113,
+                "generationRate": 4,
+                "passengers": 204
+              }
+            ],
+            "goals": [
+              {
+                "cell": 126,
+                "label": "学校"
+              }
+            ]
+          },
+          {
+            "name": "玫瑰住宅 → 医院",
+            "color": "#bf768b",
+            "light": "#efd9e1",
+            "homes": [
+              {
+                "cell": 145,
+                "generationRate": 1,
+                "passengers": 49
+              }
+            ],
+            "goals": [
+              {
+                "cell": 158,
+                "label": "医院"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

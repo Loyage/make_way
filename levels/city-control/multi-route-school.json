@@ -1,0 +1,67 @@
+{
+  "id": "multi-route-school",
+  "name": "多点通勤",
+  "english": "MANY ORIGINS, MANY DESTINATIONS",
+  "difficulty": "教学六",
+  "title": "一条路线，也能连接城市里的多个地点。",
+  "description": "同一种颜色代表同一条路线；一条路线可以同时包含多个住宅和多个目的地。把两座住宅接入路网，让居民前往就近且尚未满员的目的地。",
+  "tip": "两个住宅都必须至少能到达一个同色目的地。车辆优先选择最近的可达目的地；目的地满员后会改派到另一个。",
+  "lesson": "多起点与多目的地",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 24,
+  "duration": 90,
+  "water": [],
+  "bridges": [],
+  "trees": [
+    22,
+    23,
+    24,
+    25,
+    86,
+    87,
+    88,
+    89,
+    166,
+    167,
+    168,
+    169
+  ],
+  "routes": [
+    {
+      "name": "两处住宅 → 工坊与公园",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 50,
+          "generationRate": 1,
+          "passengers": 55
+        },
+        {
+          "cell": 130,
+          "generationRate": 1,
+          "passengers": 55
+        }
+      ],
+      "goals": [
+        {
+          "cell": 61,
+          "label": "工坊",
+          "input": 60
+        },
+        {
+          "cell": 141,
+          "label": "公园",
+          "input": 60
+        }
+      ]
+    }
+  ]
+}

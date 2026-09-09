@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "road-basics",
+  "name": "道路入门",
+  "english": "ROAD BASICS",
+  "levels": [
+    "neighborhood.json",
+    "demolition-school.json",
+    "avenue-school.json",
+    "cut-school.json",
+    "woodland.json",
+    "growing-city.json"
+  ]
+}

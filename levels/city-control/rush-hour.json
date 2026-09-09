@@ -1,0 +1,168 @@
+{
+  "id": "rush-hour",
+  "name": "都会早高峰",
+  "english": "RUSH HOUR",
+  "difficulty": "综合挑战",
+  "title": "当整座城市同时出发。",
+  "description": "所有工具均已开放。多点橙色路线也加入早高峰；综合运用道路等级、分流、剪断与信号灯构建高效路网。",
+  "tip": "东西两岸都需要纵向道路，别让所有车辆挤在同一座桥上。留意橙色路线的两处住宅和两个目的地，高层出口与桥梁也要有足够车道。",
+  "lesson": "综合规划",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 150,
+  "duration": 190,
+  "water": [
+    7,
+    23,
+    39,
+    55,
+    71,
+    87,
+    103,
+    119,
+    135,
+    151,
+    167,
+    183,
+    8,
+    24,
+    40,
+    56,
+    72,
+    88,
+    104,
+    120,
+    136,
+    152,
+    168,
+    184
+  ],
+  "bridges": [
+    39,
+    40,
+    103,
+    104,
+    151,
+    152
+  ],
+  "trees": [
+    20,
+    21,
+    27,
+    81,
+    85,
+    74,
+    94,
+    165,
+    170
+  ],
+  "routes": [
+    {
+      "name": "松林住宅 → 工坊",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 34,
+          "generationRate": 6,
+          "passengers": 247
+        }
+      ],
+      "goals": [
+        {
+          "cell": 45,
+          "label": "工坊"
+        }
+      ]
+    },
+    {
+      "name": "两处日落住宅 → 市场与广场",
+      "color": "#d19157",
+      "light": "#f2dfbf",
+      "homes": [
+        {
+          "cell": 157,
+          "generationRate": 4,
+          "passengers": 165
+        },
+        {
+          "cell": 174,
+          "generationRate": 1,
+          "passengers": 41
+        }
+      ],
+      "goals": [
+        {
+          "cell": 146,
+          "label": "市场",
+          "input": 220
+        },
+        {
+          "cell": 172,
+          "label": "广场",
+          "input": 55
+        }
+      ]
+    },
+    {
+      "name": "丁香住宅 → 书店",
+      "color": "#9582b4",
+      "light": "#e7dff0",
+      "homes": [
+        {
+          "cell": 163,
+          "generationRate": 4,
+          "passengers": 165
+        }
+      ],
+      "goals": [
+        {
+          "cell": 108,
+          "label": "书店"
+        }
+      ]
+    },
+    {
+      "name": "海风住宅 → 车站",
+      "color": "#578fa4",
+      "light": "#d3e7ed",
+      "homes": [
+        {
+          "cell": 76,
+          "generationRate": 1,
+          "passengers": 41
+        }
+      ],
+      "goals": [
+        {
+          "cell": 67,
+          "label": "车站"
+        }
+      ]
+    },
+    {
+      "name": "玫瑰住宅 → 花园",
+      "color": "#bf768b",
+      "light": "#efd9e1",
+      "homes": [
+        {
+          "cell": 98,
+          "generationRate": 1,
+          "passengers": 41
+        }
+      ],
+      "goals": [
+        {
+          "cell": 125,
+          "label": "花园"
+        }
+      ]
+    }
+  ]
+}

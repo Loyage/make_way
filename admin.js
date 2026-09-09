@@ -98,7 +98,7 @@
   async function save() {
     await api('/api/levels', { method: 'PUT', body: JSON.stringify(catalog) });
     savedSnapshot=catalogSnapshot();updateDirtyStatus('已保存');
-    toast('已保存到 levels.json，重启游戏服务后生效');
+    toast('已保存 levels.json 清单和 levels.local/ 分关数据，重启游戏服务后生效');
   }
   async function loadPresets() {
     const data = await api('/api/presets');
@@ -564,7 +564,7 @@
     catch (err) { toast('载入失败：' + err.message); }
   };
   $('overwrite-default').onclick = async () => {
-    if (!confirm('确定用当前配置覆盖默认配置 built-in-levels.json？此操作会改写随版本发布的默认关卡。')) return;
+    if (!confirm('确定用当前配置覆盖默认关卡？此操作会重建 levels/ 分关数据和 built-in-levels.json 清单。')) return;
     try { await api('/api/default', { method: 'PUT', body: JSON.stringify(catalog) }); toast('已覆盖默认配置，重启游戏服务后生效'); }
     catch (err) { toast('覆盖失败：' + err.message); }
   };

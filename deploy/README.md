@@ -28,15 +28,15 @@ bash deploy/install-service.sh
 
 ## 1.1 管理员面板服务
 
-管理员面板是**独立、需要密码**的服务，端口 **8080**，默认绑定所有网卡（`[::]:8080`），用于创建关卡、编辑地图与 `levels.json` 数据库。它不与游戏服务（8180）共用端口。
+管理员面板是**独立、需要密码**的服务，端口 **8080**，默认绑定所有网卡（`[::]:8080`），用于创建关卡、编辑地图与分层关卡数据库（`levels.json` 清单及 `levels.local/` 分关文件）。它不与游戏服务（8180）共用端口。
 
 ```sh
 ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
 ```
 
-它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入 `levels.json`；除此之外的安全隔离与游戏服务一致。
+它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入关卡清单和分关目录；除此之外的安全隔离与游戏服务一致。
 
-面板保存关卡后写入项目根目录 `levels.json`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
+面板保存关卡后更新项目根目录 `levels.json` 路径清单，并把各关写入 `levels.local/<章节>/`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
 
 ```sh
 systemctl --user restart traffic-game.service
@@ -123,7 +123,7 @@ systemctl --user stop traffic-game.service
 
 ## 安全与运行范围
 
-- 仅提供 `index.html`、`style.css`、`built-in-levels.json`、可选的 `levels.json`、前端 JavaScript 和 `/healthz`。
+- 仅提供页面、样式、前端 JavaScript、关卡清单、`levels/` / 可选 `levels.local/` 下的 JSON 和 `/healthz`。
 - 没有目录浏览，不提供源码仓库中的部署脚本、测试、服务器文件或家庭目录文件。
 - 仅接受 GET / HEAD，带安全响应头、请求超时、连接数与内存上限。
 - 每位玩家的模拟都在自己的浏览器执行；服务器没有账户、Cookie、共享对局或成绩写入接口。

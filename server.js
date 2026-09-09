@@ -11,11 +11,32 @@ const PUBLIC_FILES = {
   '/style.css': 'text/css; charset=utf-8',
   '/built-in-levels.json': 'application/json; charset=utf-8',
   '/levels.json': 'application/json; charset=utf-8',
+  '/level-catalog.js': 'text/javascript; charset=utf-8',
+  '/core-geometry.js': 'text/javascript; charset=utf-8',
+  '/core-bus.js': 'text/javascript; charset=utf-8',
   '/core.js': 'text/javascript; charset=utf-8',
+  '/core-campaign.js': 'text/javascript; charset=utf-8',
   '/game-results.js': 'text/javascript; charset=utf-8',
   '/game-effects.js': 'text/javascript; charset=utf-8',
+  '/game-canvas.js': 'text/javascript; charset=utf-8',
+  '/game-bootstrap.js': 'text/javascript; charset=utf-8',
   '/game.js': 'text/javascript; charset=utf-8'
 };
+const OPTIONAL_FILES = new Set(['/levels.json']);
+
+async function discoverLevelFiles(directory, urlPrefix) {
+  const files = {};
+  async function visit(current, prefix) {
+    for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+      const filename = path.join(current, entry.name), url = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) await visit(filename, url);
+      else if (entry.isFile() && entry.name.endsWith('.json')) files[url] = 'application/json; charset=utf-8';
+    }
+  }
+  try { await visit(path.join(__dirname, directory), urlPrefix); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  return files;
+}
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -25,11 +46,16 @@ const SECURITY_HEADERS = {
 };
 
 async function createGameServer() {
-  // Snapshot only the public files above. Restart the service after updating the game.
-  const assets = new Map(await Promise.all(Object.entries(PUBLIC_FILES).map(async ([url, type]) => {
+  // Snapshot only named assets and JSON files below the two level-data roots.
+  const levelFiles = {
+    ...await discoverLevelFiles('levels', '/levels'),
+    ...await discoverLevelFiles('levels.local', '/levels.local')
+  };
+  const publicFiles = { ...PUBLIC_FILES, ...levelFiles };
+  const assets = new Map(await Promise.all(Object.entries(publicFiles).map(async ([url, type]) => {
     let body;
     try { body = await fs.readFile(path.join(__dirname, url.slice(1))); }
-    catch (error) { if (url === '/levels.json' && error.code === 'ENOENT') return [url, null]; throw error; }
+    catch (error) { if (OPTIONAL_FILES.has(url) && error.code === 'ENOENT') return [url, null]; throw error; }
     const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
     return [url, { body, type, etag }];
   })));

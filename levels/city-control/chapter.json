@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "city-control",
+  "name": "城市调度",
+  "english": "CITY CONTROL",
+  "levels": [
+    "signal-school.json",
+    "multi-route-school.json",
+    "rush-hour.json",
+    "bus-school.json"
+  ]
+}

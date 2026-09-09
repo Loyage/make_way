@@ -1,0 +1,91 @@
+{
+  "id": "neighborhood",
+  "name": "晨光街区",
+  "english": "FIRST CONNECTION",
+  "difficulty": "教学一",
+  "title": "从家门口的第一条路开始。",
+  "description": "梦开始的地方",
+  "tip": "按 2 切换拖拽模式，从住宅出发，沿空地拖动到对应的目的地，即可完成搭建，反过来也可以，本游戏的道路都是双向路。",
+  "lesson": "基础连接",
+  "features": {
+    "grade": false,
+    "load": false,
+    "cut": false,
+    "inspect": false,
+    "signals": false,
+    "bus": false
+  },
+  "budget": 36,
+  "duration": 90,
+  "water": [
+    102,
+    103,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111
+  ],
+  "bridges": [],
+  "trees": [
+    17,
+    18,
+    23,
+    24,
+    87,
+    88,
+    145,
+    174,
+    173,
+    119,
+    135
+  ],
+  "routes": [
+    {
+      "name": "松林住宅 → 工坊",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 69,
+          "generationRate": 1,
+          "passengers": 50
+        }
+      ],
+      "goals": [
+        {
+          "cell": 73,
+          "label": "工坊"
+        }
+      ]
+    },
+    {
+      "name": "日落住宅 → 市场",
+      "color": "#d19157",
+      "light": "#f2dfbf",
+      "homes": [
+        {
+          "cell": 121,
+          "generationRate": 1,
+          "passengers": 50
+        }
+      ],
+      "goals": [
+        {
+          "cell": 133,
+          "label": "市场"
+        }
+      ]
+    }
+  ],
+  "initialEdges": []
+}
