@@ -572,10 +572,83 @@
       this.resetOperation();
       return '';
     }
+    preflightCheck(options = {}) {
+      const issues = [], reachable = this.homes.map(() => this.goals.map(() => false));
+      const coordinates = cell => { const p = this.point(cell); return `(${p.x + 1},${p.y + 1})`; };
+      for (let hi = 0; hi < this.homes.length; hi++) for (let gi = 0; gi < this.goals.length; gi++) {
+        const home = this.homes[hi], goal = this.goals[gi];
+        if (home.route !== goal.route) continue;
+        const carPath = findPath(this.roads, home.cell, goal.cell, this.edges, this.width, this.height);
+        reachable[hi][gi] = Boolean(carPath || this.busLines.some(line => this.busCanServe(home.cell, goal.cell, line)));
+      }
+      for (let hi = 0; hi < this.homes.length; hi++) {
+        const home = this.homes[hi], route = this.routes[home.route];
+        if (!reachable[hi].some(Boolean)) issues.push({
+          code: 'home-unreachable', title: '住宅没有可达目的地', cells: [home.cell],
+          detail: `${route.name}住宅 ${coordinates(home.cell)} 无法通过道路或有效公交到达同色目的地。`
+        });
+      }
+      for (let ri = 0; ri < this.routes.length; ri++) {
+        const homes = this.homes.filter(home => home.route === ri), goals = this.goals.filter(goal => goal.route === ri);
+        const population = homes.reduce((sum, home) => sum + home.passengers, 0);
+        if (goals.length && goals.every(goal => goal.input != null)) {
+          const capacity = goals.reduce((sum, goal) => sum + goal.input, 0);
+          if (capacity < population) issues.push({
+            code: 'route-capacity', title: '目的地容量不足', cells: goals.map(goal => goal.cell),
+            detail: `${this.routes[ri].name}共有 ${population} 位居民，但同色目的地总容量只有 ${capacity} 人：${goals.map(goal => `${goal.label} ${coordinates(goal.cell)} ${goal.input} 人`).join('、')}。`
+          });
+        }
+      }
+      for (const line of this.busLines) {
+        const problem = this.busLineIssue(line);
+        if (problem) {
+          issues.push({ code: 'bus-invalid', title: '公交线路不能有效运营', lineId: line.id, cells: this.busRouteCells(line), detail: `${problem}；开始后该线路将不会发车。` });
+          continue;
+        }
+        const homes = this.homes.filter(home => this.busStopPositions(home.cell, line.id).length);
+        const goals = this.goals.filter(goal => this.busStopPositions(goal.cell, line.id).length);
+        const servicePairs = homes.reduce((sum, home) => sum + goals.filter(goal => goal.route === home.route && this.busCanServe(home.cell, goal.cell, line)).length, 0);
+        if (!homes.length || !goals.length || !servicePairs) issues.push({
+          code: 'bus-no-service', title: '公交线路没有有效上下客组合', lineId: line.id, cells: this.busRouteCells(line),
+          detail: !homes.length ? `「${line.name}」没有服务任何住宅站点。` : !goals.length ? `「${line.name}」没有服务任何目的地站点。` : `「${line.name}」的站序无法把住宅乘客送到同色目的地。`
+        });
+      }
+      const suspicious = [...new Set(Array.isArray(options.suspiciousDowngrades) ? options.suspiciousDowngrades : [])].filter(cell => Number.isInteger(cell) && this.roads.has(cell));
+      if (suspicious.length) issues.push({
+        code: 'drag-downgrade', title: '拖拽曾降低主路等级', cells: suspicious,
+        detail: `${suspicious.map(coordinates).join('、')} 的道路在一次建设拖拽中被降级，请确认这不是误操作。`
+      });
+      let maxDeliverable = 0;
+      for (let ri = 0; ri < this.routes.length; ri++) {
+        const homeIndices = this.homes.map((home, index) => home.route === ri ? index : -1).filter(index => index >= 0);
+        const goalIndices = this.goals.map((goal, index) => goal.route === ri ? index : -1).filter(index => index >= 0);
+        const source = 0, homeStart = 1, goalStart = homeStart + homeIndices.length, sink = goalStart + goalIndices.length;
+        const capacity = Array.from({ length: sink + 1 }, () => Array(sink + 1).fill(0));
+        homeIndices.forEach((hi, i) => {
+          capacity[source][homeStart + i] = this.homes[hi].passengers;
+          goalIndices.forEach((gi, j) => { if (reachable[hi][gi]) capacity[homeStart + i][goalStart + j] = this.homes[hi].passengers; });
+        });
+        goalIndices.forEach((gi, j) => { capacity[goalStart + j][sink] = this.goals[gi].input ?? this.target; });
+        while (true) {
+          const parent = Array(sink + 1).fill(-1), queue = [source]; parent[source] = source;
+          for (let q = 0; q < queue.length && parent[sink] < 0; q++) for (let next = 0; next <= sink; next++) {
+            if (parent[next] < 0 && capacity[queue[q]][next] > 0) { parent[next] = queue[q]; queue.push(next); }
+          }
+          if (parent[sink] < 0) break;
+          let amount = Infinity;
+          for (let node = sink; node !== source; node = parent[node]) amount = Math.min(amount, capacity[parent[node]][node]);
+          for (let node = sink; node !== source; node = parent[node]) { capacity[parent[node]][node] -= amount; capacity[node][parent[node]] += amount; }
+          maxDeliverable += amount;
+        }
+      }
+      if (maxDeliverable < this.target) issues.push({
+        code: 'target-impossible', title: '理论送达上限低于目标', cells: [],
+        detail: `按当前连接、公交站序和目的地容量，理论最多送达 ${maxDeliverable} / ${this.target} 人。`
+      });
+      return { ok: issues.length === 0, target: this.target, maxDeliverable, issues };
+    }
     toggle() {
       if (this.state === 'planning') {
-        const problem = this.busLineProblem();
-        if (problem) return problem;
         this.spawnBuses(); this.state = 'running';
       } else if (this.state === 'paused') this.state = 'running';
       else if (this.state === 'running') this.state = 'paused';

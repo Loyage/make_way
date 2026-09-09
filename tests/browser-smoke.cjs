@@ -136,7 +136,10 @@ async function main() {
       if(!this.arrivals.length){this.delivered=1;this.commuteTimes=[7];this.arrivals=[{route:0,time:1,commuteTime:7}];}
       this.state='won';TrafficCore.City.prototype.step=step;
     };})()`);
-    await click('#start');await delay(150);
+    await click('#start');await delay(80);
+    assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true);
+    assert.ok((await text('preflight-summary')).includes('理论最多可送达'));
+    await click('#confirm-preflight');await delay(150);
     assert.equal(await evaluate('document.querySelector("#result-dialog").open'),true);
     assert.ok((await text('result-stats')).includes('居民满意度 100%'));
     assert.ok((await text('result-stats')).includes('轻松通勤 1 人'));

@@ -18,6 +18,18 @@ test('defaults to the first lesson in planning mode with no connections', () => 
   assert.ok(city.paths.every(p=>p===null));run(city,10);
   assert.equal(city.elapsed,0);assert.equal(city.cars.length,0);
 });
+test('operation preflight reports reachability, capacity, theoretical limit and drag downgrades', () => {
+  const city=new City(),empty=city.preflightCheck({suspiciousDowngrades:[key(0,0)]});
+  assert.equal(empty.maxDeliverable,0);assert.ok(empty.issues.some(issue=>issue.code==='home-unreachable'));
+  assert.ok(empty.issues.some(issue=>issue.code==='target-impossible'));
+  assert.ok(!empty.issues.some(issue=>issue.code==='drag-downgrade'),'only existing road cells can be reported');
+  connect(city);const ready=city.preflightCheck({suspiciousDowngrades:[[...city.roads][0]]});
+  assert.equal(ready.maxDeliverable,city.target);assert.ok(!ready.issues.some(issue=>issue.code==='home-unreachable'));
+  assert.ok(ready.issues.some(issue=>issue.code==='drag-downgrade'));
+  for(const goal of city.goals)goal.input=0;
+  const limited=city.preflightCheck();assert.equal(limited.maxDeliverable,0);
+  assert.ok(limited.issues.some(issue=>issue.code==='route-capacity'));
+});
 test('construction honors terrain, buildings, bridges, and refunds', () => {
   const city = new City();
   for (const n of [key(7,1),key(1,1),ROUTES[0].homes[0].cell]) assert.ok(city.edit(n));

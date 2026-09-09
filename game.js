@@ -21,7 +21,7 @@
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
-  let designHistory = [], designHistoryIndex = -1;
+  let designHistory = [], designHistoryIndex = -1, dragDowngrades = new Map();
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   function storedDesign(levelId = city.level.id) {
@@ -54,7 +54,7 @@
     if(city.state!=='planning'){toast('运营期间不能撤销规划，请先停止运营');return;}
     if(index<0||index>=designHistory.length)return;
     const previous=designHistoryIndex,message=city.loadDesign(JSON.parse(designHistory[index]));if(message){toast(message);return;}
-    designHistoryIndex=index;dragging=false;lastCell=null;dragDraft=null;keyboardAnchor=null;busEditMode='draw';inspectedCell=null;
+    designHistoryIndex=index;dragging=false;lastCell=null;dragDraft=null;keyboardAnchor=null;busEditMode='draw';inspectedCell=null;dragDowngrades.clear();
     updateHistoryControls();updateUI();draw();toast(index<previous?'已撤销上一步规划':'已重做下一步规划');
   }
   let levelButtons = [], chapterButtons = [], visibleChapterIndex = 0;
@@ -101,7 +101,7 @@
       button.onclick=()=>{
         if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
         const message=campaign.replay(index);if(message){toast(message);return;}
-        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();dragDowngrades.clear();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
       };
       button.append(title,detail);list.append(button);
     });
@@ -694,7 +694,7 @@
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId);
     resetDesignHistory();
-    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
+    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';dragDowngrades.clear();
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
@@ -779,8 +779,9 @@
       toast(closed?`公交闭环已完成 · ${line.route.length-1} 段`:line.returnTrip?`已追加线路 · ${line.route.length-1} 段，原路返回可运营`:`已追加线路 · ${line.route.length-1} 段，请从末端继续直至闭环`);
       return;
     }
+    const downgraded = kind==='build' ? [...new Set(path)].filter(n=>city.roads.has(n)&&(city.roadGrades.get(n)||0)>dragGrade).map(cell=>[cell,city.roadGrades.get(cell)||0]) : [];
     if(kind==='build') {
-      actions.push(...[...new Set(path)].filter(n=>city.roads.has(n)&&(city.roadGrades.get(n)||0)>dragGrade).map(cell=>({type:'edit',cell,erase:false,grade:dragGrade})));
+      actions.push(...downgraded.map(([cell])=>({type:'edit',cell,erase:false,grade:dragGrade})));
       for(let i=1;i<path.length;i++) actions.push({type:'connect',a:path[i-1],b:path[i],grade:dragGrade});
     } else if(kind==='cut') for(let i=1;i<path.length;i++) actions.push({type:'cut',a:path[i-1],b:path[i]});
     else if(kind==='erase') {
@@ -788,6 +789,7 @@
       actions=[...new Set(cells)].map(cell=>({type:'edit',cell,erase:true,grade:0}));
     }
     const message=city.transact(actions);recordDesignChange(before);
+    if(!message) for(const [cell,grade] of downgraded) dragDowngrades.set(cell,Math.max(grade,dragDowngrades.get(cell)||0));
     toast(message||(kind==='erase'?'已拆除所经道路，预算已返还':kind==='cut'?'已剪断所经连接':'规划已一次性应用'));
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
@@ -904,15 +906,30 @@
   $('confirm-load').onclick=()=>{
     const message=city.loadDesign(pendingDesign);pendingDesign=null;$('load-dialog').close();
     if(message){toast(message);return;}
-    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
+    speed=1;accumulator=0;resultShown=false;inspectedCell=null;dragDowngrades.clear();resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
-  function toggleOperation() {
+  function beginOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
     if(planning)setTool('view');
     accumulator=0;updateUI();
   }
+  function toggleOperation() {
+    if(city.state!=='planning'){beginOperation();return;}
+    const suspiciousDowngrades=[...dragDowngrades].filter(([cell,grade])=>city.roads.has(cell)&&(city.roadGrades.get(cell)||0)<grade).map(([cell])=>cell);
+    const report=city.preflightCheck({suspiciousDowngrades});
+    if(!report.issues.length){toast(`运营前检查通过 · 理论可送达 ${report.maxDeliverable} / ${report.target} 人`);beginOperation();return;}
+    $('preflight-summary').textContent=`发现 ${report.issues.length} 项提示；当前理论最多可送达 ${report.maxDeliverable} / ${report.target} 人。`;
+    const rows=report.issues.map(issue=>{
+      const row=document.createElement('li');row.classList.toggle('preflight-target',issue.code==='target-impossible');
+      const title=document.createElement('strong');title.textContent=issue.title;
+      const detail=document.createElement('span');detail.textContent=issue.detail;row.append(title,detail);return row;
+    });
+    $('preflight-list').replaceChildren(...rows);$('preflight-dialog').showModal();
+  }
   $('start').onclick=toggleOperation;
+  $('cancel-preflight').onclick=()=>$('preflight-dialog').close();
+  $('confirm-preflight').onclick=()=>{$('preflight-dialog').close();beginOperation();};
   $('stop').onclick=()=>openPausedDialog($('stop-dialog'));
   $('cancel-stop').onclick=()=>closePausedDialog($('stop-dialog'));
   $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
@@ -927,9 +944,10 @@
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};
   for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
+  $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();dragDowngrades.clear();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{

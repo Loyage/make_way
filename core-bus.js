@@ -20,15 +20,30 @@
       const closed = line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1];
       return line.returnTrip && !closed ? [...line.route, ...line.route.slice(0, -1).reverse()] : [...line.route];
     }
+    busLineIssue(line) {
+      if (!line.route.length) return `「${line.name}」尚未绘制线路`;
+      const closed = line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1];
+      if (!line.returnTrip && !closed) return `「${line.name}」尚未闭环，请从线路末端继续绘制`;
+      if (line.route.length < 2) return `「${line.name}」至少需要经过两格道路`;
+      if (new Set(this.busRouteCells(line)).size < line.count) return `「${line.name}」经过的不同道路格不能少于公交车数量`;
+      return '';
+    }
     busLineProblem() {
       for (const line of this.busLines) {
-        if (!line.route.length) continue;
-        const closed = line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1];
-        if (!line.returnTrip && !closed) return `「${line.name}」尚未闭环，请从线路末端继续绘制`;
-        if (line.route.length < 2) return `「${line.name}」至少需要经过两格道路`;
-        if (new Set(this.busRouteCells(line)).size < line.count) return `「${line.name}」经过的不同道路格不能少于公交车数量`;
+        const problem = this.busLineIssue(line);
+        if (problem) return problem;
       }
       return '';
+    }
+    busLineOperational(line) { return Boolean(line && !this.busLineIssue(line)); }
+    busCanServe(homeCell, goalCell, line) {
+      if (!this.busLineOperational(line)) return false;
+      const homePositions = this.busStopPositions(homeCell, line.id), goalPositions = this.busStopPositions(goalCell, line.id);
+      if (!homePositions.length || !goalPositions.length) return false;
+      const closed = line.route[0] === line.route[line.route.length - 1], segments = line.route.length - 1;
+      return homePositions.some(homePosition => goalPositions.some(goalPosition => closed
+        ? (goalPosition - homePosition + segments) % segments > 0
+        : goalPosition > homePosition));
     }
     // Compatibility aliases keep older integrations focused on the selected line.
     get busRoute() { return this.activeBusLine?.route || []; }
@@ -216,6 +231,7 @@
       this.buses = [];
       const used = new Set();
       for (const line of this.busLines) {
+        if (!this.busLineOperational(line)) continue;
         const route = this.busOperatingRoute(line);
         if (route.length < 3) continue;
         const segments = route.length - 1;

@@ -17,7 +17,7 @@ test('bus routes can be drawn in sections but regular service requires a closed 
   assert.equal(city.appendBusRoute(route.slice(0,2)),'');
   assert.equal(city.remaining,before-BUS_COST);
   const partial=city.serializeDesign(),partialCopy=new City('bus-school');assert.equal(partialCopy.loadDesign(partial),'');assert.deepEqual(partialCopy.busRoute,city.busRoute);
-  assert.match(city.toggle(),/尚未闭环/);assert.equal(city.state,'planning');
+  assert.ok(city.preflightCheck().issues.some(issue=>issue.code==='bus-invalid'));assert.equal(city.toggle(),'');assert.equal(city.state,'running');assert.equal(city.buses.length,0);city.stop();
   assert.ok(city.appendBusRoute([route[0],route[1]]));
   assert.equal(city.appendBusRoute(route.slice(1)),'');assert.deepEqual(city.busRoute,route);
   const trimmed=[route.at(-1),route.at(-2),route.at(-3)];assert.equal(city.trimBusRoute(trimmed),'');assert.deepEqual(city.busRoute,route.slice(0,-2));
@@ -48,7 +48,7 @@ test('one to three buses consume budget and survive design round trips', () => {
 test('an open line can return over the same road and skips every stop on the return trip', () => {
   const city=new City('bus-school'),ring=loop(city),outbound=[...ring.slice(31,-1),...ring.slice(0,6)];
   assert.equal(city.setBusRoute(outbound),'');
-  assert.match(city.toggle(),/尚未闭环/);
+  assert.ok(city.preflightCheck().issues.some(issue=>issue.code==='bus-invalid'));
   assert.equal(city.updateBusLine(city.activeBusLineId,{returnTrip:true}),'');
   const line=city.activeBusLine,operating=city.busOperatingRoute(line);
   assert.deepEqual(operating,[...outbound,...outbound.slice(0,-1).reverse()]);
