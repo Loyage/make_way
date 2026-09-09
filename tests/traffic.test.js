@@ -123,6 +123,20 @@ test('disabled lights still protect conflict quadrants; upgrades do not remove c
   const {city,n}=cross();city.edit(n,false,2);city.setSignal(n,false,2);city.cars=[car(n-1,1,0,n)];
   assert.equal(city.available(n,WIDTH),false);assert.equal(city.load(n).capacity,1);
 });
+test('higher road grades separate turning traffic into dedicated approach lanes',()=>{
+  const results=[];
+  for(const grade of [0,1,2]) {
+    const {city,n}=cross(),approach=n-1;
+    for(const cell of [n-2,approach,n,n+1,n+WIDTH])city.edit(cell,false,grade);
+    assert.deepEqual(['left','straight','right'].map(turn=>city.turnLane(approach,turn)),grade===0?[0,0,0]:grade===1?[0,1,1]:[0,1,2]);
+    const straight=car(approach,1,city.turnLane(approach,'straight'));straight.id=1;straight.goal=n+1;
+    const right=car(n-2);right.id=2;right.goal=n+WIDTH;
+    city.cars=[straight,right];city.elapsed=4.5;city.toggle();
+    for(let i=0;i<20;i++)city.step(.05);
+    results.push(right.cell===right.goal);
+  }
+  assert.deepEqual(results,[false,false,true],'only the three-lane approach lets right turns bypass a straight vehicle waiting at red');
+});
 test('blocked junction exits prevent box entry even during green',()=>{
   const {city,n}=cross(),c=car(n-1);city.cars=[c,car(n+1),car(n+1,1,0,null,0)];city.toggle();city.step(.05);
   assert.equal(c.next,null);assert.ok(c.blocked>0);

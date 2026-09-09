@@ -248,6 +248,12 @@
       this.removeEdge(a,b);this.refreshPaths();return '';
     }
     roadType(n) { return ROAD_TYPES[this.roadGrades.get(n) || 0]; }
+    turnLane(n, turn) {
+      const lanes = this.roadType(n).lanes;
+      if (lanes === 1) return 0;
+      if (lanes === 2) return turn === 'left' ? 0 : 1;
+      return turn === 'left' ? 0 : turn === 'straight' ? 1 : 2;
+    }
     get remaining() {
       let spent = 0;
       for (const n of this.roads) spent += this.roadType(n).cost;
@@ -480,13 +486,12 @@
       if (!this.signals.get(n)?.enabled) return this.occupants(n,self).length===0;
       return !this.occupants(n, self).some(c => this.reservations(c).some(r => r.cell === n && movementsConflict(move, r.movement || { mask: 15 })));
     }
-    laneFor(n, heading, self, slot = 0, exitHeading = heading, preferred = 0) {
+    laneFor(n, heading, self, slot = 0, exitHeading = heading, preferred = 0, strict = false) {
       if (this.signals.has(n)) return this.junctionAvailable(n, movement(heading, exitHeading), self) ? 0 : -1;
       const cars = this.occupants(n, self);
       if (!this.roads.has(n)) return cars.length ? -1 : 0;
-      const lanes = this.roadType(n).lanes;
-      for (let i = 0; i < lanes; i++) {
-        const lane = (preferred + i) % lanes;
+      const lanes = this.roadType(n).lanes, choices = strict ? [preferred] : Array.from({ length: lanes }, (_, i) => (preferred + i) % lanes);
+      for (const lane of choices) {
         if (!cars.some(c => this.reservations(c).some(r => r.cell === n && r.heading === heading && r.lane === lane && r.slot === slot))) return lane;
       }
       return -1;
@@ -781,13 +786,20 @@
       const segments = route.length - 1;
       if (bus.next === null) {
         const nextPosition = bus.routePosition + 1, nextRoad = route[nextPosition];
+        const routeAt = offset => {
+          const position = nextPosition + offset;
+          return position <= segments ? route[position] : route[1 + (position - segments - 1) % segments];
+        };
         const heading = nextRoad - bus.cell;
         const internal = !this.signals.has(bus.cell) && bus.cellSlot === 0;
         const target = internal ? bus.cell : nextRoad;
         const slot = internal || this.signals.has(target) ? 1 : 0;
         const followingPosition = nextPosition >= segments ? 1 : nextPosition + 1;
         const exitHeading = route[followingPosition] - nextRoad;
-        const lane = this.laneFor(target, heading, bus, slot, exitHeading, bus.cellLane || 0);
+        const junction = internal ? nextRoad : routeAt(1), junctionExit = internal ? routeAt(1) : routeAt(2);
+        const turn = this.signals.has(junction) ? movement(junction - target, junctionExit - junction).turn : null;
+        const preferred = turn ? this.turnLane(target, turn) : bus.cellLane || 0;
+        const lane = this.laneFor(target, heading, bus, slot, exitHeading, preferred, turn !== null);
         if (lane < 0 || !internal && !this.canEnter(target, heading, exitHeading)) { bus.blocked += dt; return; }
         if (!internal && this.signals.has(target)) {
           const afterTarget = route[followingPosition];
@@ -901,7 +913,10 @@
           const target = internal ? car.cell : path[1];
           const slot = internal || this.signals.has(target) || this.buildings.has(target) ? 1 : 0;
           const exitHeading = path[2] === undefined ? heading : path[2] - target;
-          const lane = this.laneFor(target, heading, car, slot, exitHeading, car.cellLane || 0);
+          const junctionIndex = internal ? 1 : 2, junction = path[junctionIndex], junctionExit = path[junctionIndex + 1];
+          const turn = junctionExit !== undefined && this.signals.has(junction) ? movement(junction - target, junctionExit - junction).turn : null;
+          const preferred = turn ? this.turnLane(target, turn) : car.cellLane || 0;
+          const lane = this.laneFor(target, heading, car, slot, exitHeading, preferred, turn !== null);
           if (lane < 0 || (!internal && !this.canEnter(target, heading, exitHeading))) { car.blocked += dt; continue; }
           if (!internal && this.signals.has(target) && path[2] !== undefined
             && this.laneFor(path[2], exitHeading, car, 0, path[3] === undefined ? exitHeading : path[3] - path[2]) < 0) { car.blocked += dt; continue; }
