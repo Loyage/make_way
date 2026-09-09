@@ -86,26 +86,27 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 
 /* Scenario selector */
 .level-selector { margin-bottom: 24px; }
-.level-selector-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 12px; }
+.level-selector-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px; }
 .level-selector-heading small { color: var(--muted); font-size: 10px; }
-.level-list { display: grid; gap: 14px; }
-.level-chapter { padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: #f8f8f2; }
-.level-chapter-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 2px 9px; }
-.level-chapter-heading strong { color: var(--green); font-size: 12px; }
-.level-chapter-heading small { color: var(--muted); font-size: 9px; letter-spacing: 1px; }
-.level-chapter-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.level-card { position: relative; text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 11px; padding: 15px 12px; color: var(--ink); }
-.level-card strong { display: block; font-size: 13px; margin: 8px 0 5px; }
+.chapter-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 7px; scrollbar-width: thin; }
+.chapter-tab { display: flex; align-items: baseline; gap: 8px; flex: 0 0 auto; padding: 8px 13px; border: 1px solid transparent; border-radius: 9px 9px 3px 3px; background: transparent; color: var(--muted); }
+.chapter-tab span { font-size: 9px; letter-spacing: 1px; }
+.chapter-tab strong { font-size: 12px; }
+.chapter-tab small { font-size: 8px; letter-spacing: .8px; }
+.chapter-tab.selected { color: var(--green); background: #e9efdf; border-color: #cad8c2; }
+.level-list { display: flex; gap: 8px; width: 100%; overflow-x: auto; padding: 9px; border: 1px solid var(--line); border-radius: 13px; background: #f8f8f2; scrollbar-width: thin; }
+.level-card { position: relative; flex: 1 0 155px; min-width: 0; text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; color: var(--ink); }
+.level-card strong { display: block; font-size: 13px; margin: 4px 0 3px; }
 .level-card small { color: var(--muted); font-size: 10px; }
-.level-number { color: #9eaa96; font-size: 10px; letter-spacing: 1px; }
+.level-number { color: #9eaa96; font-size: 9px; letter-spacing: 1px; }
 .level-card.selected { background: #e9efdf; border-color: #7ea079; box-shadow: inset 0 0 0 1px #7ea079; }
 .level-card.selected .level-number { color: var(--green); }
-.level-card.selected::after { content: '●'; position: absolute; right: 12px; top: 13px; font-size: 9px; color: var(--green); }
+.level-card.selected::after { content: '●'; position: absolute; right: 11px; top: 10px; font-size: 8px; color: var(--green); }
 .chapter small { max-width: 125px; }
 @media (max-width: 760px) {
-  .level-chapter-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .level-card { padding: 11px; }
+  .level-card { flex-basis: 138px; padding: 10px; }
   .level-card strong { font-size: 12px; }
   .level-card small { font-size: 9px; }
   .level-selector-heading small { font-size: 9px; }
+  .chapter-tab small { display: none; }
 }

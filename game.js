@@ -25,26 +25,32 @@
     designAvailable=storedDesign()!==null;
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
   }
-  let levelButtons = [];
-  function buildLevelButtons() {
+  let levelButtons = [], chapterButtons = [], visibleChapterIndex = 0;
+  function showChapter(chapterIndex) {
+    const chapter=chapters()[chapterIndex];if(!chapter)return;
+    visibleChapterIndex=chapterIndex;
+    chapterButtons.forEach((button,i)=>{button.classList.toggle('selected',i===chapterIndex);button.setAttribute('aria-pressed',String(i===chapterIndex));});
     const list=$('level-list');list.replaceChildren();levelButtons=[];
-    $('level-summary').textContent = `${chapters().length} 个章节 · ${levels().length} 座小城 · 切换会重置本局`;
-    let levelIndex=0;
-    for(const [chapterIndex,chapter] of chapters().entries()) {
-      const group=document.createElement('section');group.className='level-chapter';
-      const heading=document.createElement('div');heading.className='level-chapter-heading';
-      const title=document.createElement('strong');title.textContent=`${String(chapterIndex+1).padStart(2,'0')} · ${chapter.name}`;
-      const english=document.createElement('small');english.textContent=chapter.english;heading.append(title,english);
-      const cards=document.createElement('div');cards.className='level-chapter-cards';
-      for(const level of chapter.levels) {
-        const i=levelIndex++,button=document.createElement('button');button.className='level-card';button.dataset.levelId=level.id;
-        const number=document.createElement('span');number.className='level-number';number.textContent=String(i+1).padStart(2,'0');
-        const name=document.createElement('strong');name.textContent=level.name;
-        const detail=document.createElement('small');detail.textContent=`${level.difficulty} · ${level.lesson}`;
-        button.append(number,name,detail);button.onclick=()=>requestLevel(level.id);cards.append(button);levelButtons.push(button);
-      }
-      group.append(heading,cards);list.append(group);
+    for(const level of chapter.levels) {
+      const i=levels().indexOf(level),button=document.createElement('button');button.className='level-card';button.dataset.levelId=level.id;
+      const number=document.createElement('span');number.className='level-number';number.textContent=String(i+1).padStart(2,'0');
+      const name=document.createElement('strong');name.textContent=level.name;
+      const detail=document.createElement('small');detail.textContent=`${level.difficulty} · ${level.lesson}`;
+      button.append(number,name,detail);button.onclick=()=>requestLevel(level.id);list.append(button);levelButtons.push(button);
     }
+    $('level-summary').textContent=`${chapter.name} · ${chapter.levels.length} 座小城 · 切换会重置本局`;
+    levelButtons.forEach(button=>{const selected=button.dataset.levelId===city.level.id;button.classList.toggle('selected',selected);button.setAttribute('aria-current',selected?'true':'false');});
+  }
+  function buildLevelButtons() {
+    const list=$('chapter-list');list.replaceChildren();chapterButtons=[];
+    for(const [chapterIndex,chapter] of chapters().entries()) {
+      const button=document.createElement('button');button.className='chapter-tab';button.setAttribute('aria-pressed','false');
+      const number=document.createElement('span');number.textContent=String(chapterIndex+1).padStart(2,'0');
+      const name=document.createElement('strong');name.textContent=chapter.name;
+      const english=document.createElement('small');english.textContent=chapter.english;
+      button.append(number,name,english);button.onclick=()=>showChapter(chapterIndex);list.append(button);chapterButtons.push(button);
+    }
+    const current=chapters().findIndex(chapter=>chapter.levels.some(level=>level.id===city.level.id));showChapter(Math.max(0,current));
   }
   function configureLevel() {
     const level = city.level, index = levels().indexOf(level);
@@ -62,7 +68,7 @@
     const demand = $('demand-list');demand.replaceChildren();
     for (const r of city.routes) {
       const row = document.createElement('li');
-      const homes = r.homes.map(h => `住宅 (${point(h.cell).x + 1},${point(h.cell).y + 1}) 输出 ${h.passengers} 人 · ${h.rate} 人/s`);
+      const homes = r.homes.map(h => `住宅 (${point(h.cell).x + 1},${point(h.cell).y + 1}) 共 ${h.passengers} 人 · 产生 ${h.generationRate} 人/s · 汽车出口由门口道路等级决定`);
       const goals = r.goals.map(g => `目的地 (${point(g.cell).x + 1},${point(g.cell).y + 1}) · ${g.label}${g.input != null ? ` 输入 ${g.input} 人` : ''}`);
       row.textContent = `${r.name}：${[...homes, ...goals].join('；')}`;
       demand.append(row);
@@ -74,9 +80,11 @@
     $('legend-bus').hidden = !level.features.bus;
     $('show-load').checked = level.features.load;
     if (tool === 'cut' && !level.features.cut || tool === 'bus' && !level.features.bus) setTool('select');
-    levelButtons.forEach((button, i) => {
-      button.classList.toggle('selected', i === index);
-      button.setAttribute('aria-current', i === index ? 'true' : 'false');
+    if(visibleChapterIndex!==chapterIndex)showChapter(chapterIndex);
+    else levelButtons.forEach(button=>{
+      const selected=button.dataset.levelId===level.id;
+      button.classList.toggle('selected',selected);
+      button.setAttribute('aria-current',selected?'true':'false');
     });
     $('connection-list').replaceChildren();
     connectionRows = city.routes.map((route, ri) => {
@@ -123,10 +131,10 @@
       toast('运营期间只能查看路况，请先停止运营再修改规划'); return;
     }
     if (value === 'cut' && !city.level.features.cut) {
-      toast('完成前面的教学关卡后解锁剪刀'); return;
+      toast('剪刀工具在本关未开放'); return;
     }
     if (value === 'bus' && !city.level.features.bus) {
-      toast('完成前面的教学关卡后解锁公交线路'); return;
+      toast('公交线路在本关未开放'); return;
     }
     tool = value;if(value!=='bus')busEditMode='draw';keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;
     $('road-inspector').hidden=tool!=='select';
@@ -172,7 +180,7 @@
     }
   }
   function applySignalSettings(settings, success='路口设置已更新') {
-    if (!city.level.features.signals) { toast('红绿灯将在下一课解锁'); updateUI(); return false; }
+    if (!city.level.features.signals) { toast('红绿灯在本关未开放'); updateUI(); return false; }
     const message=city.setSignal(inspectedCell,settings);
     if(message){$('signal-priority-list').dataset.signature='';$('signal-phase-list').dataset.signature='';}
     toast(message||success);updateUI();draw();return !message;
@@ -265,10 +273,10 @@
         $('road-load').textContent=city.level.features.load?(signal?(signal.enabled?`冲突区预约 ${load.used} / 4 区 · 占用/驶入 ${load.total} 辆`:`逐车通行 · 路口占用 ${load.total} / 1 辆`):`每方向 ${type.lanes} 车道 × 前后 2 辆 · 最忙方向 ${load.used} / ${load.capacity} 辆`):(['running','paused'].includes(city.state)?`当前占用或驶入 ${load.total} 辆`:'');
         const names={off:signal?.yieldMode==='priority'?`方向优先 · ${signal.priority.map(entry=>SIGNAL_ENTRY_NAMES[entry].replace('侧入口','')).join(' → ')}`:'自动让行 · 35% 速度 · 先到先行','horizontal-straight':'横向直行绿灯','horizontal-left':'横向左转绿灯','vertical-straight':'纵向直行绿灯','vertical-left':'纵向左转绿灯',clearance:'直行 / 左转全红清空'};
         const custom=phase.stage==='custom'?`手动阶段 ${phase.index+1} · ${phase.actions.map(action=>{const [entry,turn]=action.split('-');return SIGNAL_ENTRY_NAMES[entry].replace('侧入口','')+SIGNAL_TURN_NAMES[turn];}).join('、')}`:'';
-        $('signal-phase').textContent=!city.level.features.inspect?`本关专注于「${city.level.lesson}」，详细路况与信号将在后续教学解锁。`:signal?`${custom||names[phase.stage]}${phase.axis==='off'?'':` · ${phase.remaining.toFixed(1)} 秒；右转须让行`}`:'非路口，无需红绿灯';
+        $('signal-phase').textContent=!city.level.features.inspect?`本关专注于「${city.level.lesson}」，详细路况与信号在本关未开放。`:signal?`${custom||names[phase.stage]}${phase.axis==='off'?'':` · ${phase.remaining.toFixed(1)} 秒；右转须让行`}`:'非路口，无需红绿灯';
       } else if(homeIndex>=0) {
         const home=city.homes[homeIndex];
-        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) 住宅 · 总人口 ${home.passengers} 人 · 输出流量 ${home.rate} 人/秒`;
+        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) 住宅 · 总人口 ${home.passengers} 人 · 居民产生 ${home.generationRate} 人/秒 · 汽车出口由门口道路等级决定`;
         const serving=city.linesServingBuilding(n);
         $('road-load').textContent=`剩余 ${home.passengers-city.departedByHome[homeIndex]} 人 · 已离开 ${city.departedByHome[homeIndex]} 人 · 当前等待 ${city.queues[homeIndex]} 人`;
         $('signal-phase').textContent=`建筑可作为拖拽起点；向空地延伸时固定从支路开始。${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
@@ -285,7 +293,7 @@
       }
     }
     updateSignalControls(signal,planning);
-    if(signal&&city.level.features.inspect&&!city.level.features.signals)$('signal-phase').textContent+=' · 红绿灯将在下一课解锁';
+    if(signal&&city.level.features.inspect&&!city.level.features.signals)$('signal-phase').textContent+=' · 红绿灯在本关未开放';
     updateBusLineInspector(n, planning);
   }
   function resize() {
@@ -399,11 +407,11 @@
     rounded(x*s+s*.1,y*s+s*.15,s*.8,s*.8,s*.16,'#8d9a7d22');
     rounded(x*s+s*.08,y*s+s*.07,s*.84,s*.84,s*.17,r.light);
     if(b.isHome) {
-      if (r.rate === 6) {
+      if (r.generationRate === 6) {
         rounded(cx-s*.22,cy-s*.36,s*.44,s*.64,s*.025,r.color);
         for(let floor=0;floor<4;floor++) for(let col=0;col<2;col++) rounded(cx-s*.14+col*s*.17,cy-s*.28+floor*s*.13,s*.09,s*.07,0,r.light);
       } else {
-        const width=r.rate===4?.32:.23;
+        const width=r.generationRate===4?.32:.23;
         ctx.beginPath();ctx.moveTo(cx-s*width,cy-s*.03);ctx.lineTo(cx,cy-s*.29);ctx.lineTo(cx+s*width,cy-s*.03);ctx.closePath();ctx.fillStyle=r.color;ctx.fill();
         rounded(cx-s*width*.8,cy-s*.05,s*width*1.6,s*.31,s*.025,r.color);
         rounded(cx-s*.055,cy+s*.08,s*.11,s*.18,s*.01,r.light);
@@ -417,7 +425,7 @@
     if(b.isHome) {
       buildingBubble(String(Math.max(0,r.passengers-city.departedByHome[b.index])), (x+.53)*s,(y+.025)*s,s*.43,s*.27,r.color,'#fffef9');
       rounded((x+.055)*s,(y+.7)*s,s*.43,s*.235,s*.09,r.light,r.color);
-      label(`⇥ ${r.rate}/s`,(x+.27)*s,(y+.815)*s,s*.165,r.color,'700');
+      label(`+${r.generationRate}/s`,(x+.27)*s,(y+.815)*s,s*.125,r.color,'700');
       const queued=city.queues[b.index];
       if(queued) {
         const text=`待${queued}`,width=(queued>99?.43:queued>9?.37:.31)*s;
@@ -631,12 +639,13 @@
   }
   function showResult() {
     resultShown=true;
-    const won=city.state==='won', report=TrafficResults.commuteReport(city.commuteTimes);
+    const won=city.state==='won', generated=city.generated.reduce((sum,count)=>sum+count,0);
+    const report=TrafficResults.commuteReport(city.commuteTimes,Math.max(0,generated-city.delivered));
     $('result-icon').textContent=won?'✳':'⌁';
     $('result-title').textContent=won?'这座小城，因你而畅通。':'再给小城一个好计划。';
     $('result-description').textContent=won?'目标达成！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
-    const summary=document.createElement('strong');summary.textContent=`已抵达居民满意度 ${report.score}%`;
-    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.level.target} 人 · 平均通勤 ${report.average.toFixed(1)} 秒 · 建设及公交 ${city.level.budget-city.remaining} 点`;
+    const summary=document.createElement('strong');summary.textContent=`已产生居民满意度 ${report.score}%`;
+    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.level.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.level.budget-city.remaining} 点`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
     $('result-stats').replaceChildren(summary,meta,distribution);

@@ -71,7 +71,8 @@ test('road cells become stops for adjacent buildings and can be toggled per line
   assert.equal(city.setBusStop(stopCell,false,lineId),'');assert.equal(city.busStopPositions(home.cell,lineId).length,0);
   assert.equal(city.setBusStop(stopCell,true,lineId),'');assert.equal(city.isBusStop(stopCell,lineId),true);
   const bus={lineId,cell:stopCell,routePosition:position,passengers:[],dwell:0,needsStop:true};
-  city.serviceBusStop(bus);assert.ok(bus.passengers.length>0,'the adjacent stop boards without a building-road edge');
+  city.generated[0]=BUS_CAPACITY;city.queues[0]=BUS_CAPACITY;city.queueTimes[0]=Array(BUS_CAPACITY).fill(0);
+  city.serviceBusStop(bus);assert.ok(bus.passengers.length>0,'the adjacent stop boards generated residents without a building-road edge');
   assert.equal(city.departedByHome[0],bus.passengers.length);
   const goalPosition=city.busStopPositions(city.goals[0].cell,lineId)[0];bus.cell=route[goalPosition];bus.routePosition=goalPosition;bus.needsStop=true;
   city.serviceBusStop(bus);assert.ok(city.byGoal[0]>0);
@@ -100,12 +101,12 @@ test('the bus lesson requires public transport and is winnable with one bus', ()
   assert.equal(withBus.state,'won');assert.ok(withBus.delivered>=withBus.level.target);
 });
 
-test('buses bypass home output rate, respect capacity, and deliver eligible passengers', () => {
+test('buses respect resident generation and deliver eligible passengers in batches', () => {
   const city=new City('bus-school'),route=loop(city);
   assert.equal(BUS_CAPACITY,12);assert.ok(BUS_SPEED_MULTIPLIER>1);assert.equal(BUS_BOARDING_RATE,8);
   assert.equal(city.setBusCount(3),'');assert.equal(city.setBusRoute(route),'');city.toggle();
   run(city,12);
-  assert.ok(city.generated.some((count,i)=>count>city.homes[i].rate*city.elapsed+2),'bus pickup should not wait for private-car output');
+  assert.ok(city.generated.every((count,i)=>count<=city.homes[i].generationRate*city.elapsed+1),'bus pickup must not bypass resident generation');
   assert.ok(city.buses.every(bus=>bus.passengers.length<=BUS_CAPACITY));
   assert.ok(city.departedByHome.some(count=>count>0));
   assert.ok(city.departedByHome.every((count,i)=>count<=city.homes[i].passengers));

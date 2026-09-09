@@ -10,6 +10,14 @@ test('commute satisfaction groups residents by travel time and weights their sco
   assert.equal(report.average, 14.6);
 });
 
+test('generated residents who have not arrived count in the lowest satisfaction band', () => {
+  const report = commuteReport([5, 10], 3);
+  assert.equal(report.count, 5);
+  assert.deepEqual(report.bands.map(band => band.count), [1, 1, 0, 3]);
+  assert.equal(report.score, 54);
+  assert.equal(report.average, 7.5, 'average commute time still describes completed trips');
+});
+
 test('empty and malformed commute samples produce a stable empty report', () => {
   assert.deepEqual(commuteReport([NaN, -1, '5']), {
     count: 0, score: 0, average: 0,

@@ -32,16 +32,21 @@ async function main() {
   }
   const drag=(x1,y1,x2,y2)=>dragThrough([[x1,y1],[x2,y2]]);
   async function go(index){
-    await click(`.level-card:nth-child(${index+1})`);
+    const level=LEVELS[index],chapterIndex=CATALOG.chapters.findIndex(chapter=>chapter.levels.some(item=>item.id===level.id));
+    await click(`.chapter-tab:nth-child(${chapterIndex+1})`);
+    await click(`.level-card[data-level-id="${level.id}"]`);
     if(await evaluate('document.querySelector("#level-dialog").open'))await click('#confirm-level');
   }
   try {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
-    assert.equal(await evaluate('document.querySelectorAll(".level-chapter").length'),2);
-    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),8);
+    assert.equal(await evaluate('document.querySelectorAll(".chapter-tab").length'),2);
+    assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),CATALOG.chapters[0].levels.length);
     for(let i=0;i<LEVELS.length;i++){
+      const chapterIndex=CATALOG.chapters.findIndex(chapter=>chapter.levels.some(level=>level.id===LEVELS[i].id));
+      await click(`.chapter-tab:nth-child(${chapterIndex+1})`);
+      assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),CATALOG.chapters[chapterIndex].levels.length);
       await click(`.level-card[data-level-id="${LEVELS[i].id}"]`);
       assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
       assert.equal(await text('map-name'),LEVELS[i].name);
@@ -83,7 +88,7 @@ async function main() {
 
     await go(2);
     assert.equal(await evaluate('document.querySelector("#load-setting").hidden'),false);
-    assert.ok((await text('demand-list')).includes('输出 330 人 · 6 人/s'));
+    assert.ok((await text('demand-list')).includes('共 330 人 · 产生 6 人/s'));
     const previousBudget=Number(await text('budget'));
     await click('#road-tool');await drag(3,2,5,2);assert.ok(Number(await text('budget'))<previousBudget);
     await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');

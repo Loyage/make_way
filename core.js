@@ -70,11 +70,16 @@
     return null;
   }
   // A route may list one or many origins (homes) and one or many destinations
-  // (goals). Each home carries its own output (rate / passengers); each goal may
-  // cap its input. Legacy single-home/single-goal routes are normalized here.
+  // (goals). Each home carries its own resident generation rate and population;
+  // private cars leave as soon as the connected doorway road has room. Legacy
+  // definitions used `rate` for generation. The former `carRate` field is ignored.
+  function normalizeHome(h) {
+    const { rate, carRate, ...rest } = h, legacyRate = rate ?? 1;
+    return { ...rest, generationRate: h.generationRate ?? legacyRate };
+  }
   function routeHomes(r) {
-    if (Array.isArray(r.homes) && r.homes.length) return r.homes;
-    return [{ cell: r.home, rate: r.rate ?? 1, passengers: r.passengers ?? 0 }];
+    if (Array.isArray(r.homes) && r.homes.length) return r.homes.map(normalizeHome);
+    return [normalizeHome({ cell: r.home, rate: r.rate, passengers: r.passengers ?? 0 })];
   }
   function routeGoals(r) {
     if (Array.isArray(r.goals) && r.goals.length) return r.goals;
@@ -252,7 +257,7 @@
     rebuildRoutes() {
       const homes = [], goals = [];
       this.routes.forEach((r, ri) => {
-        for (const h of routeHomes(r)) homes.push({ route: ri, cell: h.cell, rate: h.rate ?? 1, passengers: h.passengers ?? 0, color: r.color, light: r.light });
+        for (const h of routeHomes(r)) homes.push({ route: ri, cell: h.cell, generationRate: h.generationRate, passengers: h.passengers ?? 0, color: r.color, light: r.light });
         for (const g of routeGoals(r)) goals.push({ route: ri, cell: g.cell, label: g.label, input: g.input, color: r.color, light: r.light });
       });
       this.homes = homes;
@@ -261,7 +266,7 @@
       this.queues = homes.map(() => 0);
       this.queueTimes = homes.map(() => []);
       this.generated = homes.map(() => 0);
-      this.spawnTimers = homes.map(h => 1 / h.rate);
+      this.spawnTimers = homes.map(h => 1 / h.generationRate);
       this.byRoute = this.routes.map(() => 0);
       this.byGoal = goals.map(() => 0);
       this.goalAssigned = goals.map(() => 0);
@@ -320,7 +325,7 @@
     }
     createBusLine(name, color) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '本关尚未解锁公交线路';
+      if (!this.level.features.bus) return '公交线路在本关未开放';
       if (this.busLines.length >= this.busLineLimit) return `本关最多可规划 ${this.busLineLimit} 条公交线路`;
       const number = this.busLines.length + 1, lineName = name === undefined ? `公交 ${number} 号线` : typeof name === 'string' ? name.trim() : '';
       const lineColor = color === undefined ? BUS_LINE_COLORS[(number - 1) % BUS_LINE_COLORS.length] : color;
@@ -372,7 +377,7 @@
     }
     setBusRoute(path, lineId = this.activeBusLineId) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '本关尚未解锁公交线路';
+      if (!this.level.features.bus) return '公交线路在本关未开放';
       if (!Array.isArray(path)) return '公交线路无效';
       if (!lineId) { const message = this.ensureBusLine(); if (message) return message; lineId = this.activeBusLineId; }
       const line = this.busLine(lineId);
@@ -389,7 +394,7 @@
     }
     appendBusRoute(path, lineId = this.activeBusLineId) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '本关尚未解锁公交线路';
+      if (!this.level.features.bus) return '公交线路在本关未开放';
       if (!Array.isArray(path) || path.length < 2) return '本段公交线路至少需要经过两格道路';
       const line = this.busLine(lineId);
       if (!line?.route.length) return this.setBusRoute(path, lineId);
@@ -403,7 +408,7 @@
     }
     trimBusRoute(path, lineId = this.activeBusLineId) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '本关尚未解锁公交线路';
+      if (!this.level.features.bus) return '公交线路在本关未开放';
       if (!Array.isArray(path) || path.length < 2) return '请从线路末端反向擦除至少一段';
       const line = this.busLine(lineId);
       if (!line?.route.length) return '当前线路尚未绘制';
@@ -417,7 +422,7 @@
     }
     setBusCount(count, lineId = this.activeBusLineId) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!this.level.features.bus) return '本关尚未解锁公交线路';
+      if (!this.level.features.bus) return '公交线路在本关未开放';
       if (!Number.isInteger(count) || count < 1 || count > 3) return '每条线路可配置 1 至 3 辆公交车';
       if (!lineId) { const message = this.ensureBusLine(); if (message) return message; lineId = this.activeBusLineId; }
       const line = this.busLine(lineId);
@@ -584,7 +589,7 @@
       this.queues = this.homes.map(() => 0);
       this.queueTimes = this.homes.map(() => []);
       this.generated = this.homes.map(() => 0);
-      this.spawnTimers = this.homes.map(h => 1 / h.rate);
+      this.spawnTimers = this.homes.map(h => 1 / h.generationRate);
       this.byRoute = this.routes.map(() => 0);
       this.byGoal = this.goals.map(() => 0);
       this.goalAssigned = this.goals.map(() => 0);
@@ -736,14 +741,11 @@
       for (let hi = 0; hi < this.homes.length && bus.passengers.length < BUS_CAPACITY; hi++) {
         const home = this.homes[hi];
         if (!neighbors(home.cell).includes(bus.cell)) continue;
-        while (bus.passengers.length < BUS_CAPACITY && (this.generated[hi] < home.passengers || this.queues[hi] > 0)) {
+        while (bus.passengers.length < BUS_CAPACITY && this.queues[hi] > 0) {
           const goalIndex = this.busGoalFor(home, bus.routePosition, bus.lineId);
           if (goalIndex === null) break;
-          let commuteStarted = this.elapsed;
-          if (this.queues[hi] > 0) {
-            this.queues[hi]--;
-            commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
-          } else this.generated[hi]++;
+          this.queues[hi]--;
+          const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
           this.goalAssigned[goalIndex]++;
           this.departedByHome[hi]++;
           bus.passengers.push({ route: home.route, homeIndex: hi, goal: this.goals[goalIndex].cell, goalIndex, commuteStarted });
@@ -842,7 +844,7 @@
           this.generated[hi]++;
           this.queues[hi]++;
           this.queueTimes[hi]?.push(this.elapsed);
-          this.spawnTimers[hi] += 1 / home.rate;
+          this.spawnTimers[hi] += 1 / home.generationRate;
         }
         if (this.queues[hi]) {
           const { goalIndex, path } = this.bestGoalPath(hi);

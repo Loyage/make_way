@@ -47,7 +47,7 @@
         "homes": [
           {
             "cell": 50,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -65,7 +65,7 @@
         "homes": [
           {
             "cell": 140,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -109,7 +109,7 @@
         "homes": [
           {
             "cell": 34,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 55
           }
         ],
@@ -295,7 +295,7 @@
         "homes": [
           {
             "cell": 34,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 55
           }
         ],
@@ -313,7 +313,7 @@
         "homes": [
           {
             "cell": 82,
-            "rate": 4,
+            "generationRate": 4,
             "passengers": 220
           }
         ],
@@ -331,7 +331,7 @@
         "homes": [
           {
             "cell": 130,
-            "rate": 6,
+            "generationRate": 6,
             "passengers": 330
           }
         ],
@@ -561,7 +561,7 @@
         "homes": [
           {
             "cell": 34,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -579,7 +579,7 @@
         "homes": [
           {
             "cell": 157,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -597,7 +597,7 @@
         "homes": [
           {
             "cell": 114,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -615,7 +615,7 @@
         "homes": [
           {
             "cell": 125,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -807,7 +807,7 @@
         "homes": [
           {
             "cell": 65,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 70
           }
         ],
@@ -825,7 +825,7 @@
         "homes": [
           {
             "cell": 126,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 70
           }
         ],
@@ -843,12 +843,12 @@
         "homes": [
           {
             "cell": 21,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 70
           },
           {
             "cell": 22,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 70
           }
         ],
@@ -872,7 +872,7 @@
         "homes": [
           {
             "cell": 170,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 70
           }
         ],
@@ -1081,12 +1081,12 @@
         "homes": [
           {
             "cell": 50,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           },
           {
             "cell": 130,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 60
           }
         ],
@@ -1178,7 +1178,7 @@
         "homes": [
           {
             "cell": 34,
-            "rate": 6,
+            "generationRate": 6,
             "passengers": 330
           }
         ],
@@ -1196,12 +1196,12 @@
         "homes": [
           {
             "cell": 157,
-            "rate": 4,
+            "generationRate": 4,
             "passengers": 220
           },
           {
             "cell": 174,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 55
           }
         ],
@@ -1225,7 +1225,7 @@
         "homes": [
           {
             "cell": 163,
-            "rate": 4,
+            "generationRate": 4,
             "passengers": 220
           }
         ],
@@ -1243,7 +1243,7 @@
         "homes": [
           {
             "cell": 76,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 55
           }
         ],
@@ -1261,7 +1261,7 @@
         "homes": [
           {
             "cell": 98,
-            "rate": 1,
+            "generationRate": 1,
             "passengers": 55
           }
         ],
@@ -1315,7 +1315,7 @@
         "homes": [
           {
             "cell": 50,
-            "rate": 1,
+            "generationRate": 6,
             "passengers": 45
           }
         ],
@@ -1334,7 +1334,7 @@
         "homes": [
           {
             "cell": 125,
-            "rate": 1,
+            "generationRate": 6,
             "passengers": 45
           }
         ],

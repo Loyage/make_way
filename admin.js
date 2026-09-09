@@ -179,8 +179,8 @@
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
           mkCoord(`住宅${hi + 1} 坐标`, h.cell, v => { removeInitialEdgesAt(level,[h.cell]);h.cell = v; }),
-          mkText('速率 rate（人/秒）', h.rate, v => { h.rate = Number(v); }),
-          mkText('总输出 passengers', h.passengers, v => { h.passengers = Number(v); })
+          mkText('居民产生率 generationRate（人/秒）', h.generationRate ?? h.rate, v => { h.generationRate = Number(v); delete h.rate; delete h.carRate; }),
+          mkText('总人口 passengers', h.passengers, v => { h.passengers = Number(v); })
         );
         const use = document.createElement('button'); use.className = 'tool'; use.textContent = hi === activeHome ? '当前' : '设为当前';
         use.onclick = () => { activeRoute = ri; activeHome = hi; renderRoutes(); draw(); };
@@ -189,7 +189,7 @@
         row.append(use, del); card.append(row);
       });
       const addHome = document.createElement('button'); addHome.className = 'tool'; addHome.textContent = '＋ 住宅';
-      addHome.onclick = () => { route.homes.push({ cell: keyCoord(3, 3), rate: 1, passengers: 60 }); activeRoute = ri; activeHome = route.homes.length - 1; markDirty(); renderRoutes(); draw(); };
+      addHome.onclick = () => { route.homes.push({ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }); activeRoute = ri; activeHome = route.homes.length - 1; markDirty(); renderRoutes(); draw(); };
       card.append(addHome);
 
       const goalsTitle = document.createElement('strong'); goalsTitle.textContent = '目的地（输入）';
@@ -262,7 +262,7 @@
       description: '请在此填写关卡任务说明。', tip: '请在此填写给玩家的规划提示。', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
       busLineLimit: 3, budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
-        homes: [{ cell: keyCoord(2, 2), rate: 1, passengers: 60 }],
+        homes: [{ cell: keyCoord(2, 2), generationRate: 1, passengers: 60 }],
         goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
       }], initialEdges: []
     });
@@ -438,7 +438,7 @@
   $('add-route').onclick = () => {
     const level = current(); if (!level) return;
     const c = COLORS[level.routes.length % COLORS.length];
-    level.routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), rate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
+    level.routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
     activeRoute = level.routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
   };
 

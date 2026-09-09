@@ -9,16 +9,24 @@ test('multi-home / multi-goal routes annotate each node and prefer the nearest r
   const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();
   c.setRoutes([{
     name:'双住宅 → 双目的地', color:'#638d69', light:'#dae6cb',
-    homes:[{cell:key(1,3),rate:1,passengers:30},{cell:key(1,5),rate:2,passengers:60}],
+    homes:[{cell:key(1,3),generationRate:3,passengers:30},{cell:key(1,5),generationRate:4,passengers:60}],
     goals:[{cell:key(7,3),label:'工坊'},{cell:key(7,5),label:'市场'}]
   }]);
   assert.equal(c.homes.length,2);assert.equal(c.goals.length,2);
   assert.equal(c.generated.length,2);assert.equal(c.byRoute.length,1);assert.equal(c.byGoal.length,2);
-  assert.equal(c.homes[0].passengers,30);assert.equal(c.homes[1].rate,2);
+  assert.equal(c.homes[0].passengers,30);assert.equal(c.homes[0].generationRate,3);assert.equal(c.homes[1].generationRate,4);
   assert.equal(c.goals[0].label,'工坊');assert.equal(c.goals[1].label,'市场');
   line(c,1,3,7,3,0);line(c,1,5,7,5,0);line(c,7,3,7,5,0);
   assert.deepEqual(c.homeGoal,[0,1],'each home prefers its own nearest reachable goal');
   assert.ok(c.routeConnected(0));
+});
+
+test('legacy home rates migrate to generationRate and obsolete carRate is ignored',()=>{
+  const c=new City('neighborhood');
+  c.setRoutes([{name:'旧路线',color:'#638d69',light:'#dae6cb',homes:[{cell:key(1,3),rate:4,carRate:.01,passengers:20}],goals:[{cell:key(7,3),label:'工坊'}]}]);
+  assert.equal(c.homes[0].generationRate,4);
+  assert.equal('rate' in c.routes[0].homes[0],false);
+  assert.equal('carRate' in c.routes[0].homes[0],false);
 });
 
 test('a full goal (input cap reached) is skipped for later home->goal assignment',()=>{
@@ -51,11 +59,11 @@ test('input caps spread demand across destinations even when spawn outpaces deli
 test('finite demand is visible before starting and respects each building rate',()=>{
   for(const level of LEVELS){
     const c=new City(level.id);c.edges.clear();c.refreshPaths();
-    for(const h of c.homes){assert.ok([1,4,6].includes(h.rate));assert.ok(Number.isInteger(h.passengers)&&h.passengers>0);assert.ok(h.passengers/h.rate<=level.duration);}
+    for(const h of c.homes){assert.ok([1,4,6].includes(h.generationRate));assert.ok(Number.isInteger(h.passengers)&&h.passengers>0);assert.ok(h.passengers/h.generationRate<=level.duration);}
     assert.ok(level.target<=c.homes.reduce((sum,h)=>sum+h.passengers,0));
     assert.deepEqual(c.generated,c.homes.map(()=>0));
     c.toggle();for(let i=0;i<200;i++)c.step(.05);
-    assert.deepEqual(c.generated,c.homes.map(h=>Math.min(h.passengers,10*h.rate)));
+    assert.deepEqual(c.generated,c.homes.map(h=>Math.min(h.passengers,10*h.generationRate)));
     const snapshot=[...c.generated];c.toggle();c.step(.05);assert.deepEqual(c.generated,snapshot);c.toggle();
     for(let i=0;i<3000;i++)c.step(.05);
     assert.deepEqual(c.queues,c.homes.map(h=>h.passengers));
@@ -68,6 +76,19 @@ function straight(grade,rate,seconds=120) {
   c.level={...c.level,budget:100,duration:seconds,target:rate*seconds+1};
   c.resetOperation();line(c,1,5,14,5,grade);return c;
 }
+test('private-car departure depends on the doorway road grade, not carRate metadata',()=>{
+  const departures=[];
+  for(const grade of [0,1,2]) {
+    const counts=[];
+    for(const carRate of [.01,1000]) {
+      const c=straight(grade,50,20);c.routes[0].homes[0].carRate=carRate;c.rebuildRoutes();c.toggle();
+      for(let i=0;i<100;i++)c.step(.05);
+      counts.push(c.departedByHome[0]);
+    }
+    assert.equal(counts[0],counts[1]);departures.push(counts[0]);
+  }
+  assert.ok(departures[0]<departures[1]&&departures[1]<departures[2]);
+});
 test('large custom demand rates generate every due passenger even with coarse steps',()=>{
   const c=straight(0,50,2);c.edges.clear();c.refreshPaths();c.toggle();
   for(let i=0;i<10;i++)c.step(.1);

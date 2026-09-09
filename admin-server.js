@@ -144,7 +144,8 @@ function validateLevels(data) {
       if (!Array.isArray(route.goals) || route.goals.length === 0) return `关卡「${level.id}」的路线至少需要一个目的地 (goals)`;
       for (const h of route.homes) {
         if (!h || typeof h !== 'object' || !isCoord(h.cell)) return `关卡「${level.id}」的路线 homes 坐标越界`;
-        if (!Number.isFinite(h.rate) || h.rate <= 0) return `关卡「${level.id}」的路线 homes.rate 无效`;
+        const generationRate = h.generationRate ?? h.rate;
+        if (!Number.isFinite(generationRate) || generationRate <= 0) return `关卡「${level.id}」的路线 homes.generationRate 无效`;
         if (!Number.isInteger(h.passengers) || h.passengers <= 0) return `关卡「${level.id}」的路线 homes.passengers 无效`;
       }
       for (const g of route.goals) {
