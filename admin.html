@@ -23,6 +23,11 @@
     <header class="header">
       <div class="brand"><span class="brand-icon">⌂</span><span>慢行小城<small>MAKE WAY · 管理员面板</small></span></div>
       <div class="header-actions">
+        <div class="history-actions" role="group" aria-label="编辑历史">
+          <button id="undo" class="tool" type="button" disabled title="撤销（Ctrl/Command + Z）">↶ 撤销</button>
+          <button id="redo" class="tool" type="button" disabled title="重做（Ctrl/Command + Shift + Z）">↷ 重做</button>
+        </div>
+        <a class="tool manual-link" href="admin-manual.html" target="_blank" rel="noopener">操作手册</a>
         <span id="save-status" class="local-tag"><i></i> 未保存</span>
         <button id="logout" class="tool">退出登录</button>
       </div>
@@ -132,6 +137,29 @@
               </label>
               <span id="map-status" class="map-status">当前工具：观察（拖动查看地图）</span>
             </div>
+            <div class="map-workbench">
+              <section class="shift-panel" aria-labelledby="shift-title">
+                <div><strong id="shift-title">整体挪动</strong><small>地形、初始道路及五日建筑一起移动；越界时拒绝操作。</small></div>
+                <div class="shift-controls">
+                  <label>X（右为正）<input id="shift-x" type="number" value="0" step="1"></label>
+                  <label>Y（上为正）<input id="shift-y" type="number" value="0" step="1"></label>
+                  <button id="apply-shift" class="tool" type="button">移动全部内容</button>
+                </div>
+              </section>
+              <section class="simulation-panel" aria-labelledby="simulation-title">
+                <div><strong id="simulation-title">初始道路仿真</strong><small>使用与游戏相同的核心引擎测试当前日期；编辑时会自动停止。</small></div>
+                <div class="simulation-stats">
+                  <span>状态 <b id="sim-state">未开始</b></span><span>送达 <b id="sim-delivered">0 / 0</b></span><span>时间 <b id="sim-time">0.0 / 0 秒</b></span><span>在途 <b id="sim-cars">0</b></span><span>等待 <b id="sim-waiting">0</b></span>
+                </div>
+                <div class="simulation-actions">
+                  <button id="sim-start" class="primary" type="button">▶ 开始仿真</button>
+                  <button id="sim-speed" class="tool" type="button">1×</button>
+                  <button id="sim-reset" class="tool" type="button" disabled>重置</button>
+                  <button id="validate" class="tool" type="button">立即校验</button>
+                  <span id="validation-status" class="validation-status">等待校验</span>
+                </div>
+              </section>
+            </div>
             <div class="canvas-wrap"><canvas id="map" class="view-mode" tabindex="0" aria-label="关卡地图编辑器；观察模式可拖动，滚轮可缩放"></canvas></div>
             <div class="legend">
               <span><i class="sw water"></i>水面</span>
@@ -153,6 +181,6 @@
   </div>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="admin.js"></script>
+  <script src="core.js"></script><script src="admin.js"></script>
 </body>
 </html>

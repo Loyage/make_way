@@ -21,7 +21,8 @@
   let activeHome = 0;       // which home the "home" tool places
   let activeGoal = 0;       // which goal the "goal" tool places
   let hover = null, dragging = false, dragAnchor = null, lastCell = null;
-  let dirty = false;
+  let dirty = false, savedSnapshot = '', history = [], historyIndex = -1, historyBatching = false;
+  let simulationCity = null, simulationLevelId = null, simulationDay = 0, simulationSpeed = 1, simulationFrame = 0, simulationLast = 0, simulationAccumulator = 0, validationTimer = 0, validationSeq = 0;
   let cellSize = 40, viewportWidth = 0, viewportHeight = 0, viewZoom = 1, viewX = 0, viewY = 0, viewTarget = null, panLast = null;
   const pointers=new Map();let pinch=null;
 
@@ -42,7 +43,23 @@
   const cellToXY = n => ({ x: n % mapWidth() - Math.floor(mapWidth()/2), y: Math.floor((mapHeight()-1)/2) - Math.floor(n / mapWidth()) });
   const xyToCell = (x, y) => { const col=x+Math.floor(mapWidth()/2),row=Math.floor((mapHeight()-1)/2)-y;return Number.isInteger(x)&&Number.isInteger(y)&&col>=0&&col<mapWidth()&&row>=0&&row<mapHeight()?keyCoord(col,row):null; };
   function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
-  function markDirty() { dirty = true; const el = $('save-status'); el.textContent = '有未保存更改'; el.classList.add('dirty'); }
+  const catalogSnapshot = () => JSON.stringify(catalog);
+  function updateDirtyStatus(label = '') {
+    dirty = catalogSnapshot() !== savedSnapshot;
+    const el = $('save-status'); el.textContent = label || (dirty ? '有未保存更改' : '已保存'); el.classList.toggle('dirty', dirty);
+  }
+  function updateHistoryButtons() { $('undo').disabled=historyIndex<=0;$('redo').disabled=historyIndex>=history.length-1; }
+  function commitHistory() {
+    const snapshot=catalogSnapshot();if(history[historyIndex]===snapshot){updateHistoryButtons();return;}
+    history=history.slice(0,historyIndex+1);history.push(snapshot);if(history.length>60)history.shift();historyIndex=history.length-1;updateHistoryButtons();
+  }
+  function resetHistory(label) { savedSnapshot=catalogSnapshot();history=[savedSnapshot];historyIndex=0;updateHistoryButtons();updateDirtyStatus(label);scheduleValidation(); }
+  function restoreHistory(index) {
+    if(index<0||index>=history.length)return;stopSimulation(false);historyIndex=index;catalog=JSON.parse(history[index]);
+    currentChapterIndex=Math.min(currentChapterIndex,Math.max(0,chapters().length-1));currentLevelIndex=currentLevelIndex===null?null:Math.min(currentLevelIndex,Math.max(0,(currentChapter()?.levels.length||1)-1));
+    activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;updateHistoryButtons();updateDirtyStatus();renderAll();scheduleValidation();
+  }
+  function markDirty() { if(simulationCity)stopSimulation();if(!historyBatching)commitHistory();updateDirtyStatus();scheduleValidation(); }
 
   // ── API ───────────────────────────────────────────────────────────────
   async function api(path, options = {}) {
@@ -57,13 +74,18 @@
     }
     return res.json();
   }
+  async function validateCatalog(showToast = false) {
+    const seq=++validationSeq,el=$('validation-status');el.textContent='校验中…';el.className='validation-status';
+    try { const result=await api('/api/validate',{method:'POST',body:JSON.stringify(catalog)});if(seq!==validationSeq)return;el.textContent='✓ 配置有效';el.className='validation-status valid';if(showToast)toast('配置校验通过');return result; }
+    catch(error){if(seq!==validationSeq)return;el.textContent='✕ '+error.message;el.className='validation-status invalid';if(showToast)toast('校验失败：'+error.message);return null;}
+  }
+  function scheduleValidation(){clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateCatalog(false),400);}
   async function loadLevels() {
     const data = await api('/api/levels');
     catalog = data.catalog;
     currentChapterIndex = 0;
     currentLevelIndex = chapters()[0]?.levels.length ? 0 : null;
-    dirty = false;
-    const status=$('save-status');status.textContent='已从磁盘载入';status.classList.remove('dirty');
+    stopSimulation(false);resetHistory('已从磁盘载入');
     renderAll();loadPresets().catch(()=>{});
   }
   async function login(password) {
@@ -73,7 +95,7 @@
   }
   async function save() {
     await api('/api/levels', { method: 'PUT', body: JSON.stringify(catalog) });
-    dirty = false; const el = $('save-status'); el.textContent = '已保存'; el.classList.remove('dirty');
+    savedSnapshot=catalogSnapshot();updateDirtyStatus('已保存');
     toast('已保存到 levels.json，重启游戏服务后生效');
   }
   async function loadPresets() {
@@ -150,6 +172,7 @@
   }
   function renderEditor() {
     const level = current();
+    if(simulationCity&&(simulationLevelId!==level?.id||simulationDay!==activeCampaignDay))stopSimulation(false);
     const body = $('editor-body');
     if (!level) {
       body.hidden = true; $('editor-title').textContent = currentChapter()?.name || '未选择关卡';
@@ -214,7 +237,7 @@
         const { x, y } = cellToXY(cell);
         const xi = document.createElement('input'); xi.type = 'number'; xi.value = x; xi.title = 'x 轴（右为正）';
         const yi = document.createElement('input'); yi.type = 'number'; yi.value = y; yi.title = 'y 轴（上为正）';
-        const apply = () => { const next = xyToCell(Number(xi.value), Number(yi.value)); if (next === null) { toast('坐标超出当前地图范围'); const cur = cellToXY(cell); xi.value = cur.x; yi.value = cur.y; return; } onchange(next); };
+        const apply = () => { const next = xyToCell(Number(xi.value), Number(yi.value)); if (next === null) { toast('坐标超出当前地图范围'); const cur = cellToXY(cell); xi.value = cur.x; yi.value = cur.y; return; } onchange(next); markDirty(); renderRoutes(); draw(); };
         xi.onchange = apply; yi.onchange = apply;
         box.append(xi, yi); l.append(span, box); return l;
       };
@@ -349,6 +372,17 @@
     for(const building of buildings)building.cell=translate(building.cell);
     level.width=width;level.height=height;hover=null;dragging=false;lastCell=null;markDirty();renderEditor();toast(`地图已调整为 ${width} × ${height}`);
   }
+  function shiftMap() {
+    const level=current(),dx=Number($('shift-x').value),dy=Number($('shift-y').value);if(!level)return;
+    if(!Number.isInteger(dx)||!Number.isInteger(dy)){toast('整体挪动量必须是整数');return;}if(dx===0&&dy===0){toast('请输入非零挪动量');return;}
+    const translate=cell=>{const x=cell%mapWidth()+dx,y=Math.floor(cell/mapWidth())-dy;return x>=0&&x<mapWidth()&&y>=0&&y<mapHeight()?keyCoord(x,y):null;};
+    const routeGroups=[level.routes,...(level.campaign?.days||[]).map(day=>day.routes)].filter(Boolean),buildings=[...new Set(routeGroups.flatMap(routes=>routes.flatMap(route=>[...(route.homes||[]),...(route.goals||[])])))];
+    const cells=[...level.water,...level.bridges,...level.trees,...(level.initialEdges||[]).flatMap(edge=>edge.slice(0,2)),...buildings.map(building=>building.cell)];
+    if(cells.some(cell=>translate(cell)===null)){toast('移动后会有内容超出地图边界，操作已取消');return;}
+    level.water=level.water.map(translate);level.bridges=level.bridges.map(translate);level.trees=level.trees.map(translate);level.initialEdges=(level.initialEdges||[]).map(([a,b,grade])=>[translate(a),translate(b),grade]);
+    for(const building of buildings)building.cell=translate(building.cell);
+    $('shift-x').value=0;$('shift-y').value=0;hover=null;markDirty();renderRoutes();draw();toast(`已整体移动：x ${dx>=0?'+':''}${dx}，y ${dy>=0?'+':''}${dy}`);
+  }
   function eventPoint(evt){const rect=canvas.getBoundingClientRect();return{x:evt.clientX-rect.left,y:evt.clientY-rect.top};}
   function cellFromEvent(evt) {
     const p=eventPoint(evt),x=Math.floor((p.x-viewX)/cellSize),y=Math.floor((p.y-viewY)/cellSize);
@@ -456,6 +490,7 @@
     }
     // bridges over water
     for (const n of level.bridges) { const { x, y } = point(n); ctx.fillStyle = '#708b9b'; ctx.fillRect((x + .15) * s, (y + .5) * s, s * .7, s * .3); }
+    if(simulationCity)drawSimulationVehicles();
     // hover highlight
     if (hover !== null) {
       const { x, y } = point(hover);
@@ -491,6 +526,36 @@
     ctx.strokeRect((x + .08) * s, (y + .08) * s, s * .84, s * .84);
     ctx.restore();
   }
+  function drawSimulationVehicles() {
+    for(const car of [...simulationCity.cars,...simulationCity.buses]){
+      const pose=simulationCity.pose(car),color=simulationCity.routes[car.route]?.color||'#345e40';ctx.save();ctx.translate(pose.x*cellSize,pose.y*cellSize);ctx.rotate(pose.angle);ctx.fillStyle=color;ctx.strokeStyle='#fffef9';ctx.lineWidth=Math.max(1,cellSize*.04);ctx.fillRect(-cellSize*.18,-cellSize*.1,cellSize*.36,cellSize*.2);ctx.strokeRect(-cellSize*.18,-cellSize*.1,cellSize*.36,cellSize*.2);ctx.restore();
+    }
+  }
+  function updateSimulationUI() {
+    const city=simulationCity,stateNames={planning:'未开始',running:'运行中',paused:'已暂停',won:'已达标',lost:'未达标'};
+    $('sim-state').textContent=city?stateNames[city.state]||city.state:'未开始';$('sim-delivered').textContent=city?`${city.delivered} / ${city.target}`:'0 / 0';$('sim-time').textContent=city?`${city.elapsed.toFixed(1)} / ${city.duration} 秒`:'0.0 / 0 秒';$('sim-cars').textContent=city?String(city.cars.length+city.buses.length):'0';$('sim-waiting').textContent=city?String(city.queues.reduce((sum,n)=>sum+n,0)):'0';
+    $('sim-reset').disabled=!city;$('sim-start').textContent=!city||['won','lost'].includes(city.state)?'▶ 开始仿真':city.state==='running'?'Ⅱ 暂停':'▶ 继续';
+  }
+  function stopSimulation(redraw = true) {
+    if(simulationFrame)cancelAnimationFrame(simulationFrame);simulationFrame=0;simulationCity=null;simulationLevelId=null;simulationAccumulator=0;simulationLast=0;updateSimulationUI();if(redraw)draw();
+  }
+  function simulationTick(now) {
+    if(!simulationCity||simulationCity.state!=='running'){simulationFrame=0;updateSimulationUI();draw();return;}
+    const delta=simulationLast?Math.min(.25,(now-simulationLast)/1000):0;simulationLast=now;simulationAccumulator+=delta*simulationSpeed;
+    while(simulationAccumulator>=.05&&simulationCity.state==='running'){simulationCity.step(.05);simulationAccumulator-=.05;}
+    updateSimulationUI();draw();simulationFrame=requestAnimationFrame(simulationTick);
+  }
+  function createSimulation() {
+    const level=current();if(!level)return false;
+    try {
+      const copy=JSON.parse(JSON.stringify(catalog)),problem=TrafficCore.setLevels(copy);if(problem)throw new Error(problem);
+      const day=level.campaign?.days?.[activeCampaignDay];simulationCity=new TrafficCore.City(level.id,day?{routes:day.routes,duration:day.duration,target:day.target}:{});simulationLevelId=level.id;simulationDay=activeCampaignDay;simulationCity.toggle();simulationAccumulator=0;simulationLast=0;updateSimulationUI();return true;
+    } catch(error){stopSimulation(false);toast('无法开始仿真：'+error.message);return false;}
+  }
+  function toggleSimulation() {
+    if(!simulationCity||['won','lost'].includes(simulationCity.state)){if(!createSimulation())return;}else simulationCity.toggle();
+    if(simulationCity.state==='running'&&!simulationFrame){simulationLast=0;simulationFrame=requestAnimationFrame(simulationTick);}else{if(simulationFrame)cancelAnimationFrame(simulationFrame);simulationFrame=0;updateSimulationUI();draw();}
+  }
 
   // ── Event wiring ─────────────────────────────────────────────────────
   async function doLogin() {
@@ -508,6 +573,10 @@
   $('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
   $('logout').onclick = async () => { if(dirty&&!confirm('有未保存更改，确定退出登录并放弃这些更改吗？'))return;dirty=false;await api('/api/logout', { method: 'POST' }); location.reload(); };
   $('save').onclick = async () => { try { await save(); } catch (err) { toast('保存失败：' + err.message); } };
+  $('undo').onclick=()=>restoreHistory(historyIndex-1);$('redo').onclick=()=>restoreHistory(historyIndex+1);
+  $('apply-shift').onclick=shiftMap;$('validate').onclick=()=>validateCatalog(true);
+  $('sim-start').onclick=toggleSimulation;$('sim-reset').onclick=()=>stopSimulation();
+  $('sim-speed').onclick=()=>{const speeds=[1,2,4,.5],index=speeds.indexOf(simulationSpeed);simulationSpeed=speeds[(index+1)%speeds.length];$('sim-speed').textContent=simulationSpeed+'×';};
   $('save-preset').onclick = async () => {
     const name = prompt('请输入配置文件名（不能重复）：');
     if (name === null) return;
@@ -520,7 +589,7 @@
     const name = $('preset-select').value;
     if (!name) { toast('请先选择一个配置'); return; }
     if (dirty && !confirm('有未保存更改，确定载入所选配置并放弃这些更改吗？')) return;
-    try { const data = await api('/api/presets/' + encodeURIComponent(name)); catalog = data.catalog; currentChapterIndex = 0; currentLevelIndex = chapters()[0]?.levels.length ? 0 : null; activeCampaignDay = 0; activeRoute = 0; activeHome = 0; activeGoal = 0; dirty = false; const status = $('save-status'); status.textContent = `已载入配置「${name}」`; status.classList.remove('dirty'); renderAll(); toast(`已载入配置「${name}」`); }
+    try { const data = await api('/api/presets/' + encodeURIComponent(name)); catalog = data.catalog; currentChapterIndex = 0; currentLevelIndex = chapters()[0]?.levels.length ? 0 : null; activeCampaignDay = 0; activeRoute = 0; activeHome = 0; activeGoal = 0; stopSimulation(false);resetHistory(`已载入配置「${name}」`);renderAll();toast(`已载入配置「${name}」`); }
     catch (err) { toast('载入失败：' + err.message); }
   };
   $('overwrite-default').onclick = async () => {
@@ -595,7 +664,7 @@
     const p=eventPoint(e);pointers.set(e.pointerId,p);
     if(pointers.size===2){dragging=false;lastCell=null;panLast=null;const[a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:viewZoom,worldX:(center.x-viewX)/cellSize,worldY:(center.y-viewY)/cellSize};return;}
     if(tool==='view'){panLast=p;hover=null;return;}
-    dragging=true;hover=cellFromEvent(e);lastCell=hover;dragAnchor=hover;
+    dragging=true;historyBatching=true;hover=cellFromEvent(e);lastCell=hover;dragAnchor=hover;
     if(tool!=='road'&&hover!==null)applyTool(hover);
   });
   canvas.addEventListener('pointermove',e=>{
@@ -608,14 +677,17 @@
     else if(dragging&&tool!=='road'&&hover!==null&&hover!==lastCell){lastCell=hover;applyTool(hover);}
     if(!dragging)draw();
   });
-  const endDrag=e=>{pointers.delete(e.pointerId);if(pinch){if(pointers.size<2){pinch=null;panLast=null;snapView();}draw();return;}dragging=false;panLast=null;lastCell=null;dragAnchor=null;snapView();draw();};
+  const endDrag=e=>{pointers.delete(e.pointerId);if(pinch){if(pointers.size<2){pinch=null;panLast=null;if(historyBatching){historyBatching=false;commitHistory();updateDirtyStatus();}snapView();}draw();return;}dragging=false;panLast=null;lastCell=null;dragAnchor=null;if(historyBatching){historyBatching=false;commitHistory();updateDirtyStatus();}snapView();draw();};
   canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
   canvas.addEventListener('pointerleave',()=>{hover=null;updateToolHint();if(!dragging)draw();});
   // Keyboard: 1-8 tools
   const toolOrder=['view','water','bridge','tree','home','goal','road','erase'];
   document.addEventListener('keydown',e=>{
-    if(e.ctrlKey||e.metaKey||e.altKey)return;
-    if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+    const inputFocused=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName),modifier=e.ctrlKey||e.metaKey;
+    if(modifier&&e.key.toLowerCase()==='s'){e.preventDefault();save().catch(err=>toast('保存失败：'+err.message));return;}
+    if(!inputFocused&&modifier&&e.key.toLowerCase()==='z'){e.preventDefault();restoreHistory(historyIndex+(e.shiftKey?1:-1));return;}
+    if(!inputFocused&&modifier&&e.key.toLowerCase()==='y'){e.preventDefault();restoreHistory(historyIndex+1);return;}
+    if(modifier||e.altKey||inputFocused)return;
     const idx=parseInt(e.key,10)-1;if(idx>=0&&idx<toolOrder.length){const btn=document.querySelector(`.toolbar [data-tool="${toolOrder[idx]}"]`);if(btn)btn.click();}
     if(e.key.toLowerCase()==='s')save().catch(err=>toast('保存失败：'+err.message));
   });

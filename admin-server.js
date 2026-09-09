@@ -22,7 +22,9 @@ function getPassword() { return process.env.ADMIN_PASSWORD || process.env.PI_ADM
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 const ADMIN_FILES = {
+  '/core.js': 'text/javascript; charset=utf-8',
   '/admin.html': 'text/html; charset=utf-8',
+  '/admin-manual.html': 'text/html; charset=utf-8',
   '/admin.css': 'text/css; charset=utf-8',
   '/admin.js': 'text/javascript; charset=utf-8'
 };
@@ -311,6 +313,18 @@ async function handleApi(req, res, pathname, adminPassword) {
 
   if (pathname === '/api/levels' && req.method === 'GET') {
     send(res, 200, { catalog: readLevels(), hasOverride: fs.existsSync(LEVELS_PATH) });
+    return true;
+  }
+  if (pathname === '/api/validate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 1024 * 1024) req.destroy(); });
+    req.on('end', () => {
+      let catalog;
+      try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+      const error = validateLevels(catalog);
+      if(error)return send(res,400,{error});
+      send(res, 200, { ok: true });
+    });
     return true;
   }
   if (pathname === '/api/levels' && req.method === 'PUT') {

@@ -121,6 +121,10 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const catalog=JSON.parse(list.body).catalog;
   assert.equal(catalog.chapters.length,2);
   assert.ok(catalog.chapters.flatMap(chapter=>chapter.levels).length>=6);
+  const valid=await request(port,'/api/validate','POST',JSON.stringify(catalog),{Cookie:cookie.split(';')[0]});
+  assert.equal(valid.status,200);
+  const invalid=JSON.parse(JSON.stringify(catalog));invalid.chapters[0].levels[0].target=999999;
+  assert.equal((await request(port,'/api/validate','POST',JSON.stringify(invalid),{Cookie:cookie.split(';')[0]})).status,400);
 
   // Static assets are served.
   const page = await request(port, '/', 'GET', null, { Cookie: cookie.split(';')[0] });
@@ -129,6 +133,10 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.match(page.body,/id="new-chapter"/);assert.match(page.body,/id="f-chapter"/);
   assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
   assert.match(page.body,/id="f-map-width"/);assert.match(page.body,/id="f-map-height"/);assert.match(page.body,/data-tool="view"/);
+  assert.match(page.body,/id="apply-shift"/);assert.match(page.body,/id="sim-start"/);assert.match(page.body,/id="undo"/);assert.match(page.body,/src="core.js"/);
+  assert.match(page.body,/href="admin-manual.html"/);
+  const manual=await request(port,'/admin-manual.html','GET',null,{Cookie:cookie.split(';')[0]});
+  assert.equal(manual.status,200);assert.match(manual.body,/管理员操作手册/);
   assert.match(page.body,/id="save-preset"/);assert.match(page.body,/id="load-preset"/);assert.match(page.body,/id="preset-select"/);assert.match(page.body,/id="overwrite-default"/);
   assert.match(page.body,/坐标系：地图中心为原点/);
 
