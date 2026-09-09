@@ -111,6 +111,20 @@ test('green phases alternate with an all-red clearance and freeze while paused',
   assert.equal(city.setSignal(n,false,4),'运营期间不能修改规划，请先停止运营');
   assert.deepEqual(city.signalPhase(n),phase);
 });
+test('automatic T-junction signals use a main-road-first three-stage cycle',()=>{
+  const {city,n}=cross();
+  assert.equal(city.cut(n,n-WIDTH),'');
+  city.elapsed=0;
+  assert.deepEqual(city.signalPhase(n).actions,['west-straight','east-straight']);
+  assert.equal(city.canEnter(n,1,1),true);assert.equal(city.canEnter(n,-1,WIDTH),false);
+  city.elapsed=2.25;
+  assert.equal(city.signalPhase(n).stage,'main-turn');assert.deepEqual(city.signalPhase(n).actions,['east-left']);
+  assert.equal(city.canEnter(n,-1,WIDTH),true);assert.equal(city.canEnter(n,-WIDTH,-1),false);
+  city.elapsed=4.5;
+  assert.equal(city.signalPhase(n).stage,'branch-turn');assert.deepEqual(city.signalPhase(n).actions,['south-left']);
+  assert.equal(city.canEnter(n,-WIDTH,-1),true);
+  city.elapsed=6.75;assert.equal(city.signalPhase(n).stage,'main-straight');
+});
 test('red holds a vehicle upstream; green permits entry; phase changes never revoke reservations',()=>{
   const {city,n}=cross(),c=car(n-WIDTH,WIDTH);c.route=1;city.cars=[c];city.toggle();city.step(.05);
   assert.equal(c.next,null);assert.ok(c.blocked>0);

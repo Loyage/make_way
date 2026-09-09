@@ -457,24 +457,41 @@
       if (enabled) line.stops.add(cell); else line.stops.delete(cell);
       return '';
     }
+    automaticSignalPhases(n) {
+      const entries = this.links(n).map(v => n - v);
+      if (entries.length === 3) {
+        const main = entries.filter(entry => entries.includes(-entry));
+        const branch = entries.find(entry => !main.includes(entry));
+        if (main.length === 2 && branch !== undefined) {
+          const mainLeft = main.map(entry => movement(entry, -branch)).filter(move => move.turn === 'left').map(movementAction);
+          const branchLeft = main.map(entry => movement(branch, -entry)).filter(move => move.turn === 'left').map(movementAction);
+          return [
+            { stage: 'main-straight', axis: Math.abs(main[0]) === 1 ? 'horizontal' : 'vertical', turn: 'straight', actions: main.map(entry => movementAction(movement(entry))) },
+            { stage: 'main-turn', axis: 'main', turn: 'left', actions: mainLeft },
+            { stage: 'branch-turn', axis: 'branch', turn: 'left', actions: branchLeft }
+          ];
+        }
+      }
+      return PHASES.map((stage, index) => {
+        const [axis, turn] = stage.split('-');
+        return { stage, axis, turn, actions: [...DEFAULT_CUSTOM_PHASES[index]] };
+      });
+    }
     signalPhase(n) {
       const signal = this.signals.get(n);
       if (!signal || !signal.enabled) return { axis: 'off', turn: 'off', stage: 'off', remaining: 0, actions: [] };
-      const phases = signal.automatic ? PHASES : signal.phases;
+      const phases = signal.automatic ? this.automaticSignalPhases(n) : signal.phases;
       const span = signal.green + SIGNAL_CLEARANCE;
       const t = this.elapsed % (span * phases.length), local = t % span, index = Math.floor(t / span);
       if (local >= signal.green) return { axis: 'clearance', turn: 'clearance', stage: 'clearance', remaining: span - local, actions: [], index };
       if (!signal.automatic) return { axis: 'custom', turn: 'custom', stage: 'custom', remaining: signal.green - local, actions: phases[index], index };
-      const stage = phases[index], [axis, turn] = stage.split('-');
-      return { axis, turn, stage, remaining: signal.green - local, actions: [], index };
+      return { ...phases[index], remaining: signal.green - local, index };
     }
     canEnter(n, heading, exitHeading = heading) {
       const signal = this.signals.get(n), phase = this.signalPhase(n), move = movement(heading, exitHeading);
       if (move.turn === 'right' || phase.axis === 'off') return true;
       if (!signal || phase.axis === 'clearance') return false;
-      return signal.automatic
-        ? phase.axis === (Math.abs(heading) === 1 ? 'horizontal' : 'vertical') && phase.turn === move.turn
-        : phase.actions.includes(movementAction(move));
+      return phase.actions.includes(movementAction(move));
     }
     occupants(n, self) { return [...this.cars,...this.buses].filter(c => !c.done && c !== self && (c.cell === n || c.next === n)); }
     reservations(car) {
