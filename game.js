@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT, key, point, neighbors } = TrafficCore;
+  const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
   const SPEED_OPTIONS=[.5,1,2,4];
@@ -8,10 +8,14 @@
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const levels = () => TrafficCore.LEVELS;
   const chapters = () => TrafficCore.CHAPTERS;
-  let city = null, tool = 'select', speed = 1, hover = null, dragging = false;
+  let city = null, tool = 'view', speed = 1, hover = null, dragging = false;
   let keyboardAnchor = null;
   let lastCell = null, dragGrade = 0, dragDraft = null, selection = null, selectionAnchor = null;
-  let cellSize = 40, lastFrame = 0, accumulator = 0;
+  let cellSize = 40, lastFrame = 0, accumulator = 0, viewportWidth = 0, viewportHeight = 0;
+  let viewZoom = 1, viewX = 0, viewY = 0, viewTarget = null, panLast = null, pinch = null, viewReady = false;
+  const pointers = new Map();
+  const key = (x,y) => TrafficCore.key(x,y,city?.width||WIDTH);
+  const point = n => TrafficCore.point(n,city?.width||WIDTH);
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
@@ -71,7 +75,7 @@
       button.onclick=()=>{
         if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
         const message=campaign.replay(index);if(message){toast(message);return;}
-        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();configureLevel();setTool('select');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
       };
       button.append(title,detail);list.append(button);
     });
@@ -84,6 +88,7 @@
     $('chapter-number').textContent = String(chapterIndex+1).padStart(2,'0');
     $('chapter-name').textContent = chapter?.name||level.english;
     $('map-name').textContent = level.name;
+    document.querySelector('.map-size').textContent = `${city.width} × ${city.height}`;
     const population=city.homes.reduce((sum,home)=>sum+home.passengers,0);
     $('target-label').textContent = `目标 ${city.target}`;
     $('target-unit').textContent = `/ ${campaign?population:city.target} 人`;
@@ -105,7 +110,7 @@
     $('bus-controls').hidden = !level.features.bus;
     $('legend-bus').hidden = !level.features.bus;
     $('show-load').checked = level.features.load;
-    if (tool === 'cut' && !level.features.cut || tool === 'bus' && !level.features.bus) setTool('select');
+    if (tool === 'cut' && !level.features.cut || tool === 'bus' && !level.features.bus) setTool('view');
     if(visibleChapterIndex!==chapterIndex)showChapter(chapterIndex);
     else levelButtons.forEach(button=>{
       const selected=button.dataset.levelId===level.id;
@@ -153,8 +158,8 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 2200);
   }
   function setTool(value) {
-    if (value !== 'select' && city.state !== 'planning') {
-      toast('运营期间只能查看路况，请先停止运营再修改规划'); return;
+    if (!['view','select'].includes(value) && city.state !== 'planning') {
+      toast('运营期间只能观察或查看路况，请先停止运营再修改规划'); return;
     }
     if (value === 'cut' && !city.level.features.cut) {
       toast('剪刀工具在本关未开放'); return;
@@ -162,12 +167,13 @@
     if (value === 'bus' && !city.level.features.bus) {
       toast('公交线路在本关未开放'); return;
     }
-    tool = value;if(value!=='bus')busEditMode='draw';keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;
+    tool = value;if(value!=='bus')busEditMode='draw';keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;panLast=null;
     $('road-inspector').hidden=tool!=='select';
-    for (const name of ['select', 'road', 'cut', 'bus']) {
+    for (const name of ['view', 'select', 'road', 'cut', 'bus']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
     }
+    canvas.classList.toggle('view-mode',tool==='view');
     draw();
   }
   function selectedCells() {
@@ -324,11 +330,29 @@
     if(signal&&city.level.features.inspect&&!city.level.features.signals)$('signal-phase').textContent+=' · 红绿灯在本关未开放';
     updateBusLineInspector(n, planning);
   }
+  function viewBounds() {
+    const worldWidth=city.width*cellSize,worldHeight=city.height*cellSize;
+    return { minX:worldWidth<=viewportWidth?(viewportWidth-worldWidth)/2:viewportWidth-worldWidth, maxX:worldWidth<=viewportWidth?(viewportWidth-worldWidth)/2:0, minY:worldHeight<=viewportHeight?(viewportHeight-worldHeight)/2:viewportHeight-worldHeight, maxY:worldHeight<=viewportHeight?(viewportHeight-worldHeight)/2:0 };
+  }
+  function snapView() {
+    const b=viewBounds();viewTarget={x:Math.max(b.minX,Math.min(b.maxX,viewX)),y:Math.max(b.minY,Math.min(b.maxY,viewY))};
+  }
+  function resetView() {
+    viewZoom=1;cellSize=Math.min(viewportWidth/city.width,viewportHeight/city.height);
+    viewX=(viewportWidth-city.width*cellSize)/2;viewY=(viewportHeight-city.height*cellSize)/2;viewTarget=null;
+  }
+  function setZoom(next,screenX=viewportWidth/2,screenY=viewportHeight/2) {
+    const oldSize=cellSize,worldX=(screenX-viewX)/oldSize,worldY=(screenY-viewY)/oldSize;
+    viewZoom=Math.max(1,Math.min(5,next));cellSize=Math.min(viewportWidth/city.width,viewportHeight/city.height)*viewZoom;
+    viewX=screenX-worldX*cellSize;viewY=screenY-worldY*cellSize;snapView();
+  }
   function resize() {
-    const width = canvas.getBoundingClientRect().width;
+    const rect = canvas.getBoundingClientRect(), oldWidth=viewportWidth, oldHeight=viewportHeight;
+    viewportWidth=rect.width;viewportHeight=rect.height;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * dpr); canvas.height = Math.round(width * HEIGHT / WIDTH * dpr);
-    cellSize = width / WIDTH;
+    canvas.width = Math.round(viewportWidth * dpr); canvas.height = Math.round(viewportHeight * dpr);
+    if(!city){ctx.setTransform(dpr,0,0,dpr,0,0);return;}
+    if(!viewReady){resetView();viewReady=true;}else{viewX+=(viewportWidth-oldWidth)/2;viewY+=(viewportHeight-oldHeight)/2;cellSize=Math.min(viewportWidth/city.width,viewportHeight/city.height)*viewZoom;snapView();}
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
   }
@@ -399,13 +423,13 @@
   function drawSignalMarkings(n) {
     const s=cellSize,p=point(n),signal=city.signals.get(n);
     const links=new Set(city.links(n));
-    const rightOf={1:WIDTH,[WIDTH]:-1,[-1]:-WIDTH,[-WIDTH]:1};
+    const width=city.width,rightOf={1:width,[width]:-1,[-1]:-width,[-width]:1};
     // Paint into each incoming quadrant, in driving coordinates: x is forward,
     // y is right. Only show arrows whose entry AND exit actually exist.
-    for(const entry of [1,WIDTH,-1,-WIDTH]) {
+    for(const entry of [1,width,-1,-width]) {
       if(!links.has(n-entry)) continue;
       ctx.save();ctx.translate((p.x+.5)*s,(p.y+.5)*s);
-      ctx.rotate(entry===1?0:entry===WIDTH?Math.PI/2:entry===-1?Math.PI:-Math.PI/2);
+      ctx.rotate(entry===1?0:entry===width?Math.PI/2:entry===-1?Math.PI:-Math.PI/2);
       ctx.lineCap='round';ctx.lineJoin='round';ctx.setLineDash([]);
       for(const turn of ['left','straight','right']) {
         const exit=turn==='straight'?entry:turn==='right'?rightOf[entry]:-rightOf[entry];
@@ -470,10 +494,12 @@
     }
   }
   function draw() {
-    const s=cellSize,w=WIDTH*s,h=HEIGHT*s;
-    ctx.clearRect(0,0,w,h);ctx.fillStyle='#eaf0df';ctx.fillRect(0,0,w,h);
+    if(!city)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2),s=cellSize,w=city.width*s,h=city.height*s;
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewportWidth,viewportHeight);
+    ctx.save();ctx.translate(viewX,viewY);ctx.fillStyle='#eaf0df';ctx.fillRect(0,0,w,h);
     // Soft grid and planted lawn patches keep the map legible at small sizes.
-    for(let y=0;y<HEIGHT;y++) for(let x=0;x<WIDTH;x++) {
+    for(let y=0;y<city.height;y++) for(let x=0;x<city.width;x++) {
       if((x*7+y*11)%13===0) { ctx.fillStyle='#e3ebd7';ctx.fillRect(x*s,y*s,s,s); }
       ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);
       if((x*3+y*7)%9===0 && !city.water.has(key(x,y)) && !city.roads.has(key(x,y)) && !city.buildings.has(key(x,y)) && !city.pendingBuildings.has(key(x,y))) {
@@ -487,11 +513,11 @@
       line((x+.2)*s,(y+.28)*s,(x+.55)*s,(y+.28)*s,'#d5e9e4',1.5);
       line((x+.55)*s,(y+.68)*s,(x+.85)*s,(y+.68)*s,'#a9cece',1.5);
       if (x === 0 || !city.water.has(n-1)) line(x*s,y*s,x*s,(y+1)*s,'#d1e3cf',s*.08);
-      if (x === WIDTH-1 || !city.water.has(n+1)) line((x+1)*s,y*s,(x+1)*s,(y+1)*s,'#d1e3cf',s*.08);
+      if (x === city.width-1 || !city.water.has(n+1)) line((x+1)*s,y*s,(x+1)*s,(y+1)*s,'#d1e3cf',s*.08);
     }
     // Bridges are terrain rather than prebuilt roads: show the structure even while empty.
     for(const n of city.bridges){
-      const {x,y}=point(n),horizontal=(x>0&&city.bridges.has(n-1))||(x<WIDTH-1&&city.bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;
+      const {x,y}=point(n),horizontal=(x>0&&city.bridges.has(n-1))||(x<city.width-1&&city.bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;
       rounded(x*s+(horizontal?0:s*.15),y*s+(horizontal?s*.15:0),horizontal?s:s*.7,horizontal?s*.7:s,s*.06,'#d7d8cb');
     }
     // Render connected road arms; dotted center lines separate the two directions.
@@ -524,7 +550,7 @@
       }
     }
     for(const n of city.bridges){
-      const {x,y}=point(n),horizontal=(x>0&&city.bridges.has(n-1))||(x<WIDTH-1&&city.bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;
+      const {x,y}=point(n),horizontal=(x>0&&city.bridges.has(n-1))||(x<city.width-1&&city.bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;
       if(horizontal){line(x*s,cy-s*.38,(x+1)*s,cy-s*.38,'#8d9b89',s*.04);line(x*s,cy+s*.38,(x+1)*s,cy+s*.38,'#8d9b89',s*.04);}
       else{line(cx-s*.38,y*s,cx-s*.38,(y+1)*s,'#8d9b89',s*.04);line(cx+s*.38,y*s,cx+s*.38,(y+1)*s,'#8d9b89',s*.04);}
     }
@@ -610,6 +636,7 @@
     if(city.state==='paused') {
       rounded(w/2-52,14,104,27,14,'#fffef9e8');label('Ⅱ  规划暂停中',w/2,28,11,'#63715b');
     }
+    ctx.restore();
   }
   function updateUI() {
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
@@ -706,11 +733,16 @@
     speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
-    configureLevel();setTool('select');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
+    resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
   }
+  function eventPoint(event) { const rect=canvas.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
   function eventCell(event) {
-    const rect=canvas.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/rect.width*WIDTH),y=Math.floor((event.clientY-rect.top)/rect.height*HEIGHT);
-    return x>=0&&x<WIDTH&&y>=0&&y<HEIGHT?key(x,y):null;
+    const p=eventPoint(event),x=Math.floor((p.x-viewX)/cellSize),y=Math.floor((p.y-viewY)/cellSize);
+    return x>=0&&x<city.width&&y>=0&&y<city.height?key(x,y):null;
+  }
+  function moveView(dx,dy) {
+    const b=viewBounds(),rubber=(value,min,max)=>value<min?min+(value-min)*.32:value>max?max+(value-max)*.32:value;
+    viewTarget=null;viewX=rubber(viewX+dx,b.minX,b.maxX);viewY=rubber(viewY+dy,b.minY,b.maxY);
   }
   function busDraftProblem(start) {
     const line=city.activeBusLine;
@@ -794,32 +826,53 @@
     toast(message||(kind==='erase'?'已拆除所经道路，预算已返还':kind==='cut'?'已剪断所经连接':'规划已一次性应用'));
   }
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault();const p=eventPoint(e),factor=Math.exp(-e.deltaY*.0015);setZoom(viewZoom*factor,p.x,p.y);draw();
+  },{passive:false});
   canvas.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;
-    e.preventDefault();canvas.focus({preventScroll:true});keyboardAnchor=null;keyboardMode=false;dragging=true;
-    canvas.setPointerCapture(e.pointerId);hover=eventCell(e);if(hover===null)return;
-    if(tool==='select'){selectionAnchor=hover;selection={start:hover,end:hover};updateUI();draw();return;}
-    if(tool==='bus'){
-      const problem=busDraftProblem(hover);
-      if(problem){dragging=false;toast(problem);return;}
+    e.preventDefault();canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);
+    const p=eventPoint(e);pointers.set(e.pointerId,p);
+    if(pointers.size===2){
+      dragging=false;dragDraft=null;lastCell=null;selectionAnchor=null;panLast=null;
+      const [a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+      pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:viewZoom,worldX:(center.x-viewX)/cellSize,worldY:(center.y-viewY)/cellSize};return;
     }
+    if(tool==='view'){panLast=p;hover=null;return;}
+    keyboardAnchor=null;keyboardMode=false;dragging=true;hover=eventCell(e);if(hover===null)return;
+    if(tool==='select'){selectionAnchor=hover;selection={start:hover,end:hover};updateUI();draw();return;}
+    if(tool==='bus'){const problem=busDraftProblem(hover);if(problem){dragging=false;toast(problem);return;}}
     lastCell=hover;dragGrade=city.roads.has(hover)?city.roadGrades.get(hover)||0:0;
     dragDraft={kind:tool==='cut'?'cut':tool==='bus'?(busEditMode==='trim'?'bus-trim':'bus'):null,path:[hover]};draw();
   });
   canvas.addEventListener('pointermove',e=>{
+    const previous=pointers.get(e.pointerId),p=eventPoint(e);if(previous)pointers.set(e.pointerId,p);
+    if(pinch&&pointers.size>=2){
+      const [a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2},distance=Math.hypot(a.x-b.x,a.y-b.y);
+      viewZoom=Math.max(1,Math.min(5,pinch.zoom*distance/Math.max(1,pinch.distance)));cellSize=Math.min(viewportWidth/city.width,viewportHeight/city.height)*viewZoom;
+      viewX=center.x-pinch.worldX*cellSize;viewY=center.y-pinch.worldY*cellSize;draw();return;
+    }
+    if(tool==='view'&&panLast&&previous){moveView(p.x-previous.x,p.y-previous.y);panLast=p;draw();return;}
     keyboardMode=false;hover=eventCell(e);if(!dragging||hover===null)return;
     if(tool==='select'){selection={start:selectionAnchor,end:hover};updateUI();draw();}else paint(hover);
   });
-  const endDrag=()=>{
+  const endPointer=e=>{
+    pointers.delete(e.pointerId);
+    if(pinch){if(pointers.size<2){pinch=null;panLast=null;snapView();}draw();return;}
+    if(tool==='view'){panLast=null;snapView();draw();return;}
     if(dragging&&tool!=='select')commitDrag();
     dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;updateUI();draw();
   };
-  canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',()=>{dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;updateUI();draw();});canvas.addEventListener('lostpointercapture',endDrag);
-  canvas.addEventListener('pointerleave',()=>{hover=null;});
+  canvas.addEventListener('pointerup',endPointer);canvas.addEventListener('pointercancel',endPointer);canvas.addEventListener('lostpointercapture',e=>{if(pointers.has(e.pointerId))endPointer(e);});
+  canvas.addEventListener('pointerleave',()=>{if(!dragging&&tool!=='view')hover=null;});
+  $('view-tool').onclick=()=>setTool('view');
   $('select-tool').onclick=()=>setTool('select');
   $('road-tool').onclick=()=>setTool('road');
   $('cut-tool').onclick=()=>setTool('cut');
   $('bus-tool').onclick=()=>{busEditMode='draw';setTool('bus');};
+  $('zoom-in').onclick=()=>{setZoom(viewZoom*1.25);draw();};
+  $('zoom-out').onclick=()=>{setZoom(viewZoom/1.25);draw();};
+  $('zoom-reset').onclick=()=>{resetView();draw();};
   $('bus-line-select').onchange=()=>{busEditMode='draw';toast(city.selectBusLine($('bus-line-select').value));updateUI();draw();};
   $('new-bus-line').onclick=()=>{busEditMode='draw';const message=city.createBusLine();toast(message||'已新建公交线路，可以分段绘制');updateUI();draw();};
   $('bus-line-name').onchange=()=>{const message=city.updateBusLine(city.activeBusLineId,{name:$('bus-line-name').value});toast(message||'线路名称已更新');updateUI();draw();};
@@ -888,7 +941,7 @@
   function toggleOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
-    if(planning)setTool('select');
+    if(planning)setTool('view');
     accumulator=0;updateUI();
   }
   $('start').onclick=toggleOperation;
@@ -908,13 +961,13 @@
   for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();configureLevel();setTool('select');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-    if(e.key==='1')setTool('select');if(e.key==='2')setTool('road');if(e.key==='3')setTool('cut');if(e.key==='4'){busEditMode='draw';setTool('bus');}
+    if(e.key==='1')setTool('view');if(e.key==='2')setTool('select');if(e.key==='3')setTool('road');if(e.key==='4')setTool('cut');if(e.key==='5'){busEditMode='draw';setTool('bus');}
     if(e.key==='Escape'){
       const wasTrimming=tool==='bus'&&busEditMode==='trim',hadDraft=Boolean(dragDraft);
       keyboardAnchor=null;dragging=false;dragDraft=null;lastCell=null;
@@ -925,11 +978,18 @@
     }
     if(e.key.toLowerCase()==='p'){toggleOperation();e.preventDefault();}
     if(document.activeElement!==canvas)return;
+    if(tool==='view'){
+      if(e.key.startsWith('Arrow')){e.preventDefault();const step=48;moveView(e.key==='ArrowLeft'?step:e.key==='ArrowRight'?-step:0,e.key==='ArrowUp'?step:e.key==='ArrowDown'?-step:0);snapView();draw();}
+      if(e.key==='+'||e.key==='='){e.preventDefault();setZoom(viewZoom*1.25);draw();}
+      if(e.key==='-'){e.preventDefault();setZoom(viewZoom/1.25);draw();}
+      if(e.key==='0'){e.preventDefault();resetView();draw();}
+      return;
+    }
     let {x,y}=point(keyboardCell);
     if(e.key.startsWith('Arrow')){
       e.preventDefault();keyboardMode=true;
       if(e.key==='ArrowLeft')x--;if(e.key==='ArrowRight')x++;if(e.key==='ArrowUp')y--;if(e.key==='ArrowDown')y++;
-      keyboardCell=key(Math.max(0,Math.min(WIDTH-1,x)),Math.max(0,Math.min(HEIGHT-1,y)));
+      keyboardCell=key(Math.max(0,Math.min(city.width-1,x)),Math.max(0,Math.min(city.height-1,y)));
       if(keyboardAnchor!==null&&keyboardAnchor!==keyboardCell) {
         extendDraft(keyboardCell);keyboardAnchor=lastCell;keyboardCell=lastCell;updateUI();draw();
       }
@@ -957,6 +1017,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&city.state==='running'){city.toggle();accumulator=0;updateUI();}});
   function frame(now) {
     const delta=lastFrame?Math.min((now-lastFrame)/1000,.25):0;lastFrame=now;
+    if(viewTarget){const amount=Math.min(1,delta*14);viewX+=(viewTarget.x-viewX)*amount;viewY+=(viewTarget.y-viewY)*amount;if(Math.hypot(viewTarget.x-viewX,viewTarget.y-viewY)<.25){viewX=viewTarget.x;viewY=viewTarget.y;viewTarget=null;}}
     if(city.state==='running') {
       accumulator+=delta*speed;
       while(accumulator>=.05){city.step(.05);accumulator-=.05;}
@@ -994,7 +1055,7 @@
       } catch (error) { TrafficCore.setLevels(builtInCatalog);console.warn('忽略 levels.json：' + error.message); }
       city = new City(TrafficCore.LEVELS[0].id);
       buildLevelButtons();
-      configureLevel();resize();updateUI();requestAnimationFrame(frame);
+      configureLevel();resize();setTool('view');updateUI();requestAnimationFrame(frame);
     } catch (error) {
       console.error(error);
       $('toast').textContent = '关卡数据加载失败，请确认游戏服务正常运行后刷新页面。';

@@ -1,9 +1,7 @@
 (() => {
   'use strict';
-  const WIDTH = 16, HEIGHT = 12;
+  const DEFAULT_WIDTH = 16, DEFAULT_HEIGHT = 12, MIN_MAP_SIZE = 8, MAX_MAP_SIZE = 64;
   const $ = id => document.getElementById(id);
-  const keyCoord = (x, y) => y * WIDTH + x;
-  const point = n => ({ x: n % WIDTH, y: Math.floor(n / WIDTH) });
   const COLORS = [
     { color: '#638d69', light: '#dae6cb', name: '松林' },
     { color: '#d19157', light: '#f2dfbf', name: '日落' },
@@ -17,27 +15,32 @@
   let currentChapterIndex = 0;
   let currentLevelIndex = null;
   let activeCampaignDay = 0;
-  let tool = 'water';
+  let tool = 'view';
   let roadGrade = 0;
   let activeRoute = 0;      // which route the home/goal tools place
   let activeHome = 0;       // which home the "home" tool places
   let activeGoal = 0;       // which goal the "goal" tool places
   let hover = null, dragging = false, dragAnchor = null, lastCell = null;
   let dirty = false;
-  let cellSize = 40;
+  let cellSize = 40, viewportWidth = 0, viewportHeight = 0, viewZoom = 1, viewX = 0, viewY = 0, viewTarget = null, panLast = null;
+  const pointers=new Map();let pinch=null;
 
   // ── Current level helpers ─────────────────────────────────────────────
   const chapters = () => catalog.chapters;
   const currentChapter = () => chapters()[currentChapterIndex] || null;
   const current = () => (currentLevelIndex === null ? null : currentChapter()?.levels[currentLevelIndex] || null);
+  const mapWidth = () => current()?.width ?? DEFAULT_WIDTH;
+  const mapHeight = () => current()?.height ?? DEFAULT_HEIGHT;
+  const keyCoord = (x, y) => y * mapWidth() + x;
+  const point = n => ({ x: n % mapWidth(), y: Math.floor(n / mapWidth()) });
   const allLevels = () => chapters().flatMap(chapter => chapter.levels);
   const activeRoutes = () => current()?.campaign?.days?.[activeCampaignDay]?.routes || current()?.routes || [];
   const allRoutes = level => level?.campaign?.days?.flatMap(day => day.routes || []) || level?.routes || [];
   const currentRoute = () => activeRoutes()[activeRoute] || null;
   const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
   const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
-  const cellToXY = n => ({ x: n % WIDTH - 8, y: 5 - Math.floor(n / WIDTH) });
-  const xyToCell = (x, y) => (Number.isInteger(x) && Number.isInteger(y) && x >= -8 && x <= 7 && y >= -6 && y <= 5) ? (5 - y) * WIDTH + (x + 8) : null;
+  const cellToXY = n => ({ x: n % mapWidth() - Math.floor(mapWidth()/2), y: Math.floor((mapHeight()-1)/2) - Math.floor(n / mapWidth()) });
+  const xyToCell = (x, y) => { const col=x+Math.floor(mapWidth()/2),row=Math.floor((mapHeight()-1)/2)-y;return Number.isInteger(x)&&Number.isInteger(y)&&col>=0&&col<mapWidth()&&row>=0&&row<mapHeight()?keyCoord(col,row):null; };
   function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
   function markDirty() { dirty = true; const el = $('save-status'); el.textContent = '有未保存更改'; el.classList.add('dirty'); }
 
@@ -93,7 +96,7 @@
   // ── Tool hint (keeps toolbar labels + status bar in sync with the active
   //    home/goal of the active route) ─────────────────────────────────────
   const TOOL_HINTS = {
-    water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木',
+    view: '观察（拖动查看，滚轮缩放）', water: '水面（点击/拖拽着色）', bridge: '桥梁（置于水面上）', tree: '树木',
     road: '初始道路（拖动连接相邻格）', erase: '擦除地形/断开道路'
   };
   function updateToolHint() {
@@ -164,6 +167,9 @@
     $('f-tip').value = level.tip;
     $('f-budget').value = level.budget; $('f-duration').value = level.duration; $('f-target').value = level.target;
     $('f-bus-line-limit').value = level.busLineLimit ?? 1;
+    $('f-map-width').value = mapWidth();$('f-map-height').value = mapHeight();
+    document.querySelector('.coord-legend').textContent=`坐标系：地图中心为原点 (0,0)，向右为 +x，向上为 +y；x 范围 ${-Math.floor(mapWidth()/2)}～${mapWidth()-Math.floor(mapWidth()/2)-1}，y 范围 ${Math.floor((mapHeight()-1)/2)-mapHeight()+1}～${Math.floor((mapHeight()-1)/2)}。`;
+    const sizeSignature=`${mapWidth()}x${mapHeight()}`;if(canvas.dataset.mapSize!==sizeSignature){canvas.dataset.mapSize=sizeSignature;resetView();}
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals', 'bus']) $('f-' + name).checked = Boolean(level.features[name]);
     renderCampaign();
     renderRoutes();
@@ -208,7 +214,7 @@
         const { x, y } = cellToXY(cell);
         const xi = document.createElement('input'); xi.type = 'number'; xi.value = x; xi.title = 'x 轴（右为正）';
         const yi = document.createElement('input'); yi.type = 'number'; yi.value = y; yi.title = 'y 轴（上为正）';
-        const apply = () => { const next = xyToCell(Number(xi.value), Number(yi.value)); if (next === null) { toast('坐标越界：x∈[-8,7]，y∈[-6,5]'); const cur = cellToXY(cell); xi.value = cur.x; yi.value = cur.y; return; } onchange(next); };
+        const apply = () => { const next = xyToCell(Number(xi.value), Number(yi.value)); if (next === null) { toast('坐标超出当前地图范围'); const cur = cellToXY(cell); xi.value = cur.x; yi.value = cur.y; return; } onchange(next); };
         xi.onchange = apply; yi.onchange = apply;
         box.append(xi, yi); l.append(span, box); return l;
       };
@@ -254,7 +260,7 @@
         row.append(use, del); card.append(row);
       });
       const addGoal = document.createElement('button'); addGoal.className = 'tool'; addGoal.textContent = '＋ 目的地';
-      addGoal.onclick = () => { route.goals.push({ cell: keyCoord(11, 7), label: '目的地' }); activeRoute = ri; activeGoal = route.goals.length - 1; markDirty(); renderRoutes(); draw(); };
+      addGoal.onclick = () => { route.goals.push({ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '目的地' }); activeRoute = ri; activeGoal = route.goals.length - 1; markDirty(); renderRoutes(); draw(); };
       card.append(addGoal);
 
       const colorRow = document.createElement('div'); colorRow.className = 'color-row';
@@ -304,12 +310,12 @@
     const chapter=currentChapter();if(!chapter){toast('请先新建章节');return;}
     let n=allLevels().length+1,id=`level-${n}`;while(allLevels().some(level=>level.id===id))id=`level-${++n}`;
     chapter.levels.push({
-      id, name: '新关卡', english: 'NEW LEVEL', difficulty: '自定义', title: '未命名关卡',
+      id, name: '新关卡', english: 'NEW LEVEL', difficulty: '自定义', title: '未命名关卡', width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT,
       description: '请在此填写关卡任务说明。', tip: '请在此填写给玩家的规划提示。', lesson: '自定义', features: { grade: true, load: true, cut: true, inspect: true, signals: true, bus: true },
       busLineLimit: 3, budget: 100, duration: 90, target: 100, water: [], bridges: [], trees: [], routes: [{
         name: '路线一 → 目的地', color: COLORS[0].color, light: COLORS[0].light,
-        homes: [{ cell: keyCoord(2, 2), generationRate: 1, passengers: 60 }],
-        goals: [{ cell: keyCoord(12, 8), label: '目的地' }]
+        homes: [{ cell: 2 * DEFAULT_WIDTH + 2, generationRate: 1, passengers: 60 }],
+        goals: [{ cell: 8 * DEFAULT_WIDTH + 12, label: '目的地' }]
       }], initialEdges: []
     });
     currentLevelIndex=chapter.levels.length-1;activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderAll();
@@ -327,11 +333,26 @@
   }
 
   // ── Map editing ──────────────────────────────────────────────────────
+  function applyMapSize() {
+    const level=current(),oldWidth=mapWidth(),oldHeight=mapHeight(),width=Number($('f-map-width').value),height=Number($('f-map-height').value);
+    if(!level)return;
+    if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP_SIZE||width>MAX_MAP_SIZE||height<MIN_MAP_SIZE||height>MAX_MAP_SIZE){toast(`地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`);renderEditor();return;}
+    if(width===oldWidth&&height===oldHeight)return;
+    const dx=Math.floor(width/2)-Math.floor(oldWidth/2),dy=Math.floor((height-1)/2)-Math.floor((oldHeight-1)/2);
+    const translate=cell=>{const x=cell%oldWidth+dx,y=Math.floor(cell/oldWidth)+dy;return x>=0&&x<width&&y>=0&&y<height?y*width+x:null;};
+    const buildings=allRoutes(level).flatMap(route=>[...(route.homes||[]),...(route.goals||[])]);
+    if(buildings.some(building=>translate(building.cell)===null)){toast('缩小后的边界会裁掉建筑，请先移动建筑或增大尺寸');renderEditor();return;}
+    if(!confirm(`将地图从 ${oldWidth} × ${oldHeight} 改为 ${width} × ${height}？内容会保持相对地图中心，边界外的地形和道路将被裁掉。`)){renderEditor();return;}
+    const mapCells=values=>values.map(translate).filter(cell=>cell!==null);
+    level.water=mapCells(level.water);level.bridges=mapCells(level.bridges);level.trees=mapCells(level.trees);
+    level.initialEdges=(level.initialEdges||[]).map(([a,b,grade])=>[translate(a),translate(b),grade]).filter(([a,b])=>a!==null&&b!==null);
+    for(const building of buildings)building.cell=translate(building.cell);
+    level.width=width;level.height=height;hover=null;dragging=false;lastCell=null;markDirty();renderEditor();toast(`地图已调整为 ${width} × ${height}`);
+  }
+  function eventPoint(evt){const rect=canvas.getBoundingClientRect();return{x:evt.clientX-rect.left,y:evt.clientY-rect.top};}
   function cellFromEvent(evt) {
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((evt.clientX - rect.left) / rect.width * WIDTH);
-    const y = Math.floor((evt.clientY - rect.top) / rect.height * HEIGHT);
-    return (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) ? keyCoord(x, y) : null;
+    const p=eventPoint(evt),x=Math.floor((p.x-viewX)/cellSize),y=Math.floor((p.y-viewY)/cellSize);
+    return (x>=0&&x<mapWidth()&&y>=0&&y<mapHeight())?keyCoord(x,y):null;
   }
   function applyTool(cell) {
     const level = current(); if (cell === null || !level) return;
@@ -386,21 +407,21 @@
   }
 
   // ── Drawing ──────────────────────────────────────────────────────────
+  function viewBounds(){const ww=mapWidth()*cellSize,wh=mapHeight()*cellSize;return{minX:ww<=viewportWidth?(viewportWidth-ww)/2:viewportWidth-ww,maxX:ww<=viewportWidth?(viewportWidth-ww)/2:0,minY:wh<=viewportHeight?(viewportHeight-wh)/2:viewportHeight-wh,maxY:wh<=viewportHeight?(viewportHeight-wh)/2:0};}
+  function snapView(){const b=viewBounds(),target={x:Math.max(b.minX,Math.min(b.maxX,viewX)),y:Math.max(b.minY,Math.min(b.maxY,viewY))};viewTarget=target;const tick=()=>{if(viewTarget!==target)return;viewX+=(target.x-viewX)*.22;viewY+=(target.y-viewY)*.22;if(Math.hypot(target.x-viewX,target.y-viewY)<.25){viewX=target.x;viewY=target.y;viewTarget=null;draw();return;}draw();requestAnimationFrame(tick);};requestAnimationFrame(tick);}
+  function resetView(){if(!current()||!viewportWidth)return;viewZoom=1;cellSize=Math.min(viewportWidth/mapWidth(),viewportHeight/mapHeight());viewX=(viewportWidth-mapWidth()*cellSize)/2;viewY=(viewportHeight-mapHeight()*cellSize)/2;viewTarget=null;}
+  function moveView(dx,dy){const b=viewBounds(),rubber=(v,min,max)=>v<min?min+(v-min)*.32:v>max?max+(v-max)*.32:v;viewTarget=null;viewX=rubber(viewX+dx,b.minX,b.maxX);viewY=rubber(viewY+dy,b.minY,b.maxY);}
+  function setZoom(next,x=viewportWidth/2,y=viewportHeight/2){const wx=(x-viewX)/cellSize,wy=(y-viewY)/cellSize;viewZoom=Math.max(1,Math.min(5,next));cellSize=Math.min(viewportWidth/mapWidth(),viewportHeight/mapHeight())*viewZoom;viewX=x-wx*cellSize;viewY=y-wy*cellSize;snapView();}
   function resize() {
-    const width = canvas.getBoundingClientRect().width;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * dpr); canvas.height = Math.round(width * HEIGHT / WIDTH * dpr);
-    cellSize = width / WIDTH;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    draw();
+    const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),first=!viewportWidth;viewportWidth=rect.width;viewportHeight=rect.height;
+    canvas.width=Math.round(viewportWidth*dpr);canvas.height=Math.round(viewportHeight*dpr);
+    if(first)resetView();else{cellSize=Math.min(viewportWidth/mapWidth(),viewportHeight/mapHeight())*viewZoom;snapView();}draw();
   }
   function draw() {
-    const s = cellSize, w = WIDTH * s, h = HEIGHT * s;
-    ctx.clearRect(0, 0, w, h); ctx.fillStyle = '#eaf0df'; ctx.fillRect(0, 0, w, h);
-    for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
-      ctx.strokeStyle = '#dce5d04d'; ctx.lineWidth = .65; ctx.strokeRect(x * s, y * s, s, s);
-    }
-    const level = current(); if (!level) return;
+    const level=current();if(!level)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2),s=cellSize,w=mapWidth()*s,h=mapHeight()*s;
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewportWidth,viewportHeight);ctx.save();ctx.translate(viewX,viewY);ctx.fillStyle='#eaf0df';ctx.fillRect(0,0,w,h);
+    for(let y=0;y<mapHeight();y++)for(let x=0;x<mapWidth();x++){ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);}
     // terrain
     for (const n of level.water) { const { x, y } = point(n); ctx.fillStyle = '#bbd9d8'; ctx.fillRect(x * s, y * s, s, s); }
     for (const n of level.trees) { const { x, y } = point(n); ctx.fillStyle = '#a9c398'; ctx.beginPath(); ctx.arc((x + .5) * s, (y + .5) * s, s * .3, 0, Math.PI * 2); ctx.fill(); }
@@ -441,6 +462,7 @@
       ctx.strokeStyle = tool === 'erase' ? '#c68b56' : '#6d936b'; ctx.lineWidth = 2;
       ctx.strokeRect(x * s + 1, y * s + 1, s - 2, s - 2);
     }
+    ctx.restore();
   }
   function drawSite(n,days) {
     const s=cellSize,{x,y}=point(n),cx=(x+.5)*s,cy=(y+.5)*s;ctx.save();ctx.fillStyle='#a6aaa4';ctx.strokeStyle='#777d78';ctx.lineWidth=1.5;ctx.setLineDash([3,2]);ctx.fillRect(cx-s*.24,cy-s*.2,s*.48,s*.4);ctx.strokeRect(cx-s*.28,cy-s*.24,s*.56,s*.48);ctx.setLineDash([]);ctx.fillStyle='#fff';ctx.font=`700 ${s*.24}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(days),cx,cy);ctx.restore();
@@ -514,7 +536,7 @@
   $('add-route').onclick = () => {
     const level = current(),routes=activeRoutes(); if (!level) return;
     const c = COLORS[routes.length % COLORS.length];
-    routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(11, 7), label: '目的地' }] });
+    routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '目的地' }] });
     activeRoute = routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
   };
 
@@ -549,6 +571,7 @@
     $(elId).onchange = () => { const l = current(); const prop = elId.replace('f-', ''); if (l) { l[prop] = Number($(elId).value); markDirty(); } };
   }
   $('f-bus-line-limit').onchange = () => { const l = current(); if (l) { l.busLineLimit = Number($('f-bus-line-limit').value); markDirty(); } };
+  $('apply-map-size').onclick=applyMapSize;
   for (const name of ['grade', 'load', 'cut', 'inspect', 'signals', 'bus']) {
     $('f-' + name).onchange = () => { const l = current(); if (l) { l.features[name] = $('f-' + name).checked; markDirty(); } };
   }
@@ -559,46 +582,42 @@
       tool = btn.dataset.tool;
       document.querySelectorAll('.toolbar [data-tool]').forEach(b => b.classList.toggle('active', b === btn));
       $('grade-control').style.visibility = tool === 'road' ? 'visible' : 'hidden';
-      updateToolHint();
+      canvas.classList.toggle('view-mode',tool==='view');updateToolHint();
     };
   });
   $('road-grade').onchange = () => { roadGrade = Number($('road-grade').value); };
 
   // Canvas interaction
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
-  canvas.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.preventDefault(); canvas.setPointerCapture(e.pointerId);
-    dragging = true; hover = cellFromEvent(e); lastCell = hover; dragAnchor = hover;
-    if (tool === 'road') { /* start drag, connect on move */ }
-    else if (hover !== null) applyTool(hover);
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  canvas.addEventListener('wheel',e=>{e.preventDefault();const p=eventPoint(e);setZoom(viewZoom*Math.exp(-e.deltaY*.0015),p.x,p.y);draw();},{passive:false});
+  canvas.addEventListener('pointerdown',e=>{
+    if(e.button!==0)return;e.preventDefault();canvas.setPointerCapture(e.pointerId);
+    const p=eventPoint(e);pointers.set(e.pointerId,p);
+    if(pointers.size===2){dragging=false;lastCell=null;panLast=null;const[a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:viewZoom,worldX:(center.x-viewX)/cellSize,worldY:(center.y-viewY)/cellSize};return;}
+    if(tool==='view'){panLast=p;hover=null;return;}
+    dragging=true;hover=cellFromEvent(e);lastCell=hover;dragAnchor=hover;
+    if(tool!=='road'&&hover!==null)applyTool(hover);
   });
-  canvas.addEventListener('pointermove', e => {
-    hover = cellFromEvent(e);
-    if (hover !== null && !dragging) { const { x, y } = cellToXY(hover); $('map-status').textContent = `悬停：(${x}, ${y})`; }
-    if (dragging && tool === 'road' && hover !== null && lastCell !== null) {
-      lastCell = connectPath(lastCell, hover);
-    } else if (dragging && tool !== 'road' && hover !== null) {
-      if (hover !== lastCell) { lastCell = hover; applyTool(hover); }
-    }
-    if (!dragging) draw();
+  canvas.addEventListener('pointermove',e=>{
+    const previous=pointers.get(e.pointerId),p=eventPoint(e);if(previous)pointers.set(e.pointerId,p);
+    if(pinch&&pointers.size>=2){const[a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2},distance=Math.hypot(a.x-b.x,a.y-b.y);viewZoom=Math.max(1,Math.min(5,pinch.zoom*distance/Math.max(1,pinch.distance)));cellSize=Math.min(viewportWidth/mapWidth(),viewportHeight/mapHeight())*viewZoom;viewX=center.x-pinch.worldX*cellSize;viewY=center.y-pinch.worldY*cellSize;draw();return;}
+    if(tool==='view'&&panLast&&previous){moveView(p.x-previous.x,p.y-previous.y);panLast=p;draw();return;}
+    hover=cellFromEvent(e);
+    if(hover!==null&&!dragging){const{x,y}=cellToXY(hover);$('map-status').textContent=`悬停：(${x}, ${y})`;}
+    if(dragging&&tool==='road'&&hover!==null&&lastCell!==null)lastCell=connectPath(lastCell,hover);
+    else if(dragging&&tool!=='road'&&hover!==null&&hover!==lastCell){lastCell=hover;applyTool(hover);}
+    if(!dragging)draw();
   });
-  const endDrag = () => { dragging = false; lastCell = null; dragAnchor = null; draw(); };
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
-  canvas.addEventListener('pointerleave', () => { hover = null; updateToolHint(); if (!dragging) draw(); });
-
-  // Keyboard: 1-7 tools
-  const toolOrder = ['water', 'bridge', 'tree', 'home', 'goal', 'road', 'erase'];
-  document.addEventListener('keydown', e => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-    const idx = parseInt(e.key, 10) - 1;
-    if (idx >= 0 && idx < toolOrder.length) {
-      const btn = document.querySelector(`.toolbar [data-tool="${toolOrder[idx]}"]`);
-      if (btn) btn.click();
-    }
-    if (e.key.toLowerCase() === 's') { save().catch(err => toast('保存失败：' + err.message)); }
+  const endDrag=e=>{pointers.delete(e.pointerId);if(pinch){if(pointers.size<2){pinch=null;panLast=null;snapView();}draw();return;}dragging=false;panLast=null;lastCell=null;dragAnchor=null;snapView();draw();};
+  canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
+  canvas.addEventListener('pointerleave',()=>{hover=null;updateToolHint();if(!dragging)draw();});
+  // Keyboard: 1-8 tools
+  const toolOrder=['view','water','bridge','tree','home','goal','road','erase'];
+  document.addEventListener('keydown',e=>{
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+    const idx=parseInt(e.key,10)-1;if(idx>=0&&idx<toolOrder.length){const btn=document.querySelector(`.toolbar [data-tool="${toolOrder[idx]}"]`);if(btn)btn.click();}
+    if(e.key.toLowerCase()==='s')save().catch(err=>toast('保存失败：'+err.message));
   });
 
   // Detect unsaved changes before leaving

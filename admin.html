@@ -72,6 +72,9 @@
               <label>预算（点）<input id="f-budget" type="number" min="1" step="1"></label>
               <label>时长（秒）<input id="f-duration" type="number" min="1" step="1"></label>
               <label>目标（人）<input id="f-target" type="number" min="1" step="1"></label>
+              <label>地图宽度（格）<input id="f-map-width" type="number" min="8" max="64" step="1"></label>
+              <label>地图高度（格）<input id="f-map-height" type="number" min="8" max="64" step="1"></label>
+              <button id="apply-map-size" class="tool" type="button">应用地图尺寸</button>
             </div>
             <div class="feature-grid">
               <label><input id="f-grade" type="checkbox"> 道路等级</label>
@@ -102,7 +105,7 @@
           <details class="editor-section" open>
             <summary>路线与建筑</summary>
             <p class="section-hint">每一条路线可包含多个住宅（home，各自输出速率/总人数）与多个目的地（goal，各自标签/可选输入上限）。在地图用「住宅 / 目的地」工具配合当前路线与当前住宅/目的地放置坐标；在下方列表增删并编辑各点。</p>
-            <p class="section-hint coord-legend">坐标系：地图中心为原点 (0,0)，向右为 +x，向上为 +y；x 范围 −8～7，y 范围 −6～5。下方建筑坐标以此为准。</p>
+            <p class="section-hint coord-legend">坐标系：地图中心为原点 (0,0)，向右为 +x，向上为 +y；坐标范围会随地图宽高变化。下方建筑坐标以此为准。</p>
             <div id="route-list" class="route-list"></div>
             <button id="add-route" class="tool">＋ 添加路线</button>
           </details>
@@ -110,7 +113,8 @@
           <details class="editor-section" open>
             <summary>地图编辑</summary>
             <div class="toolbar" role="group" aria-label="地图工具">
-              <button data-tool="water" class="tool active">水面</button>
+              <button data-tool="view" class="tool active">观察</button>
+              <button data-tool="water" class="tool">水面</button>
               <button data-tool="bridge" class="tool">桥梁</button>
               <button data-tool="tree" class="tool">树木</button>
               <button data-tool="home" id="tool-home" class="tool">住宅</button>
@@ -126,9 +130,9 @@
                   <option value="2">快速路 · 3 点/格</option>
                 </select>
               </label>
-              <span id="map-status" class="map-status">当前工具：水面（点击/拖拽着色）</span>
+              <span id="map-status" class="map-status">当前工具：观察（拖动查看地图）</span>
             </div>
-            <div class="canvas-wrap"><canvas id="map" tabindex="0" aria-label="关卡地图编辑器"></canvas></div>
+            <div class="canvas-wrap"><canvas id="map" class="view-mode" tabindex="0" aria-label="关卡地图编辑器；观察模式可拖动，滚轮可缩放"></canvas></div>
             <div class="legend">
               <span><i class="sw water"></i>水面</span>
               <span><i class="sw bridge"></i>桥梁</span>

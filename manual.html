@@ -17,10 +17,10 @@
       <section class="manual-hero">
         <div class="eyebrow">CITY PLANNER'S HANDBOOK</div>
         <h1>慢行小城游戏指南</h1>
-        <p>这里集中介绍关卡目标、地图操作和交通模拟规则。规划时使用<strong>选择、拖拽、剪刀、公交线</strong>等工具建设路网与公共交通；开始运营后，小汽车和公交车根据道路连接、容量和路口规则运送居民。</p>
+        <p>这里集中介绍关卡目标、地图操作和交通模拟规则。默认使用<strong>观察</strong>模式缩放、拖动地图，规划时再切换选择、拖拽、剪刀、公交线等工具建设路网与公共交通。</p>
       </section>
       <nav class="manual-nav" aria-label="游戏指南目录">
-        <a href="#objective">游戏目标</a><a href="#campaign">五日运营</a><a href="#select">选择模式</a><a href="#drag">拖拽模式</a><a href="#cut">剪刀模式</a><a href="#bus">公交线路</a><a href="#buildings">建筑规则</a><a href="#journey">车辆出行</a><a href="#capacity">道路容量</a><a href="#junctions">路口通行</a><a href="#results">胜负与结算</a><a href="#operation">运营限制</a><a href="#keyboard">键盘操作</a>
+        <a href="#objective">游戏目标</a><a href="#campaign">五日运营</a><a href="#view">观察地图</a><a href="#select">选择模式</a><a href="#drag">拖拽模式</a><a href="#cut">剪刀模式</a><a href="#bus">公交线路</a><a href="#buildings">建筑规则</a><a href="#journey">车辆出行</a><a href="#capacity">道路容量</a><a href="#junctions">路口通行</a><a href="#results">胜负与结算</a><a href="#operation">运营限制</a><a href="#keyboard">键盘操作</a>
       </nav>
 
       <section id="objective" class="manual-section">
@@ -47,9 +47,15 @@
         <p class="manual-note"><strong>普通关卡不受影响：</strong>其他关卡仍在达到目标时立即胜利，满意度只用于报告；只有「五日新城」把满意度纳入收入并坚持运营到每日截止时间。</p>
       </section>
 
+      <section id="view" class="manual-section">
+        <div class="eyebrow">MODE 01</div><h2>观察模式：缩放与拖动</h2>
+        <p>每次进入关卡默认使用观察模式。电脑端按住鼠标拖动地图，滚轮以指针位置为中心缩放；手机端单指拖动、双指捏合缩放。右上角的 ＋、−、⌂ 按钮也可放大、缩小或恢复完整地图。</p>
+        <p>地图可放大到适应窗口比例的 5 倍。拖到地图边界外会产生阻尼，松手后以橡皮筋效果回弹；观察模式在规划、运营和暂停期间都可使用。</p>
+      </section>
+
       <section id="select" class="manual-section">
-        <div class="eyebrow">MODE 01</div><h2>选择模式</h2>
-        <p>点击「选择」或按 <kbd>1</kbd> 进入。选择模式只负责选区和执行下方按钮，不会因为点击或拖选地图而直接建设、拆除或剪断道路。</p>
+        <div class="eyebrow">MODE 02</div><h2>选择模式</h2>
+        <p>点击「选择」或按 <kbd>2</kbd> 进入。选择模式只负责选区和执行下方按钮，不会因为点击或拖选地图而直接建设、拆除或剪断道路。</p>
         <div class="manual-grid">
           <article class="manual-card"><h3>选择一个格子</h3><p>在任意格点击后，蓝色边框标出该格。下方显示坐标和内容类型。再次点击别处会替换原选择。</p></article>
           <article class="manual-card"><h3>选择矩形区域</h3><p>从任意格按住并拖到另一格。起点和终点构成完整矩形，反向、向上或向左拖动同样有效；松手后保留选区。</p></article>
@@ -75,8 +81,8 @@
       </section>
 
       <section id="drag" class="manual-section">
-        <div class="eyebrow">MODE 02</div><h2>拖拽模式：统一建设、改造与拆除</h2>
-        <p>点击「拖拽」或按 <kbd>2</kbd> 进入。从起点按住，依次经过上下左右相邻格。快速斜拖时，系统会补成四向相邻的阶梯路线。拖动期间彩色线框只是预览；松手时才把整条规划一次性应用到地图。</p>
+        <div class="eyebrow">MODE 03</div><h2>拖拽模式：统一建设、改造与拆除</h2>
+        <p>点击「拖拽」或按 <kbd>3</kbd> 进入。从起点按住，依次经过上下左右相邻格。快速斜拖时，系统会补成四向相邻的阶梯路线。拖动期间彩色线框只是预览；松手时才把整条规划一次性应用到地图。</p>
         <h3>怎样判定拆除</h3>
         <p>只有满足以下条件，拖拽才进入橙色的拆除状态：</p>
         <ol>
@@ -118,8 +124,8 @@
       </section>
 
       <section id="cut" class="manual-section">
-        <div class="eyebrow">MODE 03</div><h2>剪刀模式</h2>
-        <p>点击「剪刀」或按 <kbd>3</kbd> 进入，第 4 关提供对应教学。沿道路或建筑出口之间的既有连接拖动，松手后一次性剪断所经连接。</p>
+        <div class="eyebrow">MODE 04</div><h2>剪刀模式</h2>
+        <p>点击「剪刀」或按 <kbd>4</kbd> 进入，第 4 关提供对应教学。沿道路或建筑出口之间的既有连接拖动，松手后一次性剪断所经连接。</p>
         <ul>
           <li>剪刀只删除“连接关系”，不会删除道路格，不改变等级，也不返还预算。</li>
           <li>剪断后两块路面即使仍紧挨着，也不能互相通行；切换到拖拽模式沿断口拖过即可重新连接。</li>
@@ -130,8 +136,8 @@
       </section>
 
       <section id="bus" class="manual-section">
-        <div class="eyebrow">MODE 04</div><h2>公交线路</h2>
-        <p>「公交线」工具只在开放公交功能的关卡可用，第 10 关提供对应教学。点击工具或按 <kbd>4</kbd>，从已有道路开始，沿明确连接的道路逐格绘制。线路可以分多次完成：每次松手提交一段，下一次从当前线路末端继续。</p>
+        <div class="eyebrow">MODE 05</div><h2>公交线路</h2>
+        <p>「公交线」工具只在开放公交功能的关卡可用，第 10 关提供对应教学。点击工具或按 <kbd>5</kbd>，从已有道路开始，沿明确连接的道路逐格绘制。线路可以分多次完成：每次松手提交一段，下一次从当前线路末端继续。</p>
         <ul>
           <li>第 10 关限制为一条线路；核心和管理界面支持关卡配置多条线路。每条线路拥有独立名称、颜色、道路站点、车辆数和运行方式。普通线路在开始运营前必须回到起点形成闭环；未闭环时开始运营会显示对应线路名称，并保持在规划状态。</li>
           <li>开启「原路返回」后，开放线路无需手动画出返程路径。公交到达终点后沿同一道路反向返回起点，返程默认不停站；再次到达起点后恢复正向停站服务。</li>
@@ -228,12 +234,13 @@
         <h2>键盘与触摸</h2>
         <table class="case-table">
           <tbody>
-            <tr><th><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> / <kbd>4</kbd></th><td>切换选择 / 拖拽 / 剪刀 / 公交线模式；公交线只在本关开放该功能时可用。</td></tr>
-            <tr><th>方向键</th><td>画布获得焦点后移动格子光标。</td></tr>
-            <tr><th>空格</th><td>选择模式选择当前格；拖拽、剪刀或公交线模式设置起点，再用方向键逐格操作，再按空格提交。公交线每次提交一段，后续从线路末端继续；反向擦除模式同样从末端开始。</td></tr>
+            <tr><th><kbd>1</kbd>～<kbd>5</kbd></th><td>切换观察 / 选择 / 拖拽 / 剪刀 / 公交线模式；公交线只在本关开放该功能时可用。</td></tr>
+            <tr><th>方向键</th><td>观察模式平移地图；其他模式在画布获得焦点后移动格子光标。</td></tr>
+            <tr><th><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></th><td>观察模式放大、缩小或恢复完整地图。</td></tr>
+            <tr><th>空格</th><td>选择模式选择当前格；拖拽、剪刀或公交线模式设置起点，再用方向键逐格操作，再按空格提交。</td></tr>
             <tr><th><kbd>Esc</kbd></th><td>取消尚未提交的键盘路径；使用公交反向擦除时，同时退出擦除并恢复线路绘制。</td></tr>
             <tr><th><kbd>P</kbd></th><td>开始运营、暂停或继续；输入框或对话框获得焦点时不触发。</td></tr>
-            <tr><th>触摸</th><td>单指按住并移动。选择模式形成矩形；拖拽、剪刀和公交线模式形成路径。松手提交。</td></tr>
+            <tr><th>触摸</th><td>观察模式单指拖动、双指捏合缩放；其他模式单指形成选区或路径，双指可随时缩放地图并取消未提交操作。</td></tr>
           </tbody>
         </table>
         <a class="manual-back" href="./">← 返回游戏</a>

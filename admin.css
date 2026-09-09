@@ -101,8 +101,9 @@ textarea{resize:vertical;line-height:1.6}
 .map-controls{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .map-controls label{display:flex;align-items:center;gap:8px;font-size:12px;color:#626f62}
 .map-status{font-size:11px;color:#8d9789}
-.canvas-wrap{margin:0 16px;background:#eaf0df;border-radius:9px;overflow:hidden}
+.canvas-wrap{margin:0 16px;background:#d9dfd2;border-radius:9px;overflow:hidden}
 canvas#map{display:block;width:100%;aspect-ratio:4/3;touch-action:none;cursor:crosshair;image-rendering:pixelated}
+canvas#map.view-mode{cursor:grab}canvas#map.view-mode:active{cursor:grabbing}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:#626f62}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;display:inline-block;border-radius:3px}

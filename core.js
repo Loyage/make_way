@@ -1,9 +1,9 @@
 /* Shared, DOM-free simulation. Browser callers load level JSON before creating a City. */
 (function (root) {
   'use strict';
-  const WIDTH = 16, HEIGHT = 12;
-  const key = (x, y) => y * WIDTH + x;
-  const point = n => ({ x: n % WIDTH, y: Math.floor(n / WIDTH) });
+  const WIDTH = 16, HEIGHT = 12, MIN_MAP_SIZE = 8, MAX_MAP_SIZE = 64;
+  const key = (x, y, width = WIDTH) => y * width + x;
+  const point = (n, width = WIDTH) => ({ x: n % width, y: Math.floor(n / width) });
   function deepFreeze(value) {
     if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
     return value;
@@ -31,6 +31,8 @@
       for (const level of chapter.levels) {
         if (!level || typeof level !== 'object' || typeof level.id !== 'string' || !level.id) return '每个关卡都需要唯一的字符串 id';
         if (levelIds.has(level.id)) return `关卡 id 重复：${level.id}`;
+        const width = level.width ?? WIDTH, height = level.height ?? HEIGHT;
+        if (!Number.isInteger(width) || !Number.isInteger(height) || width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || height < MIN_MAP_SIZE || height > MAX_MAP_SIZE) return `关卡「${level.id}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`;
         levelIds.add(level.id);levels.push(level);
       }
       chapters.push({ id: chapter.id, name: chapter.name.trim(), english: chapter.english.trim(), levels });
@@ -44,19 +46,19 @@
   if (initialCatalog) setLevels(initialCatalog);
   // Default scenario and convenience exports are retained for Node consumers.
   const { budget: BUDGET, duration: DURATION, target: TARGET, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, target: 0, routes: [] };
-  function neighbors(n) {
-    const { x, y } = point(n), out = [];
+  function neighbors(n, width = WIDTH, height = HEIGHT) {
+    const { x, y } = point(n, width), out = [];
     if (x > 0) out.push(n - 1);
-    if (x < WIDTH - 1) out.push(n + 1);
-    if (y > 0) out.push(n - WIDTH);
-    if (y < HEIGHT - 1) out.push(n + WIDTH);
+    if (x < width - 1) out.push(n + 1);
+    if (y > 0) out.push(n - width);
+    if (y < height - 1) out.push(n + width);
     return out;
   }
-  function findPath(roads, start, goal, edges = null) {
+  function findPath(roads, start, goal, edges = null, width = WIDTH, height = HEIGHT) {
     if (start === goal) return [start];
     const queue = [start], prev = new Map([[start, null]]);
     for (let i = 0; i < queue.length; i++) {
-      for (const n of edges ? (edges.get(queue[i]) || []) : neighbors(queue[i])) {
+      for (const n of edges ? (edges.get(queue[i]) || []) : neighbors(queue[i], width, height)) {
         if (prev.has(n) || (n !== goal && !roads.has(n))) continue;
         prev.set(n, queue[i]);
         if (n === goal) {
@@ -99,20 +101,21 @@
   const BUS_LINE_COLORS = Object.freeze(['#1686a0', '#d06b47', '#7868b2', '#4f965d', '#c08a28', '#a64f78']);
   const VEHICLE_WIDTH = .085, VEHICLE_LENGTH = .28, BUS_WIDTH = .11, BUS_LENGTH = .46, LANE_WIDTH = .12;
   const PHASES = Object.freeze(['horizontal-straight', 'horizontal-left', 'vertical-straight', 'vertical-left']);
-  const SIGNAL_ENTRIES = Object.freeze({ north: WIDTH, east: -1, south: -WIDTH, west: 1 });
+  const signalEntries = (width = WIDTH) => ({ north: width, east: -1, south: -width, west: 1 });
+  const SIGNAL_ENTRIES = Object.freeze(signalEntries());
   const SIGNAL_ENTRY_ORDER = Object.freeze(['north', 'east', 'south', 'west']);
   const SIGNAL_ACTIONS = Object.freeze(SIGNAL_ENTRY_ORDER.flatMap(entry => ['straight', 'left'].map(turn => `${entry}-${turn}`)));
   const DEFAULT_CUSTOM_PHASES = Object.freeze([
     Object.freeze(['west-straight', 'east-straight']), Object.freeze(['west-left', 'east-left']),
     Object.freeze(['north-straight', 'south-straight']), Object.freeze(['north-left', 'south-left'])
   ]);
-  const vector = heading => ({ x: Math.abs(heading) === 1 ? Math.sign(heading) : 0, y: Math.abs(heading) === WIDTH ? Math.sign(heading) : 0 });
-  function movement(entry, exit = entry) {
-    const a = vector(entry), b = vector(exit), cross = a.x * b.y - a.y * b.x;
+  const vector = (heading, width = WIDTH) => ({ x: Math.abs(heading) === 1 ? Math.sign(heading) : 0, y: Math.abs(heading) === width ? Math.sign(heading) : 0 });
+  function movement(entry, exit = entry, width = WIDTH) {
+    const a = vector(entry, width), b = vector(exit, width), cross = a.x * b.y - a.y * b.x;
     const turn = exit === entry ? 'straight' : cross > 0 ? 'right' : 'left';
     // Clockwise quadrants: NW, NE, SE, SW. Right-hand traffic enters
     // the first quadrant, traverses two for straight and three for left.
-    const first = ({ [WIDTH]: 0, [-1]: 1, [-WIDTH]: 2, [1]: 3 })[entry];
+    const first = ({ [width]: 0, [-1]: 1, [-width]: 2, [1]: 3 })[entry];
     const count = entry === -exit ? 4 : turn === 'right' ? 1 : turn === 'straight' ? 2 : 3;
     let mask = 0;
     for (let i = 0; i < count; i++) mask |= 1 << ((first - i + 4) % 4);
@@ -123,21 +126,22 @@
     if (a.turn === 'left' && b.turn === 'left' && a.entry === -b.entry && a.mask !== 15 && b.mask !== 15) return false;
     return Boolean(a.mask & b.mask);
   }
-  function signalActionMovement(action) {
-    const [entryName, turn] = action.split('-'), entry = SIGNAL_ENTRIES[entryName];
+  function signalActionMovement(action, width = WIDTH) {
+    const [entryName, turn] = action.split('-'), entry = signalEntries(width)[entryName];
     if (!entry || !['straight', 'left'].includes(turn)) return null;
-    const leftExit = ({ [1]: -WIDTH, [WIDTH]: 1, [-1]: WIDTH, [-WIDTH]: -1 })[entry];
-    return movement(entry, turn === 'straight' ? entry : leftExit);
+    const leftExit = ({ [1]: -width, [width]: 1, [-1]: width, [-width]: -1 })[entry];
+    return movement(entry, turn === 'straight' ? entry : leftExit, width);
   }
-  function movementAction(move) {
-    const entry = SIGNAL_ENTRY_ORDER.find(name => SIGNAL_ENTRIES[name] === move.entry);
+  function movementAction(move, width = WIDTH) {
+    const entries = signalEntries(width);
+    const entry = SIGNAL_ENTRY_ORDER.find(name => entries[name] === move.entry);
     return entry && move.turn !== 'right' ? `${entry}-${move.turn}` : '';
   }
   function defaultSignal() {
     return { enabled: false, green: 2, yieldMode: 'arrival', priority: [...SIGNAL_ENTRY_ORDER], automatic: true, phases: DEFAULT_CUSTOM_PHASES.map(phase => [...phase]) };
   }
   function cloneSignal(signal) { return { ...signal, priority: [...signal.priority], phases: signal.phases.map(phase => [...phase]) }; }
-  function signalProblem(signal) {
+  function signalProblem(signal, width = WIDTH) {
     if (typeof signal.enabled !== 'boolean' || ![2,4,6].includes(signal.green)
       || !['arrival','priority'].includes(signal.yieldMode) || typeof signal.automatic !== 'boolean') return '无效的路口控制设置';
     if (!Array.isArray(signal.priority) || signal.priority.length !== SIGNAL_ENTRY_ORDER.length
@@ -145,13 +149,13 @@
     if (!Array.isArray(signal.phases) || signal.phases.length < 1 || signal.phases.length > 8) return '手动灯序须包含 1 至 8 个阶段';
     for (const phase of signal.phases) {
       if (!Array.isArray(phase) || !phase.length || new Set(phase).size !== phase.length || phase.some(action => !SIGNAL_ACTIONS.includes(action))) return '每个手动阶段至少需要一个有效放行动作';
-      const moves = phase.map(signalActionMovement);
+      const moves = phase.map(action => signalActionMovement(action, width));
       for (let i=0;i<moves.length;i++) for (let j=i+1;j<moves.length;j++) if (movementsConflict(moves[i],moves[j])) return '同一阶段不能包含互相冲突的放行动作';
     }
     return '';
   }
-  function vehiclePosition(n, heading, lane, slot, centered = false) {
-    const p = point(n), d = vector(heading), along = centered ? 0 : slot === 0 ? -.25 : .25;
+  function vehiclePosition(n, heading, lane, slot, centered = false, width = WIDTH) {
+    const p = point(n, width), d = vector(heading, width), along = centered ? 0 : slot === 0 ? -.25 : .25;
     const side = (lane + .5) * LANE_WIDTH;
     return { x: p.x + .5 + d.x * along - d.y * side, y: p.y + .5 + d.y * along + d.x * side };
   }
@@ -159,6 +163,8 @@
     constructor(levelId = LEVELS[0].id, options = {}) {
       this.level = LEVELS.find(level => level.id === levelId);
       if (!this.level) throw new RangeError(`Unknown level: ${levelId}`);
+      this.width = this.level.width ?? WIDTH;
+      this.height = this.level.height ?? HEIGHT;
       this.routes = (options.routes || this.level.routes).map(normalizeRoute);
       this.runtimeBudget = options.budget;
       this.runtimeDuration = options.duration;
@@ -217,6 +223,12 @@
     // Compatibility aliases keep older integrations focused on the selected line.
     get busRoute() { return this.activeBusLine?.route || []; }
     get busCount() { return this.activeBusLine?.count || 1; }
+    key(x, y) { return key(x, y, this.width); }
+    point(n) { return point(n, this.width); }
+    neighbors(n) { return neighbors(n, this.width, this.height); }
+    movement(entry, exit = entry) { return movement(entry, exit, this.width); }
+    movementAction(move) { return movementAction(move, this.width); }
+    vector(heading) { return vector(heading, this.width); }
     links(n) { return [...(this.edges.get(n) || [])]; }
     addEdge(a,b) {
       if (!this.edges.has(a)) this.edges.set(a,new Set());
@@ -234,7 +246,7 @@
     }
     connect(a,b,grade=0) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
-      if (!Number.isInteger(a) || !Number.isInteger(b) || a<0 || b<0 || a>=WIDTH*HEIGHT || b>=WIDTH*HEIGHT || !neighbors(a).includes(b)) return '请沿相邻方格拖动';
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a<0 || b<0 || a>=this.width*this.height || b>=this.width*this.height || !this.neighbors(a).includes(b)) return '请沿相邻方格拖动';
       if (this.buildings.has(a) && this.buildings.has(b)) return '建筑之间需要道路';
       if (!this.edges.get(a)?.has(b) && [a,b].some(n=>this.roads.has(n) && this.links(n).length===2 && this.occupants(n).length)) return '请等车辆通过后再增设路口';
       const roads=new Set(this.roads), grades=new Map(this.roadGrades);
@@ -305,7 +317,7 @@
         const g = this.goals[gi];
         if (g.route !== home.route) continue;
         if (g.input != null && this.goalAssigned[gi] >= g.input) continue;
-        const p = findPath(this.roads, home.cell, g.cell, this.edges);
+        const p = findPath(this.roads, home.cell, g.cell, this.edges, this.width, this.height);
         if (p && (!path || p.length < path.length)) { path = p; goalIndex = gi; }
       }
       return { goalIndex, path };
@@ -331,7 +343,7 @@
         if (enabled.priority !== undefined) candidate.priority = Array.isArray(enabled.priority) ? [...enabled.priority] : enabled.priority;
         if (enabled.phases !== undefined) candidate.phases = Array.isArray(enabled.phases) ? enabled.phases.map(phase => Array.isArray(phase) ? [...phase] : phase) : enabled.phases;
       } else { candidate.enabled = enabled; candidate.green = green; }
-      const problem = signalProblem(candidate);
+      const problem = signalProblem(candidate, this.width);
       if (problem) return problem;
       if (current.enabled !== candidate.enabled && this.occupants(n).length) return '请等路口车辆通过后再切换控制方式';
       this.signals.set(n, candidate);
@@ -403,7 +415,7 @@
       if (!line.route.length && this.remaining < line.count * BUS_COST) return `公交车辆需要 ${line.count * BUS_COST} 点预算`;
       line.route = [...path];
       if (line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1]) line.returnTrip = false;
-      line.stops = new Set(this.busRouteCells(line).filter(cell => neighbors(cell).some(n => this.buildings.has(n))));
+      line.stops = new Set(this.busRouteCells(line).filter(cell => this.neighbors(cell).some(n => this.buildings.has(n))));
       return '';
     }
     appendBusRoute(path, lineId = this.activeBusLineId) {
@@ -450,7 +462,7 @@
       if (!line || !this.buildings.has(buildingCell)) return [];
       const positions = [];
       const limit = line.route[0] === line.route[line.route.length - 1] ? line.route.length - 1 : line.route.length;
-      for (let i = 0; i < limit; i++) if (line.stops.has(line.route[i]) && neighbors(buildingCell).includes(line.route[i])) positions.push(i);
+      for (let i = 0; i < limit; i++) if (line.stops.has(line.route[i]) && this.neighbors(buildingCell).includes(line.route[i])) positions.push(i);
       return positions;
     }
     linesAtCell(cell) { return this.busLines.filter(line => this.busRouteCells(line).includes(cell)); }
@@ -471,10 +483,10 @@
         const main = entries.filter(entry => entries.includes(-entry));
         const branch = entries.find(entry => !main.includes(entry));
         if (main.length === 2 && branch !== undefined) {
-          const mainLeft = main.map(entry => movement(entry, -branch)).filter(move => move.turn === 'left').map(movementAction);
-          const branchLeft = main.map(entry => movement(branch, -entry)).filter(move => move.turn === 'left').map(movementAction);
+          const mainLeft = main.map(entry => this.movement(entry, -branch)).filter(move => move.turn === 'left').map(move => this.movementAction(move));
+          const branchLeft = main.map(entry => this.movement(branch, -entry)).filter(move => move.turn === 'left').map(move => this.movementAction(move));
           return [
-            { stage: 'main-straight', axis: Math.abs(main[0]) === 1 ? 'horizontal' : 'vertical', turn: 'straight', actions: main.map(entry => movementAction(movement(entry))) },
+            { stage: 'main-straight', axis: Math.abs(main[0]) === 1 ? 'horizontal' : 'vertical', turn: 'straight', actions: main.map(entry => this.movementAction(this.movement(entry))) },
             { stage: 'main-turn', axis: 'main', turn: 'left', actions: mainLeft },
             { stage: 'branch-turn', axis: 'branch', turn: 'left', actions: branchLeft }
           ];
@@ -496,10 +508,10 @@
       return { ...phases[index], remaining: signal.green - local, index };
     }
     canEnter(n, heading, exitHeading = heading) {
-      const signal = this.signals.get(n), phase = this.signalPhase(n), move = movement(heading, exitHeading);
+      const signal = this.signals.get(n), phase = this.signalPhase(n), move = this.movement(heading, exitHeading);
       if (move.turn === 'right' || phase.axis === 'off') return true;
       if (!signal || phase.axis === 'clearance') return false;
-      return phase.actions.includes(movementAction(move));
+      return phase.actions.includes(this.movementAction(move));
     }
     occupants(n, self) { return [...this.cars,...this.buses].filter(c => !c.done && c !== self && (c.cell === n || c.next === n)); }
     reservations(car) {
@@ -512,7 +524,7 @@
       return !this.occupants(n, self).some(c => this.reservations(c).some(r => r.cell === n && movementsConflict(move, r.movement || { mask: 15 })));
     }
     laneFor(n, heading, self, slot = 0, exitHeading = heading, preferred = 0, strict = false) {
-      if (this.signals.has(n)) return this.junctionAvailable(n, movement(heading, exitHeading), self) ? 0 : -1;
+      if (this.signals.has(n)) return this.junctionAvailable(n, this.movement(heading, exitHeading), self) ? 0 : -1;
       const cars = this.occupants(n, self);
       if (!this.roads.has(n)) return cars.length ? -1 : 0;
       const lanes = this.roadType(n).lanes, choices = strict ? [preferred] : Array.from({ length: lanes }, (_, i) => (preferred + i) % lanes);
@@ -530,7 +542,7 @@
         const used = [1,2,4,8].filter(bit => mask & bit).length;
         return { used, capacity: 4, total: cars.length, ratio: used / 4 };
       }
-      const used = Math.max(0, ...[1,-1,WIDTH,-WIDTH].map(h => cars.filter(c => this.reservations(c).some(r => r.cell === n && r.heading === h)).length));
+      const used = Math.max(0, ...[1,-1,this.width,-this.width].map(h => cars.filter(c => this.reservations(c).some(r => r.cell === n && r.heading === h)).length));
       const capacity = this.roadType(n).capacity;
       return { used, capacity, total: cars.length, ratio: used / capacity };
     }
@@ -538,10 +550,10 @@
       return this.cars.some(c => !c.done && [c.cellMovement, c.nextMovement].some(m => m?.exitCell === n));
     }
     anchor(n, heading, lane, slot, move) {
-      const position = vehiclePosition(n, heading, lane, slot, this.signals.has(n) || this.buildings.has(n));
-      let direction = vector(heading);
+      const position = vehiclePosition(n, heading, lane, slot, this.signals.has(n) || this.buildings.has(n), this.width);
+      let direction = this.vector(heading);
       if (this.signals.has(n) && move && move.turn !== 'straight' && move.entry !== -move.exit) {
-        const a = vector(move.entry), b = vector(move.exit), p = point(n);
+        const a = this.vector(move.entry), b = this.vector(move.exit), p = this.point(n);
         const inset = move.turn === 'right' ? .25 : .07;
         position.x = p.x + .5 + (b.x-a.x)*inset;
         position.y = p.y + .5 + (b.y-a.y)*inset;
@@ -589,7 +601,7 @@
       return '';
     }
     edit(n, erase = false, grade = 0) {
-      if (!Number.isInteger(n) || n < 0 || n >= WIDTH * HEIGHT) return '';
+      if (!Number.isInteger(n) || n < 0 || n >= this.width * this.height) return '';
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
@@ -642,7 +654,9 @@
     }
     serializeDesign() {
       return {
-        version: 6,
+        version: 7,
+        width: this.width,
+        height: this.height,
         edges: [...this.edges].flatMap(([a,vs])=>[...vs].filter(b=>a<b).map(b=>[a,b])).sort(([a,b],[c,d])=>a-c||b-d),
         levelId: this.level.id,
         roads: [...this.roads].sort((a, b) => a - b).map(cell => ({ cell, grade: this.roadGrades.get(cell) || 0 })),
@@ -653,7 +667,9 @@
     }
     loadDesign(design) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能读取设计，请先停止运营';
-      if (!design || ![1,2,3,4,5,6].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
+      if (!design || ![1,2,3,4,5,6,7].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)
+        || design.version===7&&(design.width!==this.width||design.height!==this.height)
+        || design.version<7&&(this.width!==WIDTH||this.height!==HEIGHT)) return '存档格式无效、地图尺寸不匹配或不属于当前关卡';
       const candidate = new City(this.level.id, {
         routes: this.routes, budget: this.budget, duration: this.duration, target: this.target,
         deadlineMode: this.deadlineMode, pendingBuildings: [...this.pendingBuildings.values()]
@@ -661,7 +677,7 @@
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
       candidate.refreshPaths();
       for (const road of design.roads) {
-        if (!road || !Number.isInteger(road.cell) || road.cell < 0 || road.cell >= WIDTH * HEIGHT
+        if (!road || !Number.isInteger(road.cell) || road.cell < 0 || road.cell >= this.width * this.height
           || !Number.isInteger(road.grade) || !ROAD_TYPES[road.grade] || seenRoads.has(road.cell)) return '存档中的道路数据无效';
         seenRoads.add(road.cell);
         const message = candidate.edit(road.cell, false, road.grade);
@@ -669,14 +685,14 @@
       }
       if (design.version===1) {
         // Older designs intentionally connected every adjacent road/building.
-        for (const n of candidate.roads) for (const v of neighbors(n)) if (candidate.roads.has(v)||candidate.buildings.has(v)) candidate.addEdge(n,v);
+        for (const n of candidate.roads) for (const v of candidate.neighbors(n)) if (candidate.roads.has(v)||candidate.buildings.has(v)) candidate.addEdge(n,v);
       } else {
         if (!Array.isArray(design.edges)) return '存档缺少道路连接';
         candidate.edges.clear();const seen=new Set();
         for (const pair of design.edges) {
           if (!Array.isArray(pair)||pair.length!==2) return '存档中的连接无效';
           const [a,b]=pair,id=`${Math.min(a,b)}:${Math.max(a,b)}`;
-          if (!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a>=WIDTH*HEIGHT||b>=WIDTH*HEIGHT||!neighbors(a).includes(b)||seen.has(id)
+          if (!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a>=this.width*this.height||b>=this.width*this.height||!candidate.neighbors(a).includes(b)||seen.has(id)
             ||![a,b].every(n=>candidate.roads.has(n)||candidate.buildings.has(n))||[a,b].every(n=>candidate.buildings.has(n))) return '存档中的连接无效';
           candidate.addEdge(a,b);seen.add(id);
         }
@@ -686,8 +702,8 @@
         if (!saved || !Number.isInteger(saved.cell) || seenSignals.has(saved.cell)
           || typeof saved.enabled !== 'boolean' || ![2, 4, 6].includes(saved.green)
           || !candidate.signals.has(saved.cell)
-          || design.version === 6 && signalProblem(saved)) return '存档中的信号灯数据无效';
-        const settings = design.version === 6
+          || design.version >= 6 && signalProblem(saved, this.width)) return '存档中的信号灯数据无效';
+        const settings = design.version >= 6
           ? { enabled: saved.enabled, green: saved.green, yieldMode: saved.yieldMode, priority: saved.priority, automatic: saved.automatic, phases: saved.phases }
           : { enabled: saved.enabled, green: saved.green };
         const message = candidate.setSignal(saved.cell, settings);
@@ -703,9 +719,9 @@
           const disabled = design.bus.disabledStops ?? [];
           if (!Array.isArray(disabled) || disabled.some(cell => !Number.isInteger(cell) || !candidate.buildings.has(cell)) || new Set(disabled).size !== disabled.length) return '存档中的公交站点无效';
           const line = candidate.activeBusLine;
-          for (const building of disabled) for (const road of neighbors(building)) line.stops.delete(road);
+          for (const building of disabled) for (const road of candidate.neighbors(building)) line.stops.delete(road);
         }
-      } else if ([4,5,6].includes(design.version)) {
+      } else if ([4,5,6,7].includes(design.version)) {
         if (!Array.isArray(design.busLines) || design.busLines.length > candidate.busLineLimit) return '存档中的公交线路无效';
         const ids = new Set();
         for (const saved of design.busLines) {
@@ -766,7 +782,7 @@
       const closed = line?.route[0] === line?.route[line.route.length - 1];
       const outbound = closed || !line?.returnTrip || bus.routePosition < line.route.length;
       if (!outbound || !line?.stops.has(bus.cell)) { bus.needsStop = false; return; }
-      const leaving = bus.passengers.filter(passenger => neighbors(passenger.goal).includes(bus.cell));
+      const leaving = bus.passengers.filter(passenger => this.neighbors(passenger.goal).includes(bus.cell));
       if (leaving.length) {
         bus.passengers = bus.passengers.filter(passenger => !leaving.includes(passenger));
         for (const passenger of leaving) this.finishBusPassenger(passenger);
@@ -774,7 +790,7 @@
       }
       for (let hi = 0; hi < this.homes.length && bus.passengers.length < BUS_CAPACITY; hi++) {
         const home = this.homes[hi];
-        if (!neighbors(home.cell).includes(bus.cell)) continue;
+        if (!this.neighbors(home.cell).includes(bus.cell)) continue;
         while (bus.passengers.length < BUS_CAPACITY && this.queues[hi] > 0) {
           const goalIndex = this.busGoalFor(home, bus.routePosition, bus.lineId);
           if (goalIndex === null) break;
@@ -826,7 +842,7 @@
         const followingPosition = nextPosition >= segments ? 1 : nextPosition + 1;
         const exitHeading = route[followingPosition] - nextRoad;
         const junction = internal ? nextRoad : routeAt(1), junctionExit = internal ? routeAt(1) : routeAt(2);
-        const turn = this.signals.has(junction) ? movement(junction - target, junctionExit - junction).turn : null;
+        const turn = this.signals.has(junction) ? this.movement(junction - target, junctionExit - junction).turn : null;
         const preferred = turn ? this.turnLane(target, turn) : bus.cellLane || 0;
         const lane = this.laneFor(target, heading, bus, slot, exitHeading, preferred, turn !== null);
         if (lane < 0 || !internal && !this.canEnter(target, heading, exitHeading)) { bus.blocked += dt; return; }
@@ -837,7 +853,7 @@
         }
         bus.next = target;
         bus.nextSlot = slot;
-        bus.nextMovement = this.signals.has(target) ? { ...movement(heading, exitHeading), exitCell: route[followingPosition] } : null;
+        bus.nextMovement = this.signals.has(target) ? { ...this.movement(heading, exitHeading), exitCell: route[followingPosition] } : null;
         bus.heading = heading;
         bus.lane = lane;
         bus.blocked = 0;
@@ -906,8 +922,8 @@
       for (const car of this.cars) if (!car.done && car.next === null) {
         const goal = car.goal ?? this.defaultGoalCell(car.route), exit = car.cellMovement?.exitCell;
         // Once admitted, finish the committed turn even if other roads change.
-        plans.set(car, exit === undefined ? findPath(this.roads, car.cell, goal, this.edges)
-          : [car.cell, ...(findPath(this.roads, exit, goal, this.edges) || [exit])]);
+        plans.set(car, exit === undefined ? findPath(this.roads, car.cell, goal, this.edges, this.width, this.height)
+          : [car.cell, ...(findPath(this.roads, exit, goal, this.edges, this.width, this.height) || [exit])]);
       }
       for (const car of this.cars) {
         const path=plans.get(car),n=path?.[1];
@@ -918,13 +934,13 @@
       const signalPriority = car => {
         const path = plans.get(car), signal = path ? this.signals.get(path[1]) : null;
         if (!path || path.length < 2 || car.cellSlot === 0 || !signal || signal.enabled || signal.yieldMode !== 'priority') return null;
-        const entry = SIGNAL_ENTRY_ORDER.find(name => SIGNAL_ENTRIES[name] === path[1]-car.cell);
+        const entries = signalEntries(this.width), entry = SIGNAL_ENTRY_ORDER.find(name => entries[name] === path[1]-car.cell);
         return { node: path[1], rank: signal.priority.indexOf(entry) };
       };
       const turnPriority = car => {
         const path = plans.get(car);
         if (!path || path.length < 3 || car.cellSlot === 0 || !this.signals.get(path[1])?.enabled) return 0;
-        return movement(path[1]-car.cell, path[2]-path[1]).turn === 'right' ? 1 : 0;
+        return this.movement(path[1]-car.cell, path[2]-path[1]).turn === 'right' ? 1 : 0;
       };
       // At priority-controlled junctions, approach rank precedes arrival time.
       // Elsewhere arrival time remains authoritative; right turns still yield.
@@ -943,7 +959,7 @@
           const slot = internal || this.signals.has(target) || this.buildings.has(target) ? 1 : 0;
           const exitHeading = path[2] === undefined ? heading : path[2] - target;
           const junctionIndex = internal ? 1 : 2, junction = path[junctionIndex], junctionExit = path[junctionIndex + 1];
-          const turn = junctionExit !== undefined && this.signals.has(junction) ? movement(junction - target, junctionExit - junction).turn : null;
+          const turn = junctionExit !== undefined && this.signals.has(junction) ? this.movement(junction - target, junctionExit - junction).turn : null;
           const preferred = turn ? this.turnLane(target, turn) : car.cellLane || 0;
           const lane = this.laneFor(target, heading, car, slot, exitHeading, preferred, turn !== null);
           if (lane < 0 || (!internal && !this.canEnter(target, heading, exitHeading))) { car.blocked += dt; continue; }
@@ -951,7 +967,7 @@
             && this.laneFor(path[2], exitHeading, car, 0, path[3] === undefined ? exitHeading : path[3] - path[2]) < 0) { car.blocked += dt; continue; }
           car.next = target;
           car.nextSlot = slot;
-          car.nextMovement = this.signals.has(target) ? { ...movement(heading, exitHeading), exitCell: path[2] } : null;
+          car.nextMovement = this.signals.has(target) ? { ...this.movement(heading, exitHeading), exitCell: path[2] } : null;
           car.heading = heading;
           car.lane = lane;
           car.blocked = 0;
@@ -1052,7 +1068,7 @@
       return '';
     }
   }
-  api = { City, CampaignSession, campaignIncome, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  api = { City, CampaignSession, campaignIncome, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

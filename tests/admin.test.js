@@ -66,6 +66,14 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.match(validateLevels(mismatchedFirst),/必须与第 1 天一致/);
 });
 
+test('validateLevels accepts per-level map sizes and rejects invalid dimensions', () => {
+  const custom=JSON.parse(JSON.stringify(defaultLevels())),level=custom.chapters[0].levels[0];
+  level.width=20;level.height=12;
+  assert.equal(validateLevels(custom),'');
+  level.width=65;assert.match(validateLevels(custom),/地图宽高/);
+  level.width=20;level.water=[20*12];assert.match(validateLevels(custom),/越界/);
+});
+
 test('setLevels rebuilds active LEVELS and freezes definitions', () => {
   setLevels(defaultLevels());
   const city = new City(defaultLevels().chapters[0].levels[0].id);
@@ -120,6 +128,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.body,/id="new-chapter"/);assert.match(page.body,/id="f-chapter"/);
   assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
+  assert.match(page.body,/id="f-map-width"/);assert.match(page.body,/id="f-map-height"/);assert.match(page.body,/data-tool="view"/);
   assert.match(page.body,/id="save-preset"/);assert.match(page.body,/id="load-preset"/);assert.match(page.body,/id="preset-select"/);assert.match(page.body,/id="overwrite-default"/);
   assert.match(page.body,/坐标系：地图中心为原点/);
 

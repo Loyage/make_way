@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { WIDTH, HEIGHT, key, neighbors, ROAD_TYPES, setLevels } = require('./core.js');
+const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES, setLevels } = require('./core.js');
 
 const HOST = process.env.ADMIN_HOST || '::';
 const PORT = Number(process.env.ADMIN_PORT || process.env.PORT || 8080);
@@ -120,7 +120,7 @@ async function writeDefault(catalog) {
 }
 
 // ── Validation ──────────────────────────────────────────────────────────────
-function isCoord(n) { return Number.isInteger(n) && n >= 0 && n < WIDTH * HEIGHT; }
+function isCoord(n, width = WIDTH, height = HEIGHT) { return Number.isInteger(n) && n >= 0 && n < width * height; }
 function validateLevels(data) {
   const catalog = normalizeCatalog(data);
   if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.chapters) || !catalog.chapters.length) return '章节数据必须包含非空 chapters 数组';
@@ -145,7 +145,9 @@ function validateLevels(data) {
     for (const field of ['name', 'english', 'difficulty', 'title', 'description', 'tip', 'lesson']) {
       if (typeof level[field] !== 'string' || !level[field].trim()) return `关卡「${level.id}」缺少 ${field}`;
     }
-    // scalar parameters
+    // map and scalar parameters. Missing dimensions retain legacy 16 × 12 behavior.
+    const width = level.width ?? WIDTH, height = level.height ?? HEIGHT;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || height < MIN_MAP_SIZE || height > MAX_MAP_SIZE) return `关卡「${level.id}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`;
     if (!Number.isInteger(level.budget) || level.budget < 1) return `关卡「${level.id}」的预算无效`;
     if (!Number.isFinite(level.duration) || level.duration < 1) return `关卡「${level.id}」的时长无效`;
     if (!Number.isInteger(level.target) || level.target < 1) return `关卡「${level.id}」的目标无效`;
@@ -161,7 +163,7 @@ function validateLevels(data) {
       if (!Array.isArray(level[field])) return `关卡「${level.id}」的 ${field} 必须是数组`;
       const set = new Set();
       for (const n of level[field]) {
-        if (!isCoord(n)) return `关卡「${level.id}」的 ${field} 包含越界坐标 ${n}`;
+        if (!isCoord(n, width, height)) return `关卡「${level.id}」的 ${field} 包含越界坐标 ${n}`;
         if (set.has(n)) return `关卡「${level.id}」的 ${field} 包含重复坐标 ${n}`;
         set.add(n);
       }
@@ -177,13 +179,13 @@ function validateLevels(data) {
       if (!Array.isArray(route.homes) || route.homes.length === 0) return `关卡「${level.id}」的路线至少需要一个住宅 (homes)`;
       if (!Array.isArray(route.goals) || route.goals.length === 0) return `关卡「${level.id}」的路线至少需要一个目的地 (goals)`;
       for (const h of route.homes) {
-        if (!h || typeof h !== 'object' || !isCoord(h.cell)) return `关卡「${level.id}」的路线 homes 坐标越界`;
+        if (!h || typeof h !== 'object' || !isCoord(h.cell, width, height)) return `关卡「${level.id}」的路线 homes 坐标越界`;
         const generationRate = h.generationRate ?? h.rate;
         if (!Number.isFinite(generationRate) || generationRate <= 0) return `关卡「${level.id}」的路线 homes.generationRate 无效`;
         if (!Number.isInteger(h.passengers) || h.passengers <= 0) return `关卡「${level.id}」的路线 homes.passengers 无效`;
       }
       for (const g of route.goals) {
-        if (!g || typeof g !== 'object' || !isCoord(g.cell)) return `关卡「${level.id}」的路线 goals 坐标越界`;
+        if (!g || typeof g !== 'object' || !isCoord(g.cell, width, height)) return `关卡「${level.id}」的路线 goals 坐标越界`;
         if (typeof g.label !== 'string' || !g.label.trim()) return `关卡「${level.id}」的路线 goals.label 无效`;
         if (g.input != null && (!Number.isInteger(g.input) || g.input <= 0)) return `关卡「${level.id}」的路线 goals.input 无效`;
       }
@@ -224,7 +226,7 @@ function validateLevels(data) {
       for (const edge of level.initialEdges) {
         if (!Array.isArray(edge) || edge.length !== 3) return `关卡「${level.id}」的 initialEdges 每项须为 [a,b,grade]`;
         const [a, b, grade] = edge;
-        if (!isCoord(a) || !isCoord(b) || !neighbors(a).includes(b)) return `关卡「${level.id}」的 initialEdges 包含非相邻连接`;
+        if (!isCoord(a, width, height) || !isCoord(b, width, height) || !neighbors(a, width, height).includes(b)) return `关卡「${level.id}」的 initialEdges 包含非相邻连接`;
         if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return `关卡「${level.id}」的 initialEdges 道路等级无效`;
         const id = `${Math.min(a, b)}:${Math.max(a, b)}`;
         if (seen.has(id)) return `关卡「${level.id}」的 initialEdges 包含重复连接`;

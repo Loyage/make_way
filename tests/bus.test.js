@@ -36,7 +36,7 @@ test('one to three buses consume budget and survive design round trips', () => {
   assert.equal(source.setBusStop(stopCell,false),'');assert.equal(source.isBusStop(stopCell),false);
   assert.equal(source.remaining,0);
   const design=source.serializeDesign(),target=new City('bus-school');
-  assert.equal(design.version,6);assert.equal(target.loadDesign(design),'');
+  assert.equal(design.version,7);assert.equal(target.loadDesign(design),'');
   assert.deepEqual(target.busRoute,route);assert.equal(target.busCount,3);assert.equal(target.isBusStop(stopCell),false);assert.deepEqual(target.serializeDesign(),design);
   const legacy=JSON.parse(JSON.stringify(design));legacy.version=4;for(const line of legacy.busLines)delete line.returnTrip;
   const migrated=new City('bus-school');assert.equal(migrated.loadDesign(legacy),'');assert.equal(migrated.activeBusLine.returnTrip,false);
