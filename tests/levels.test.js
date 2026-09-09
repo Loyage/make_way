@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, LEVELS, CHAPTERS, WIDTH, HEIGHT } = require('../core.js');
+const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT } = require('../core.js');
 
-const { buildReferencePlan } = require('./reference-plan.cjs');
+const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
   test(`${level.name}: valid independent terrain and dynamic route counts`, () => {
     const city = new City(level.id);
@@ -45,13 +45,14 @@ for (const level of LEVELS) {
     assert.equal(city.state,'lost');assert.equal(city.elapsed,level.duration);
   });
 }
-test('two chapters contain four progressively unlocked levels each', () => {
-  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',4],['city-control','城市调度',4]]);
+test('two chapters contain ten progressively unlocked levels, including the five-day challenge', () => {
+  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',6],['city-control','城市调度',4]]);
   assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','woodland','signal-school','multi-route-school','rush-hour','bus-school']);
-  for(const id of ['bridge-school','riverside','cut-school']) assert.throws(()=>new City(id),RangeError);
+  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','woodland','growing-city','signal-school','multi-route-school','rush-hour','bus-school']);
+  for(const id of ['bridge-school','riverside']) assert.throws(()=>new City(id),RangeError);
   const names=['grade','load','cut','inspect','signals','bus'];
-  assert.equal(LEVELS[3].features.signals,true,'signals must be available from lesson four');
+  assert.equal(LEVELS.find(level=>level.id==='cut-school').features.cut,true,'scissors must be available from lesson four');
+  assert.equal(LEVELS.find(level=>level.id==='woodland').features.signals,true,'signals must be available from lesson five');
   for(const name of names) {
     const values=LEVELS.map(level=>level.features[name]);
     assert.ok(values.includes(false)&&values.includes(true),`${name} must be taught`);
@@ -69,4 +70,33 @@ test('two chapters contain four progressively unlocked levels each', () => {
   assert.throws(()=>new City('missing'),RangeError);
   assert.throws(()=>{LEVELS[0].budget=999;},TypeError);
 });
+test('five-day campaign pays for quality, reveals construction, and replays checkpoints', () => {
+  assert.equal(campaignIncome(50,100,80,20),12);
+  const campaign=new CampaignSession('growing-city');
+  assert.equal(campaign.days.length,5);assert.equal(campaign.city.pendingBuildings.size,8);
+  assert.equal(campaign.city.pendingBuildings.get(49).daysUntil,1);
+  assert.match(campaign.city.edit(49),/建设用地/);
+  assert.equal(campaign.city.edit(0),'');
+  assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);
+  campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
+  assert.equal(campaign.city.state,'running','campaign days always run to the deadline');
+  campaign.city.state='won';
+  const result=campaign.advance(100);assert.equal(result.population,50);assert.equal(result.delivered,42);assert.equal(result.income,16);assert.equal(campaign.dayIndex,1);
+  assert.equal(campaign.city.budget,50);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
+  assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);
+  assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
+});
+
+test('five-day campaign has an efficient affordable plan for every new demand wave', () => {
+  const campaign=new CampaignSession('growing-city');
+  for(let day=0;day<5;day++) {
+    line(campaign.city,1,1+day*2,14,1+day*2,0);
+    if(day) for(const cell of campaign.city.roads) if(Math.floor(cell/WIDTH)<1+day*2) assert.equal(campaign.city.edit(cell,false,1),'');
+    assert.ok(campaign.city.remaining>=0);assert.equal(campaign.beginDay(),'');
+    for(let step=0;step<(campaign.city.duration+1)*20;step++) campaign.city.step(.05);
+    assert.equal(campaign.city.state,'won',`day ${day+1}: ${campaign.city.delivered}/${campaign.city.target}`);
+    if(day<4) campaign.advance(100);
+  }
+});
+
 module.exports = { buildReferencePlan };

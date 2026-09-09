@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {City,key,WIDTH}=require('../core.js');
-function plain(){const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();c.edges.clear();return c;}
+function plain(){const c=new City('neighborhood');c.water.clear();c.trees.clear();c.bridges.clear();c.roads.clear();c.edges.clear();c.setRoutes([{name:'占位',color:'#638d69',light:'#dae6cb',homes:[{cell:key(0,11),generationRate:1,passengers:0}],goals:[{cell:key(15,11),label:'占位'}]}]);return c;}
 function cross(){const c=plain(),n=key(6,5);c.setRoutes([
   {name:'a',color:'#638d69',light:'#dae6cb',homes:[{cell:key(3,5),rate:1,passengers:0}],goals:[{cell:key(9,5),label:'工坊'}]},
   {name:'b',color:'#d19157',light:'#f2dfbf',homes:[{cell:key(6,2),rate:1,passengers:0}],goals:[{cell:key(6,8),label:'市场'}]}
@@ -14,7 +14,7 @@ test('neighboring surfaces stay disconnected until an explicit stroke joins them
 });
 test('building connections are explicit and scissors preserve costs and surfaces',()=>{
  const c=new City('neighborhood');for(let x=3;x<10;x++)c.connect(key(x,3),key(x+1,3));assert.equal(c.paths[0],null);
- c.connect(key(2,3),key(3,3));c.connect(key(10,3),key(11,3));assert.ok(c.paths[0]);const cost=c.remaining;
+ c.connect(key(5,4),key(5,3));c.connect(key(9,4),key(9,3));assert.ok(c.paths[0]);const cost=c.remaining;
  c.cut(key(6,3),key(7,3));assert.equal(c.paths[0],null);assert.equal(c.remaining,cost);assert.ok(c.roads.has(key(6,3))&&c.roads.has(key(7,3)));
  c.connect(key(6,3),key(7,3));assert.ok(c.paths[0]);assert.equal(c.remaining,cost);
 });
@@ -33,8 +33,8 @@ test('scissors protect crossings and committed exits; cuts can be saved and rest
  const invalid={...real.serializeDesign(),edges:[[15,16]]};const previous=target.serializeDesign();assert.ok(target.loadDesign(invalid));assert.deepEqual(target.serializeDesign(),previous);
 });
 test('legacy v1 designs migrate adjacency and keep original signal choices',()=>{
- const c=new City('neighborhood'),old={version:1,levelId:'neighborhood',roads:[3,4,5].map(x=>({cell:key(x,3),grade:0})),signals:[]};
- assert.equal(c.loadDesign(old),'');assert.ok(c.links(key(3,3)).includes(key(2,3)));assert.ok(c.links(key(4,3)).includes(key(5,3)));
+ const c=new City('neighborhood'),old={version:1,levelId:'neighborhood',roads:[4,5,6].map(x=>({cell:key(x,3),grade:0})),signals:[]};
+ assert.equal(c.loadDesign(old),'');assert.ok(c.links(key(5,3)).includes(key(5,4)));assert.ok(c.links(key(4,3)).includes(key(5,3)));
 });
 test('yield intersections serialize opposing movements and strongly reward signals',()=>{
  const slow=cross(),fast=cross();fast.c.setSignal(fast.n,true);

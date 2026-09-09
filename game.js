@@ -1,8 +1,9 @@
 (() => {
   'use strict';
-  const { City, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT, key, point, neighbors } = TrafficCore;
+  const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT, key, point, neighbors } = TrafficCore;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
+  const SPEED_OPTIONS=[.5,1,2,4];
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const levels = () => TrafficCore.LEVELS;
@@ -14,6 +15,7 @@
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
+  let campaign = null, pendingCampaignScore = null;
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   function storedDesign(levelId = city.level.id) {
@@ -52,6 +54,28 @@
     }
     const current=chapters().findIndex(chapter=>chapter.levels.some(level=>level.id===city.level.id));showChapter(Math.max(0,current));
   }
+  function renderCampaignProgress() {
+    const panel=$('campaign-progress');panel.hidden=!campaign;$('legend-site').hidden=!campaign;
+    if(!campaign)return;
+    $('campaign-day-title').textContent=`第 ${campaign.dayIndex+1} 天 · ${city.state==='planning'?'改造规划':'通勤运营'}`;
+    $('campaign-income').textContent=`累计收入 ${campaign.results.reduce((sum,result)=>sum+result.income,0)} 点 · 可用 ${city.remaining} 点`;
+    const list=$('campaign-days'),signature=JSON.stringify([campaign.dayIndex,city.state,city.remaining,campaign.results,campaign.checkpoints.map(Boolean)]);
+    if(list.dataset.signature===signature)return;
+    list.dataset.signature=signature;list.replaceChildren();
+    campaign.days.forEach((day,index)=>{
+      const button=document.createElement('button');button.className='campaign-day';
+      const title=document.createElement('strong');title.textContent=`第 ${index+1} 天`;
+      const result=campaign.results[index],detail=document.createElement('span');detail.textContent=result?`+${result.income} 点`:index===campaign.dayIndex?'当前':'未到达';
+      const reached=Boolean(campaign.checkpoints[index])||index===campaign.dayIndex;button.classList.toggle('reached',reached);button.classList.toggle('current',index===campaign.dayIndex);
+      button.disabled=!campaign.checkpoints[index]||index===campaign.dayIndex;button.title=button.disabled?'':`回到第 ${index+1} 天运营前，并覆盖之后的记录`;
+      button.onclick=()=>{
+        if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
+        const message=campaign.replay(index);if(message){toast(message);return;}
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();configureLevel();setTool('select');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+      };
+      button.append(title,detail);list.append(button);
+    });
+  }
   function configureLevel() {
     const level = city.level, index = levels().indexOf(level);
     const chapterIndex=chapters().findIndex(chapter=>chapter.levels.some(item=>item.id===level.id)),chapter=chapters()[chapterIndex];
@@ -60,11 +84,13 @@
     $('chapter-number').textContent = String(chapterIndex+1).padStart(2,'0');
     $('chapter-name').textContent = chapter?.name||level.english;
     $('map-name').textContent = level.name;
-    $('target-label').textContent = `目标 ${level.target}`;
-    $('target-unit').textContent = `/ ${level.target} 人`;
+    const population=city.homes.reduce((sum,home)=>sum+home.passengers,0);
+    $('target-label').textContent = `目标 ${city.target}`;
+    $('target-unit').textContent = `/ ${campaign?population:city.target} 人`;
     $('mission-title').textContent = level.title;
-    $('mission-description').textContent = `在 ${level.duration} 秒内送达 ${level.target} 人，建设与公交预算共 ${level.budget} 点。${level.description}`;
-    $('mission-tip').textContent = `第 ${number} 课 · ${level.lesson}　↗ ${level.tip}`;
+    $('mission-description').textContent = campaign?`第 ${campaign.dayIndex+1} 天：在 ${city.duration} 秒内尽量完成 ${city.target} 人的通勤。当日总人口送达比例与满意度共同决定收入，结算后可改造路网。`:`在 ${city.duration} 秒内送达 ${city.target} 人，建设与公交预算共 ${city.budget} 点。${level.description}`;
+    $('mission-tip-meta').textContent = campaign?`五日运营 · 当日最高收入 ${campaign.days[campaign.dayIndex].maxIncome} 点`:`第 ${number} 课 · ${level.lesson}`;
+    $('mission-tip').textContent = level.tip;
     const demand = $('demand-list');demand.replaceChildren();
     for (const r of city.routes) {
       const row = document.createElement('li');
@@ -95,7 +121,7 @@
       row.append(name, status); $('connection-list').append(row);
       return { row, status, routeIndex: ri };
     });
-    updateDesignControls();
+    updateDesignControls();renderCampaignProgress();
   }
   function requestLevel(id) {
     if (id === city.level.id) return;
@@ -248,7 +274,7 @@
     $('upgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)<ROAD_TYPES.length-1)||!city.level.features.grade||!planning;
     $('downgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)>0)||!city.level.features.grade||!planning;
     $('remove-road').disabled=!removable.length||!planning;
-    $('build-road').disabled=!(n!==null&&!city.roads.has(n)&&!city.buildings.has(n)&&(!city.water.has(n)||city.bridges.has(n))&&!city.trees.has(n))||!planning;
+    $('build-road').disabled=!(n!==null&&!city.roads.has(n)&&!city.buildings.has(n)&&!city.pendingBuildings.has(n)&&(!city.water.has(n)||city.bridges.has(n))&&!city.trees.has(n))||!planning;
     $('upgrade-road').textContent=cells.length>1?'↑ 全部升级':'↑ 升级';
     $('downgrade-road').textContent=cells.length>1?'↓ 全部降级':'↓ 降级';
     $('remove-road').textContent=cells.length>1?'⌫ 全部拆除':'⌫ 拆除';
@@ -288,9 +314,10 @@
         const serving=city.linesServingBuilding(n);
         $('signal-phase').textContent=`建筑可作为拖拽起点；向空地延伸时固定从支路开始。${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
       } else {
-        const kind=city.bridges.has(n)?'桥梁（空）':city.water.has(n)?'水面':city.trees.has(n)?'绿地':'空地';
-        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${kind}`;
-        $('road-load').textContent=kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';$('signal-phase').textContent='';
+        const site=city.pendingBuildings.get(n);
+        const kind=site?`${site.kind==='home'?'住宅':'目的地'}建设用地`:city.bridges.has(n)?'桥梁（空）':city.water.has(n)?'水面':city.trees.has(n)?'绿地':'空地';
+        $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${kind}${site?` · ${site.daysUntil} 天后落成`:''}`;
+        $('road-load').textContent=site?'建设期间不可铺路，请为建筑和出口预留空间。':kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';$('signal-phase').textContent='';
       }
     }
     updateSignalControls(signal,planning);
@@ -449,7 +476,7 @@
     for(let y=0;y<HEIGHT;y++) for(let x=0;x<WIDTH;x++) {
       if((x*7+y*11)%13===0) { ctx.fillStyle='#e3ebd7';ctx.fillRect(x*s,y*s,s,s); }
       ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);
-      if((x*3+y*7)%9===0 && !city.water.has(key(x,y)) && !city.roads.has(key(x,y)) && !city.buildings.has(key(x,y))) {
+      if((x*3+y*7)%9===0 && !city.water.has(key(x,y)) && !city.roads.has(key(x,y)) && !city.buildings.has(key(x,y)) && !city.pendingBuildings.has(key(x,y))) {
         line((x+.2)*s,(y+.72)*s,(x+.23)*s,(y+.64)*s,'#cedcbd',1);
         line((x+.27)*s,(y+.74)*s,(x+.3)*s,(y+.67)*s,'#cedcbd',1);
       }
@@ -525,6 +552,14 @@
       line(cx,cy,cx,cy+s*.31,'#a5b18d',s*.055);
       circle(cx-s*.1,cy,s*.19,'#a9c398');circle(cx+s*.1,cy+s*.015,s*.19,'#9ab88a');circle(cx,cy-s*.13,s*.19,'#b3cba1');
     }
+    for(const site of city.pendingBuildings.values()) {
+      const {x,y}=point(site.cell),cx=(x+.5)*s,cy=(y+.5)*s;
+      ctx.save();ctx.globalAlpha=.78;ctx.setLineDash([s*.08,s*.06]);
+      rounded(x*s+s*.1,y*s+s*.1,s*.8,s*.8,s*.13,'#c7cac5aa','#747a75');ctx.setLineDash([]);
+      label(site.kind==='home'?'⌂':'▣',cx,cy-s*.08,s*.34,'#6f756f','700');
+      rounded(cx-s*.2,cy+s*.16,s*.4,s*.22,s*.1,'#676d68');label(String(site.daysUntil),cx,cy+s*.27,s*.14,'#fffef9','800');
+      ctx.restore();
+    }
     city.homes.forEach((h,i)=>drawBuilding({...h,isHome:true,index:i}));
     city.goals.forEach((g,i)=>drawBuilding({...g,isHome:false,index:i}));
     // Road paint sits below vehicles, so it reads as part of the grid.
@@ -570,7 +605,7 @@
       rounded(x*s+1,y*s+1,s-2,s-2,s*.1,retracting?'#d18d4f22':'#317a5719',retracting?'#c68b56':'#6d936b');
       if(tool==='cut')label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
       if(tool==='bus')label(busEditMode==='trim'?'−':'▰',(x+.5)*s,(y+.5)*s,s*.34,busEditMode==='trim'?'#c8844f':city.activeBusLine?.color||'#1686a0','800');
-      if(tool==='road'&&!city.buildings.has(selected)&&!city.roads.has(selected))label(retracting?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,retracting?'#bd8253':'#82a277');
+      if(tool==='road'&&!city.buildings.has(selected)&&!city.pendingBuildings.has(selected)&&!city.roads.has(selected))label(retracting?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,retracting?'#bd8253':'#82a277');
     }
     if(city.state==='paused') {
       rounded(w/2-52,14,104,27,14,'#fffef9e8');label('Ⅱ  规划暂停中',w/2,28,11,'#63715b');
@@ -578,8 +613,9 @@
   }
   function updateUI() {
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
-    $('progress').style.width=Math.min(100,city.delivered/city.level.target*100)+'%';
-    const seconds=Math.ceil(Math.max(0,city.level.duration-city.elapsed));
+    const deliveryTotal=campaign?city.homes.reduce((sum,home)=>sum+home.passengers,0):city.target;
+    $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';
+    const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
     $('timer').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
     const waiting=city.queues.reduce((a,b)=>a+b,0),blocked=[...city.cars,...city.buses].filter(c=>c.blocked>1.5).length;
     const heavy=blocked>3||waiting>18, neutral=['planning','paused','lost'].includes(city.state);
@@ -631,35 +667,46 @@
     updateBusVisibilityControls();
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
     $('speed').textContent=speed+'×';
+    $('speed').setAttribute('aria-label',`切换运营倍速，当前 ${speed} 倍`);
+    $('speed').title=`当前 ${speed}×；点击切换为 ${SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length]}×`;
     $('connection-count').textContent=city.routes.filter((r,i)=>city.routeConnected(i)).length+' / '+city.routes.length;
     connectionRows.forEach(({row,status},i)=>{
       row.classList.toggle('connected',city.routeConnected(i));status.textContent=city.routeConnected(i)?'已连接 ✓':'待连接';
     });
     updateInspector();
+    renderCampaignProgress();
     if(['won','lost'].includes(city.state)&&!resultShown) showResult();
   }
   function showResult() {
     resultShown=true;
     const won=city.state==='won', generated=city.generated.reduce((sum,count)=>sum+count,0);
     const report=TrafficResults.commuteReport(city.commuteTimes,Math.max(0,generated-city.delivered));
+    pendingCampaignScore=report.score;
+    const settlement=campaign?campaign.settlement(report.score):null,finalDay=campaign&&campaign.dayIndex===campaign.days.length-1;
     $('result-icon').textContent=won?'✳':'⌁';
-    $('result-title').textContent=won?'这座小城，因你而畅通。':'再给小城一个好计划。';
-    $('result-description').textContent=won?'目标达成！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
+    $('result-title').textContent=campaign?finalDay?'五天运营，城市因你而成长。':`第 ${campaign.dayIndex+1} 天运营结算`:won?'这座小城，因你而畅通。':'再给小城一个好计划。';
+    $('result-description').textContent=campaign?`${won?'完成':'未完成'}当日目标；本日收入 ${settlement.income} 点，由当日总人口送达比例与通勤满意度共同计算。${finalDay?'你仍可关闭报告，从进度条回到任一天重新运营。':'进入下一天后，新建筑可能落成，请先用收入改造交通。'}`:won?'目标达成！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
     const summary=document.createElement('strong');summary.textContent=`已产生居民满意度 ${report.score}%`;
-    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.level.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.level.budget-city.remaining} 点`;
+    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${campaign?settlement.population:city.target} 人${campaign?` · 当日目标 ${city.target} 人`:''} · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
     $('result-stats').replaceChildren(summary,meta,distribution);
-    $('next-level').hidden = !won || levels().indexOf(city.level) === levels().length - 1;
+    $('next-level').hidden = campaign?finalDay:!won||levels().indexOf(city.level)===levels().length-1;
+    $('next-level').textContent=campaign?'进入下一天规划 ↗':'下一座小城 ↗';
+    $('view-city').hidden=Boolean(campaign&&!finalDay);
+    $('play-again').textContent=campaign?'重新开始五天':'再规划一次';
+    if(finalDay&&!campaign.results[campaign.dayIndex])campaign.advance(report.score);
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('result-dialog').showModal();
   }
   function reset(levelId = city.level.id) {
+    const switching=Boolean(city&&levelId!==city.level.id);
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    city=new City(levelId);speed=1;accumulator=0;resultShown=false;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
+    const level=levels().find(item=>item.id===levelId);campaign=level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId);
+    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
-    configureLevel();setTool('select');updateUI();draw();toast(`欢迎来到${city.level.name}！${city.level.tip}`);
+    configureLevel();setTool('select');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
   }
   function eventCell(event) {
     const rect=canvas.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/rect.width*WIDTH),y=Math.floor((event.clientY-rect.top)/rect.height*HEIGHT);
@@ -839,7 +886,7 @@
     speed=1;accumulator=0;resultShown=false;inspectedCell=null;updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
   function toggleOperation() {
-    const planning=city.state==='planning',message=city.toggle();
+    const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
     if(planning)setTool('select');
     accumulator=0;updateUI();
@@ -848,7 +895,7 @@
   $('stop').onclick=()=>openPausedDialog($('stop-dialog'));
   $('cancel-stop').onclick=()=>closePausedDialog($('stop-dialog'));
   $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
-  $('speed').onclick=()=>{speed=speed===1?2:1;updateUI();};
+  $('speed').onclick=()=>{speed=SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length];updateUI();};
   $('help').onclick=()=>openPausedDialog($('help-dialog'));
   document.querySelector('.dialog-close').onclick=()=>closePausedDialog($('help-dialog'));
   document.querySelector('.dialog-done').onclick=()=>closePausedDialog($('help-dialog'));
@@ -859,7 +906,11 @@
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};
   for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
-  $('next-level').onclick=()=>{const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);};
+  $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
+  $('next-level').onclick=()=>{
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();configureLevel();setTool('select');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
+  };
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;
     if (['SELECT', 'INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
@@ -932,7 +983,7 @@
               for(const level of levels()) {
                 for(const field of ['name','english','difficulty','title','description','tip','lesson']) if(typeof level[field]!=='string'||!level[field].trim()) throw new Error(`关卡 ${level.id} 缺少 ${field}`);
                 if(!level.features||!Array.isArray(level.routes)||!Number.isFinite(level.budget)||!Number.isFinite(level.duration)||!Number.isFinite(level.target)) throw new Error(`关卡 ${level.id} 缺少运行参数`);
-                new City(level.id);
+                new City(level.id);if(level.campaign)new CampaignSession(level.id);
               }
             } catch(error) {
               TrafficCore.setLevels(builtInCatalog);

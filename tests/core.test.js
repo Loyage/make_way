@@ -72,8 +72,9 @@ test('unconnected city loses at the deadline and terminal states do not advance'
 });
 test('disconnecting and reconnecting roads updates path availability', () => {
   const city=new City();connect(city);
-  city.edit(key(5,3),true);assert.equal(city.paths[0],null);
-  city.connect(key(4,3),key(5,3));city.connect(key(5,3),key(6,3));assert.ok(city.paths[0]);
+  const path=[...city.paths[0]],mid=path[1];
+  city.edit(mid,true);assert.equal(city.paths[0],null);
+  city.connect(path[0],mid);city.connect(mid,path[2]);assert.ok(city.paths[0]);
 });
 test('operation locks every planning mutation while running or paused', () => {
   const city=new City();connect(city);
@@ -109,8 +110,10 @@ test('stopping operation keeps the design and resets all simulation progress', (
   assert.deepEqual(city.serializeDesign(),design);assert.equal(city.stop(),false);
 });
 test('designs round-trip with road grades and signals while invalid data is atomic', () => {
-  const source=new City();connect(source);source.edit(key(5,3),false,2);
-  const junction=key(4,3);source.connect(junction,key(4,4));
+  const source=new City();connect(source);
+  const path=[...source.paths[0]],junction=path[1];
+  source.edit(path[2],false,2);
+  source.connect(junction,key(point(junction).x,point(junction).y-1));
   assert.equal(source.setSignal(junction,{enabled:true,green:6,automatic:false,yieldMode:'priority',priority:['west','south','east','north'],phases:[['north-straight'],['west-left','east-left']]}),'');
   const design=source.serializeDesign(), target=new City();target.edit(key(1,1));target.toggle();run(target,1);target.stop();
   assert.equal(design.version,6);assert.equal(target.loadDesign(JSON.parse(JSON.stringify(design))),'');

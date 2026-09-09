@@ -10,10 +10,10 @@
   }
   let LEVELS = [], CHAPTERS = [], api = null;
   function legacyCatalog(list) {
-    if (list.length === 8) return { version: 1, chapters: [
-      { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: list.slice(0,4) },
-      { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: list.slice(4) }
-    ] };
+    if (list.length === 8 || list.length === 9 || list.length === 10) { const split = list.length - 4; return { version: 1, chapters: [
+      { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: list.slice(0,split) },
+      { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: list.slice(split) }
+    ] }; }
     return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: list }] };
   }
   // Replace the active chapter catalog. Legacy flat level arrays are migrated
@@ -156,10 +156,15 @@
     return { x: p.x + .5 + d.x * along - d.y * side, y: p.y + .5 + d.y * along + d.x * side };
   }
   class City {
-    constructor(levelId = LEVELS[0].id) {
+    constructor(levelId = LEVELS[0].id, options = {}) {
       this.level = LEVELS.find(level => level.id === levelId);
       if (!this.level) throw new RangeError(`Unknown level: ${levelId}`);
-      this.routes = this.level.routes.map(normalizeRoute);
+      this.routes = (options.routes || this.level.routes).map(normalizeRoute);
+      this.runtimeBudget = options.budget;
+      this.runtimeDuration = options.duration;
+      this.runtimeTarget = options.target;
+      this.deadlineMode = Boolean(options.deadlineMode);
+      this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site }]));
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
       this.roads = new Set();
@@ -184,6 +189,9 @@
         if (error) throw new Error(`Invalid initial road: ${error}`);
       }
     }
+    get budget() { return this.runtimeBudget ?? this.level.budget; }
+    get duration() { return this.runtimeDuration ?? this.level.duration; }
+    get target() { return this.runtimeTarget ?? this.level.target; }
     get busLineLimit() { return Number.isInteger(this.level.busLineLimit) ? this.level.busLineLimit : 1; }
     busLine(lineId = this.activeBusLineId) { return this.busLines.find(line => line.id === lineId) || null; }
     get activeBusLine() { return this.busLine(); }
@@ -258,7 +266,7 @@
       let spent = 0;
       for (const n of this.roads) spent += this.roadType(n).cost;
       for (const line of this.busLines) if (line.route.length) spent += line.count * BUS_COST;
-      return this.level.budget - spent;
+      return this.budget - spent;
     }
     rebuildRoutes() {
       const homes = [], goals = [];
@@ -585,6 +593,7 @@
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
+      if (this.pendingBuildings.has(n)) return '这里是建设用地，请为即将落成的建筑预留空间';
       if (erase) {
         if (!this.roads.has(n)) return '';
         if (this.busLines.some(line => line.route.includes(n))) return '这格道路正在公交线路上，请先删除或重画线路';
@@ -645,7 +654,10 @@
     loadDesign(design) {
       if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能读取设计，请先停止运营';
       if (!design || ![1,2,3,4,5,6].includes(design.version) || design.levelId !== this.level.id || !Array.isArray(design.roads) || !Array.isArray(design.signals)) return '存档格式无效或不属于当前关卡';
-      const candidate = new City(this.level.id), seenRoads = new Set(), seenSignals = new Set();
+      const candidate = new City(this.level.id, {
+        routes: this.routes, budget: this.budget, duration: this.duration, target: this.target,
+        deadlineMode: this.deadlineMode, pendingBuildings: [...this.pendingBuildings.values()]
+      }), seenRoads = new Set(), seenSignals = new Set();
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
       candidate.refreshPaths();
       for (const road of design.roads) {
@@ -864,7 +876,7 @@
     }
     step(dt) {
       if (this.state !== 'running' || !Number.isFinite(dt) || dt <= 0) return;
-      dt = Math.min(dt, 0.1, this.level.duration - this.elapsed);
+      dt = Math.min(dt, 0.1, this.duration - this.elapsed);
       this.elapsed += dt;
       for (let hi = 0; hi < this.homes.length; hi++) {
         const home = this.homes[hi];
@@ -971,11 +983,76 @@
         }
       }
       this.cars = this.cars.filter(c => !c.done);
-      if (this.delivered >= this.level.target) this.state = 'won';
-      else if (this.elapsed >= this.level.duration) this.state = 'lost';
+      if (!this.deadlineMode && this.delivered >= this.target) this.state = 'won';
+      else if (this.elapsed >= this.duration) this.state = this.delivered >= this.target ? 'won' : 'lost';
     }
   }
-  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
+  function campaignIncome(delivered, population, satisfaction, maxIncome) {
+    const deliveryRatio = Math.min(1, Math.max(0, delivered) / Math.max(1, population));
+    const satisfactionRatio = Math.min(1, Math.max(0, satisfaction) / 100);
+    return Math.round(Math.max(0, maxIncome) * (deliveryRatio * 0.7 + satisfactionRatio * 0.3));
+  }
+  class CampaignSession {
+    constructor(levelId) {
+      this.level = LEVELS.find(level => level.id === levelId);
+      if (!this.level?.campaign || !Array.isArray(this.level.campaign.days) || this.level.campaign.days.length !== 5) throw new RangeError(`Level is not a five-day campaign: ${levelId}`);
+      this.days = this.level.campaign.days;
+      if (this.days.some(day => !day || !Number.isFinite(day.duration) || day.duration <= 0 || !Number.isInteger(day.target) || day.target <= 0
+        || !Number.isInteger(day.maxIncome) || day.maxIncome < 0 || !Array.isArray(day.routes) || !day.routes.length)) throw new RangeError(`Invalid campaign day: ${levelId}`);
+      this.dayIndex = 0;
+      this.results = [];
+      this.checkpoints = [];
+      this.city = this.createCity(0, this.level.budget);
+    }
+    pendingBuildings(dayIndex = this.dayIndex) {
+      const active = new Set(this.days[dayIndex].routes.flatMap(route => [...routeHomes(route).map(home => home.cell), ...routeGoals(route).map(goal => goal.cell)]));
+      const sites = new Map();
+      for (let future = dayIndex + 1; future < this.days.length; future++) {
+        for (const route of this.days[future].routes) {
+          for (const [kind, buildings] of [['home', routeHomes(route)], ['goal', routeGoals(route)]]) for (const building of buildings) {
+            if (!active.has(building.cell) && !sites.has(building.cell)) sites.set(building.cell, { cell: building.cell, kind, daysUntil: future - dayIndex });
+          }
+        }
+      }
+      return [...sites.values()];
+    }
+    createCity(dayIndex, budget, design = null) {
+      const day = this.days[dayIndex];
+      const city = new City(this.level.id, { routes: day.routes, budget, duration: day.duration, target: day.target, deadlineMode: true, pendingBuildings: this.pendingBuildings(dayIndex) });
+      if (design) { const message = city.loadDesign(design); if (message) throw new Error(message); }
+      return city;
+    }
+    beginDay() {
+      if (this.city.state !== 'planning') return this.city.toggle();
+      const design = this.city.serializeDesign(), message = this.city.toggle();
+      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: JSON.parse(JSON.stringify(design)) };
+      return message;
+    }
+    settlement(satisfaction) {
+      const day = this.days[this.dayIndex], population = this.city.homes.reduce((sum, home) => sum + home.passengers, 0);
+      return { day: this.dayIndex + 1, delivered: this.city.delivered, population, target: this.city.target, satisfaction, income: campaignIncome(this.city.delivered, population, satisfaction, day.maxIncome) };
+    }
+    advance(satisfaction) {
+      if (!['won','lost'].includes(this.city.state)) throw new Error('当天运营尚未结束');
+      const result = this.settlement(satisfaction);
+      this.results[this.dayIndex] = result;
+      if (this.dayIndex === this.days.length - 1) return result;
+      const design = this.city.serializeDesign(), budget = this.city.budget + result.income;
+      this.dayIndex++;
+      this.city = this.createCity(this.dayIndex, budget, design);
+      return result;
+    }
+    replay(dayIndex) {
+      if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex >= this.checkpoints.length || !this.checkpoints[dayIndex]) return '这一天还没有可回溯的运营前存档';
+      const checkpoint = this.checkpoints[dayIndex];
+      this.dayIndex = dayIndex;
+      this.results = this.results.slice(0, dayIndex);
+      this.checkpoints = this.checkpoints.slice(0, dayIndex + 1);
+      this.city = this.createCity(dayIndex, checkpoint.budget, checkpoint.design);
+      return '';
+    }
+  }
+  api = { City, CampaignSession, campaignIncome, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, WIDTH, HEIGHT, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

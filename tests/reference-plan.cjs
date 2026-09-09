@@ -14,10 +14,17 @@ function completeCrossing(city) {
 function buildReferencePlan(city) {
   if(city.level.id==='demolition-school') {
     for(const n of [...city.roads]) assert.equal(city.edit(n,true),'');
-    line(city,2,2,2,8);return;
+    line(city,2,2,0,2);line(city,0,2,0,6);line(city,0,6,2,6);line(city,2,6,2,8);return;
   }
   if(city.level.id==='avenue-school') {
     line(city,2,5,13,5,1);line(city,2,8,13,8,2);return;
+  }
+  if(city.level.id==='cut-school') {
+    // Scissors split the crossing: green keeps the straight east-west road,
+    // while the north-south flow reroutes through the western bypass.
+    assert.equal(city.cut(key(7,4),key(7,5)),'');
+    assert.equal(city.cut(key(7,5),key(7,6)),'');
+    return;
   }
   if(city.level.id==='woodland') {
     for(const [x1,y1,x2,y2] of [[2,2,3,2],[3,2,3,3],[12,2,11,2],[11,2,11,3],[13,9,11,9],[11,9,11,8],[3,9,3,8],[2,7,3,7],[12,5,11,5],[13,7,11,7],[4,4,4,3]]) line(city,x1,y1,x2,y2,2);

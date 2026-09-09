@@ -114,19 +114,18 @@ test('housing demand matches road grades, not merely the length of a detour',()=
     }
   }
 });
-for(const id of ['demolition-school','avenue-school','signal-school'])test(`${id}: the taught intervention turns a losing plan into a win`,()=>{
+for(const id of ['demolition-school','avenue-school','cut-school','signal-school'])test(`${id}: the taught intervention turns a losing plan into a win`,()=>{
   const before=new City(id),after=new City(id);
   if(id==='signal-school')completeCrossing(before);
   buildReferencePlan(after);
   for(const c of [before,after])run(c);
   assert.equal(before.state,'lost');assert.equal(after.state,'won');assert.ok(after.delivered>before.delivered);assert.ok(after.remaining>=0);
 });
-test('demolition refunds a spent budget and rebuilding cannot be skipped',()=>{
-  const c=new City('demolition-school');assert.equal(c.remaining,0);
-  assert.ok(c.connect(key(2,2),key(2,3)));
-  assert.equal(c.edit(key(13,5),true),'');assert.equal(c.remaining,1);assert.equal(c.paths[0],null);
+test('demolition refunds a spent budget and disconnects the route',()=>{
+  const c=new City('demolition-school');assert.equal(c.remaining,6);
+  assert.equal(c.edit(key(9,5),true),'');assert.equal(c.remaining,7);assert.equal(c.paths[0],null);
   const saved=c.serializeDesign(),other=new City(c.level.id);assert.equal(other.loadDesign(saved),'');
-  assert.deepEqual(other.serializeDesign(),saved);assert.equal(other.roads.has(key(13,5)),false);
+  assert.deepEqual(other.serializeDesign(),saved);assert.equal(other.roads.has(key(9,5)),false);
 });
 test('woodland starts with a complete high-grade ring and only needs feeders',()=>{
   const c=new City('woodland'),ring=[...c.roads];
