@@ -121,8 +121,6 @@
     if (!Array.isArray(signal.phases) || signal.phases.length < 1 || signal.phases.length > 8) return '手动灯序须包含 1 至 8 个阶段';
     for (const phase of signal.phases) {
       if (!Array.isArray(phase) || !phase.length || new Set(phase).size !== phase.length || phase.some(action => !SIGNAL_ACTIONS.includes(action))) return '每个手动阶段至少需要一个有效放行动作';
-      const moves = phase.map(action => signalActionMovement(action, width));
-      for (let i=0;i<moves.length;i++) for (let j=i+1;j<moves.length;j++) if (movementsConflict(moves[i],moves[j])) return '同一阶段不能包含互相冲突的放行动作';
     }
     return '';
   }
@@ -686,6 +684,14 @@
     preflightCheck(options = {}) {
       const issues = [], reachable = this.homes.map(() => this.goals.map(() => false));
       const coordinates = cell => { const p = this.point(cell); return `(${p.x + 1},${p.y + 1})`; };
+      for (const [cell,signal] of this.signals) {
+        if (!signal.enabled || signal.automatic) continue;
+        const phases = signal.phases.map((actions,index) => ({ index, conflicts: this.signalConflicts(actions) })).filter(phase => phase.conflicts.length);
+        if (phases.length) issues.push({
+          code: 'signal-conflict', blocking: true, title: '红绿灯放行动作冲突', cells: [cell],
+          detail: `路口 ${coordinates(cell)} 的${phases.map(phase => `阶段 ${phase.index + 1}`).join('、')}包含冲突动作，请调整手动灯序后再开始运营。`
+        });
+      }
       for (let hi = 0; hi < this.homes.length; hi++) for (let gi = 0; gi < this.goals.length; gi++) {
         const home = this.homes[hi], goal = this.goals[gi];
         if (home.route !== goal.route) continue;
@@ -756,10 +762,11 @@
         code: 'target-impossible', title: '理论送达上限低于目标', cells: [],
         detail: `按当前连接、公交站序和目的地容量，理论最多送达 ${maxDeliverable} / ${this.target} 人。`
       });
-      return { ok: issues.length === 0, target: this.target, maxDeliverable, issues };
+      return { ok: issues.length === 0, blocking: issues.some(issue => issue.blocking), target: this.target, maxDeliverable, issues };
     }
     toggle() {
       if (this.state === 'planning') {
+        if ([...this.signals.values()].some(signal => signal.enabled && !signal.automatic && signal.phases.some(actions => this.signalConflicts(actions).length))) return '地图设计有问题：手动红绿灯包含冲突的放行动作';
         this.spawnBuses(); this.state = 'running';
       } else if (this.state === 'paused') this.state = 'running';
       else if (this.state === 'running') this.state = 'paused';

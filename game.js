@@ -70,7 +70,7 @@
       const detail=document.createElement('small');detail.textContent=`${level.difficulty} · ${level.lesson}`;
       button.append(number,name,detail);button.onclick=()=>requestLevel(level.id);list.append(button);levelButtons.push(button);
     }
-    $('level-summary').textContent=`${chapter.name} · ${chapter.levels.length} 座小城 · 切换会重置本局`;
+    $('level-summary').textContent=`当前：${city.level.name}`;
     levelButtons.forEach(button=>{const selected=button.dataset.levelId===city.level.id;button.classList.toggle('selected',selected);button.setAttribute('aria-current',selected?'true':'false');});
   }
   function buildLevelButtons() {
@@ -114,6 +114,9 @@
     $('chapter-number').textContent = String(chapterIndex+1).padStart(2,'0');
     $('chapter-name').textContent = chapter?.name||level.english;
     $('map-name').textContent = level.name;
+    $('level-summary').textContent = `当前：${level.name}`;
+    if ($('level-picker').contains(document.activeElement)) $('level-picker').querySelector('summary').focus();
+    $('level-picker').open = false;
     document.querySelector('.map-size').textContent = `${city.width} × ${city.height}`;
     const population=city.target;
     $('target-label').textContent = '全部居民';
@@ -171,7 +174,11 @@
     for(const button of grid.children){const cell=Number(button.dataset.cell);button.setAttribute('aria-label',accessibleCellLabel(cell));button.tabIndex=-1;}
   }
   function requestLevel(id) {
-    if (id === city.level.id) return;
+    if (id === city.level.id) {
+      $('level-picker').querySelector('summary').focus();
+      $('level-picker').open = false;
+      return;
+    }
     const defaultDesign = new City(city.level.id).serializeDesign();
     const designChanged = JSON.stringify(city.serializeDesign()) !== JSON.stringify(defaultDesign);
     if (!designChanged && city.state === 'planning') {
@@ -263,11 +270,10 @@
   function signalActionName(action){const [entry,turn]=action.split('-');return `${SIGNAL_ENTRY_NAMES[entry]}${SIGNAL_TURN_NAMES[turn]}`;}
   function applySignalSettings(settings, success='路口设置已更新') {
     if (!city.level.features.signals) { toast('红绿灯在本关未开放'); updateUI(); return false; }
-    const conflict=(settings.phases||[]).map(actions=>city.signalConflicts(actions)[0]).find(Boolean);
-    $('signal-conflict').textContent=conflict?`${signalActionName(conflict[0])}与${signalActionName(conflict[1])}会穿过同一冲突区，不能同时放行。`:'';
     const message=mutateDesign(()=>city.setSignal(inspectedCell,settings));
     if(message){$('signal-priority-list').dataset.signature='';$('signal-phase-list').dataset.signature='';}
-    toast(message||success);updateUI();draw();return !message;
+    const signal=city.signals.get(inspectedCell),hasConflict=signal?.phases.some(actions=>city.signalConflicts(actions).length);
+    toast(message||(hasConflict?'已保留设置，但冲突灯序必须在运营前修正':success));updateUI();draw();return !message;
   }
   function updateSignalControls(signal, planning) {
     const unlocked=Boolean(signal&&city.level.features.signals),editable=unlocked&&planning;
@@ -281,7 +287,9 @@
     $('signal-cycle').disabled=!editable||!signal?.enabled;
     if(document.activeElement!==$('signal-cycle'))$('signal-cycle').value=String(signal?.green||2);
     $('signal-custom-editor').hidden=!signal?.enabled||signal?.automatic!==false;
-    if(!signal)return;
+    if(!signal){$('signal-conflict').textContent='';return;}
+    const phaseConflicts=signal.phases.map(actions=>city.signalConflicts(actions));
+    $('signal-conflict').textContent=phaseConflicts.flatMap((conflicts,index)=>conflicts.map(conflict=>`阶段 ${index+1}：${signalActionName(conflict[0])}与${signalActionName(conflict[1])}会穿过同一冲突区。`)).join(' ');
     const priorityList=$('signal-priority-list'),prioritySignature=`${editable}:${signal.priority.join(',')}`;
     if(priorityList.dataset.signature!==prioritySignature) {
       priorityList.dataset.signature=prioritySignature;priorityList.replaceChildren();
@@ -300,9 +308,9 @@
     if(phaseList.dataset.signature!==phaseSignature) {
       phaseList.dataset.signature=phaseSignature;phaseList.replaceChildren();
       signal.phases.forEach((phase,index)=>{
-        const card=document.createElement('section');card.className='signal-phase-card';card.classList.toggle('previewing',index===previewSignalPhaseIndex);card.onclick=event=>{if(event.target.closest('button,input'))return;previewSignalPhaseIndex=index;phaseList.dataset.signature='';updateUI();draw();};
+        const card=document.createElement('section');card.className='signal-phase-card';card.classList.toggle('previewing',index===previewSignalPhaseIndex);card.classList.toggle('conflicted',Boolean(phaseConflicts[index].length));card.setAttribute('aria-invalid',String(Boolean(phaseConflicts[index].length)));card.onclick=event=>{if(event.target.closest('button,input'))return;previewSignalPhaseIndex=index;phaseList.dataset.signature='';updateUI();draw();};
         const heading=document.createElement('div');heading.className='signal-phase-heading';
-        const title=document.createElement('strong');title.textContent=`阶段 ${index+1}`;
+        const title=document.createElement('strong');title.textContent=`阶段 ${index+1}${phaseConflicts[index].length?' · 动作冲突':''}`;
         const up=document.createElement('button'),down=document.createElement('button'),remove=document.createElement('button');
         for(const button of [up,down,remove]){button.type='button';button.className='tool';button.disabled=!editable;}
         up.textContent='↑';up.title='阶段提前';up.disabled||=index===0;down.textContent='↓';down.title='阶段后移';down.disabled||=index===signal.phases.length-1;
@@ -968,12 +976,17 @@
     if(city.state!=='planning'){beginOperation();return;}
     const report=city.preflightCheck();
     if(!report.issues.length){toast(`运营前检查通过 · 理论可送达 ${report.maxDeliverable} / ${report.target} 人`);beginOperation();return;}
-    $('preflight-summary').textContent=`发现 ${report.issues.length} 项提示；当前理论最多可送达 ${report.maxDeliverable} / ${report.target} 人。`;
+    $('preflight-title').textContent=report.blocking?'地图设计有问题':'运营前发现需要确认的问题';
+    $('preflight-summary').textContent=report.blocking?`发现 ${report.issues.filter(issue=>issue.blocking).length} 项必须修正的问题；问题位置已在下方列出。`:`发现 ${report.issues.length} 项提示；当前理论最多可送达 ${report.maxDeliverable} / ${report.target} 人。`;
     const rows=report.issues.map(issue=>{
-      const row=document.createElement('li');row.classList.toggle('preflight-target',issue.code==='target-impossible');
+      const row=document.createElement('li');row.classList.toggle('preflight-target',issue.code==='target-impossible');row.classList.toggle('preflight-blocking',Boolean(issue.blocking));
       const title=document.createElement('strong');title.textContent=issue.title;
-      const detail=document.createElement('span');detail.textContent=issue.detail;row.append(title,detail);return row;
+      const detail=document.createElement('span');detail.textContent=issue.detail;row.append(title,detail);
+      if(issue.cells?.length){const locate=document.createElement('button');locate.type='button';locate.className='tool';locate.textContent='在地图中查看';locate.onclick=()=>{$('preflight-dialog').close();setTool('select');selection={start:issue.cells[0],end:issue.cells[0]};updateUI();draw();canvas.scrollIntoView({block:'center'});};row.append(locate);}
+      return row;
     });
+    $('preflight-note').textContent=report.blocking?'存在冲突的手动灯序时不能开始运营。请定位问题路口并修改，或改用自动信号灯。':'检查只提供规划提示，不会阻止开始。无效公交线路将不发车，其余交通按当前设计运行。';
+    $('confirm-preflight').hidden=report.blocking;
     $('preflight-list').replaceChildren(...rows);$('preflight-dialog').showModal();
   }
   $('start').onclick=toggleOperation;
@@ -990,7 +1003,16 @@
   $('cancel-reset').onclick=()=>closePausedDialog($('reset-dialog'));
   $('confirm-reset').onclick=()=>{delete $('reset-dialog').dataset.resumeOperation;reset();};
   $('play-again').onclick=()=>reset();$('view-city').onclick=()=> $('result-dialog').close();
-  for(const button of document.querySelectorAll('.mobile-info-tabs button'))button.onclick=()=>{for(const item of document.querySelectorAll('.mobile-info-tabs button'))item.classList.toggle('active',item===button);for(const panel of document.querySelectorAll('[data-info-panel]'))panel.classList.toggle('mobile-active',panel.dataset.infoPanel===button.dataset.mobilePanel);};
+  for(const button of document.querySelectorAll('.mobile-info-tabs button')) {
+    button.setAttribute('aria-pressed', String(button.classList.contains('active')));
+    button.onclick=()=>{
+      for(const item of document.querySelectorAll('.mobile-info-tabs button')) {
+        item.classList.toggle('active',item===button);
+        item.setAttribute('aria-pressed',String(item===button));
+      }
+      for(const panel of document.querySelectorAll('[data-info-panel]'))panel.classList.toggle('mobile-active',panel.dataset.infoPanel===button.dataset.mobilePanel);
+    };
+  }
   document.querySelector('[data-info-panel="mission"]').classList.add('mobile-active');
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};

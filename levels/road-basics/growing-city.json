@@ -3,10 +3,10 @@
   "name": "五日新城",
   "english": "FIVE DAYS OF GROWTH",
   "difficulty": "章节挑战",
-  "title": "经营五天，让道路跟上城市生长。",
-  "description": "连续完成五天通勤运营。每日结算会按送达比例与满意度发放收入，用来在下一天规划前改造路网；灰色工地会标出未来落成的住宅和目的地。",
-  "tip": "新客流先适合支路，次日会增长为 4 人/秒；一边接通新街区，一边用昨日收入升级旧通道。",
-  "lesson": "持续运营与城市成长",
+  "title": "经营五天，每天重画一条不相交的路。",
+  "description": "连续完成五天通勤运营。新街区的最短走法会依次穿过旧路线；每日结算后用收入调整路网，把不同车流分开，争取更高满意度与次日预算。灰色工地会标出未来落成的住宅和目的地。",
+  "tip": "别让两条直达线硬碰在一起：观察新工地，每天把其中一路绕到外圈，留出不交汇的独立通道；高客流旧线再升级。",
+  "lesson": "逐日避开路线交汇",
   "features": {
     "grade": true,
     "load": true,
@@ -20,22 +20,14 @@
   "water": [],
   "bridges": [],
   "trees": [
-    38,
-    39,
-    40,
-    41,
-    70,
-    71,
-    72,
-    73,
-    102,
-    103,
-    104,
-    105,
-    134,
-    135,
-    136,
-    137
+    75,
+    76,
+    91,
+    92,
+    130,
+    131,
+    146,
+    147
   ],
   "routes": [
     {
@@ -44,14 +36,14 @@
       "light": "#dae6cb",
       "homes": [
         {
-          "cell": 17,
+          "cell": 33,
           "generationRate": 1,
           "passengers": 42
         }
       ],
       "goals": [
         {
-          "cell": 30,
+          "cell": 46,
           "label": "工坊"
         }
       ]
@@ -69,14 +61,14 @@
             "light": "#dae6cb",
             "homes": [
               {
-                "cell": 17,
+                "cell": 33,
                 "generationRate": 1,
                 "passengers": 42
               }
             ],
             "goals": [
               {
-                "cell": 30,
+                "cell": 46,
                 "label": "工坊"
               }
             ]
@@ -93,14 +85,14 @@
             "light": "#dae6cb",
             "homes": [
               {
-                "cell": 17,
+                "cell": 33,
                 "generationRate": 4,
                 "passengers": 200
               }
             ],
             "goals": [
               {
-                "cell": 30,
+                "cell": 46,
                 "label": "工坊"
               }
             ]
@@ -111,14 +103,14 @@
             "light": "#f2dfbf",
             "homes": [
               {
-                "cell": 49,
+                "cell": 20,
                 "generationRate": 1,
                 "passengers": 50
               }
             ],
             "goals": [
               {
-                "cell": 62,
+                "cell": 84,
                 "label": "市场"
               }
             ]
@@ -135,14 +127,14 @@
             "light": "#dae6cb",
             "homes": [
               {
-                "cell": 17,
+                "cell": 33,
                 "generationRate": 4,
                 "passengers": 202
               }
             ],
             "goals": [
               {
-                "cell": 30,
+                "cell": 46,
                 "label": "工坊"
               }
             ]
@@ -153,14 +145,14 @@
             "light": "#f2dfbf",
             "homes": [
               {
-                "cell": 49,
+                "cell": 20,
                 "generationRate": 4,
                 "passengers": 202
               }
             ],
             "goals": [
               {
-                "cell": 62,
+                "cell": 84,
                 "label": "市场"
               }
             ]
@@ -171,14 +163,14 @@
             "light": "#e7dff0",
             "homes": [
               {
-                "cell": 81,
+                "cell": 65,
                 "generationRate": 1,
                 "passengers": 51
               }
             ],
             "goals": [
               {
-                "cell": 94,
+                "cell": 72,
                 "label": "书店"
               }
             ]
@@ -195,14 +187,14 @@
             "light": "#dae6cb",
             "homes": [
               {
-                "cell": 17,
+                "cell": 33,
                 "generationRate": 4,
                 "passengers": 203
               }
             ],
             "goals": [
               {
-                "cell": 30,
+                "cell": 46,
                 "label": "工坊"
               }
             ]
@@ -213,14 +205,14 @@
             "light": "#f2dfbf",
             "homes": [
               {
-                "cell": 49,
+                "cell": 20,
                 "generationRate": 4,
                 "passengers": 203
               }
             ],
             "goals": [
               {
-                "cell": 62,
+                "cell": 84,
                 "label": "市场"
               }
             ]
@@ -231,14 +223,14 @@
             "light": "#e7dff0",
             "homes": [
               {
-                "cell": 81,
+                "cell": 65,
                 "generationRate": 4,
                 "passengers": 203
               }
             ],
             "goals": [
               {
-                "cell": 94,
+                "cell": 72,
                 "label": "书店"
               }
             ]
@@ -249,14 +241,14 @@
             "light": "#d3e7ed",
             "homes": [
               {
-                "cell": 113,
+                "cell": 55,
                 "generationRate": 1,
                 "passengers": 51
               }
             ],
             "goals": [
               {
-                "cell": 126,
+                "cell": 167,
                 "label": "学校"
               }
             ]
@@ -273,14 +265,14 @@
             "light": "#dae6cb",
             "homes": [
               {
-                "cell": 17,
+                "cell": 33,
                 "generationRate": 4,
                 "passengers": 204
               }
             ],
             "goals": [
               {
-                "cell": 30,
+                "cell": 46,
                 "label": "工坊"
               }
             ]
@@ -291,14 +283,14 @@
             "light": "#f2dfbf",
             "homes": [
               {
-                "cell": 49,
+                "cell": 20,
                 "generationRate": 4,
                 "passengers": 204
               }
             ],
             "goals": [
               {
-                "cell": 62,
+                "cell": 84,
                 "label": "市场"
               }
             ]
@@ -309,14 +301,14 @@
             "light": "#e7dff0",
             "homes": [
               {
-                "cell": 81,
+                "cell": 65,
                 "generationRate": 4,
                 "passengers": 204
               }
             ],
             "goals": [
               {
-                "cell": 94,
+                "cell": 72,
                 "label": "书店"
               }
             ]
@@ -327,14 +319,14 @@
             "light": "#d3e7ed",
             "homes": [
               {
-                "cell": 113,
+                "cell": 55,
                 "generationRate": 4,
                 "passengers": 204
               }
             ],
             "goals": [
               {
-                "cell": 126,
+                "cell": 167,
                 "label": "学校"
               }
             ]
@@ -345,14 +337,14 @@
             "light": "#efd9e1",
             "homes": [
               {
-                "cell": 145,
+                "cell": 133,
                 "generationRate": 1,
                 "passengers": 49
               }
             ],
             "goals": [
               {
-                "cell": 158,
+                "cell": 142,
                 "label": "医院"
               }
             ]

@@ -20,10 +20,12 @@ async function main() {
   });
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
   const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
-  const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const click=selector=>evaluate(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});const details=element.closest('details');if(details&&!element.matches('summary'))details.open=true;element.click();})()`);
   const text=id=>evaluate(`document.getElementById(${JSON.stringify(id)}).textContent`);
   const select=(id,value)=>evaluate(`(()=>{const e=document.getElementById(${JSON.stringify(id)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   async function dragThrough(points){
+    await evaluate('document.querySelector("canvas").scrollIntoView({block:"center"})');
+    await delay(100);
     const r=await evaluate('(()=>{const r=document.querySelector("canvas").getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}})()');
     const mouse=(type,x,y)=>send('Input.dispatchMouseEvent',{type,x:r.x+(x+.5)*r.w/16,y:r.y+(y+.5)*r.h/12,button:'left',buttons:type==='mouseReleased'?0:1,clickCount:1});
     await mouse('mousePressed',...points[0]);
@@ -41,6 +43,11 @@ async function main() {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
+    assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
+    assert.equal(await evaluate('document.querySelector(".design-menu").open'),false);
+    await click('#level-picker > summary');
+    assert.equal(await evaluate('document.querySelector("#level-picker").open'),true);
+    await click('#level-picker > summary');
     assert.equal(await evaluate('document.querySelectorAll(".chapter-tab").length'),2);
     assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),CATALOG.chapters[0].levels.length);
     for(let i=0;i<LEVELS.length;i++){
@@ -50,6 +57,8 @@ async function main() {
       await click(`.level-card[data-level-id="${LEVELS[i].id}"]`);
       assert.equal(await evaluate('document.querySelector("#level-dialog").open'),false,'default design should switch without confirmation');
       assert.equal(await text('map-name'),LEVELS[i].name);
+      assert.equal(await text('level-summary'),`当前：${LEVELS[i].name}`);
+      assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
       if(i>0)assert.equal(await text('toast'),LEVELS[i].description);
       assert.equal(await text('mission-tip'),LEVELS[i].tip);
       assert.equal(await evaluate('getComputedStyle(document.querySelector("#mission-tip")).whiteSpace'),'pre-line');
@@ -115,6 +124,14 @@ async function main() {
     await click('#select-tool');await drag(3,3,3,3);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
     await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
+    await click('#signal-automatic');await click('.signal-phase-card input');
+    assert.equal(await evaluate('document.querySelector(".signal-phase-card input").checked'),true,'conflicting action remains selected for further editing');
+    assert.equal(await evaluate('document.querySelector(".signal-phase-card").classList.contains("conflicted")'),true);
+    assert.equal(await evaluate('getComputedStyle(document.querySelector("#signal-phase-list")).gridTemplateColumns.split(" ").length'),2,'desktop signal phases should use the available width');
+    await click('#start');assert.equal(await text('preflight-title'),'地图设计有问题');
+    assert.equal(await evaluate('document.querySelector("#confirm-preflight").hidden'),true);
+    assert.ok((await text('preflight-list')).includes('路口 (4,4)'));
+    await click('.preflight-blocking .tool');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),false);
 
     await go(5);
     assert.equal(await evaluate('document.querySelector("#campaign-progress").hidden'),false);
@@ -145,9 +162,15 @@ async function main() {
     assert.ok((await text('result-stats')).includes('居民满意度 100%'));
     assert.ok((await text('result-stats')).includes('轻松通勤 1 人'));
 
-    for(const width of [320,768,1024]){
+    for(const width of [320,390,760,768,1024,1440]){
       await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<760});await delay(60);
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`overflow at ${width}px`);
+      await click('[data-mobile-panel="demand"]');
+      assert.equal(await evaluate('document.querySelector("[data-mobile-panel=demand]").getAttribute("aria-pressed")'),'true');
+      assert.equal(await evaluate('getComputedStyle(document.querySelector("[data-info-panel=demand]")).display'),'block');
+      assert.equal(await evaluate('getComputedStyle(document.querySelector("[data-info-panel=mission]")).display'),'none');
+      await click('[data-mobile-panel="mission"]');
+      if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
     console.log('Browser smoke passed: 10 progressive levels, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT } = require('../core.js');
+const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../core.js');
 
 const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
@@ -46,13 +46,13 @@ for (const level of LEVELS) {
   });
 }
 test('two chapters contain ten progressively unlocked levels, including the five-day challenge', () => {
-  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',6],['city-control','城市调度',4]]);
+  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',5],['city-control','城市调度',5]]);
   assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','woodland','growing-city','signal-school','multi-route-school','rush-hour','bus-school']);
+  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','signal-school','multi-route-school','rush-hour','bus-school']);
   for(const id of ['bridge-school','riverside']) assert.throws(()=>new City(id),RangeError);
   const names=['grade','load','cut','inspect','signals','bus'];
   assert.equal(LEVELS.find(level=>level.id==='cut-school').features.cut,true,'scissors must be available from lesson four');
-  assert.equal(LEVELS.find(level=>level.id==='woodland').features.signals,true,'signals must be available from lesson five');
+  assert.equal(LEVELS.find(level=>level.id==='woodland').features.signals,true,'signals must be available from chapter two');
   for(const name of names) {
     const values=LEVELS.map(level=>level.features[name]);
     assert.ok(values.includes(false)&&values.includes(true),`${name} must be taught`);
@@ -74,8 +74,8 @@ test('five-day campaign pays for quality, reveals construction, and replays chec
   assert.equal(campaignIncome(50,100,80,20),12);
   const campaign=new CampaignSession('growing-city');
   assert.equal(campaign.days.length,5);assert.equal(campaign.city.pendingBuildings.size,8);
-  assert.equal(campaign.city.pendingBuildings.get(49).daysUntil,1);
-  assert.match(campaign.city.edit(49),/建设用地/);
+  assert.equal(campaign.city.pendingBuildings.get(20).daysUntil,1);
+  assert.match(campaign.city.edit(20),/建设用地/);
   assert.equal(campaign.city.edit(0),'');
   assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);
   campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
@@ -87,11 +87,33 @@ test('five-day campaign pays for quality, reveals construction, and replays chec
   assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
 });
 
-test('five-day campaign has an efficient affordable plan for every new demand wave', () => {
+test('five-day campaign rewards rebuilding into affordable routes without intersections', () => {
   const campaign=new CampaignSession('growing-city');
+  const plans=[
+    [[1,2,1,0],[1,0,14,0],[14,0,14,2]],
+    [[4,1,4,5]],
+    [[1,4,1,6],[1,6,8,6],[8,6,8,4]],
+    [[7,3,9,3],[9,3,9,10],[9,10,7,10]],
+    [[5,8,5,11],[5,11,14,11],[14,11,14,8]]
+  ];
+  const crossingCells=[null,key(4,2),key(4,4),key(7,4),key(7,8)];
+  const routeRoads=[];
+  const onDirectPath=(route,cell)=>{
+    const a=point(route.homes[0].cell),b=point(route.goals[0].cell),p=point(cell);
+    return a.x===b.x ? p.x===a.x&&p.y>=Math.min(a.y,b.y)&&p.y<=Math.max(a.y,b.y) :
+      a.y===b.y&&p.y===a.y&&p.x>=Math.min(a.x,b.x)&&p.x<=Math.max(a.x,b.x);
+  };
   for(let day=0;day<5;day++) {
-    line(campaign.city,1,1+day*2,14,1+day*2,0);
-    if(day) for(const cell of campaign.city.roads) if(Math.floor(cell/WIDTH)<1+day*2) assert.equal(campaign.city.edit(cell,false,1),'');
+    if(day) {
+      assert.ok(onDirectPath(campaign.city.routes[day-1],crossingCells[day]));
+      assert.ok(onDirectPath(campaign.city.routes[day],crossingCells[day]),`day ${day+1} should tempt routes to cross`);
+      for(const cell of routeRoads[day-1]) assert.equal(campaign.city.edit(cell,false,1),'');
+    }
+    const before=new Set(campaign.city.roads);
+    for(const segment of plans[day]) line(campaign.city,...segment,0);
+    const added=new Set([...campaign.city.roads].filter(cell=>!before.has(cell)));
+    for(const earlier of routeRoads) for(const cell of added) assert.ok(!earlier.has(cell),`day ${day+1} route intersects at ${cell}`);
+    routeRoads.push(added);
     assert.ok(campaign.city.remaining>=0);assert.equal(campaign.beginDay(),'');
     for(let step=0;step<(campaign.city.duration+1)*20;step++) campaign.city.step(.05);
     assert.equal(campaign.city.state,'won',`day ${day+1}: ${campaign.city.delivered}/${campaign.city.target}`);

@@ -155,9 +155,10 @@ test('designs round-trip with road grades and signals while invalid data is atom
   for(const signal of legacy.signals)for(const field of ['automatic','yieldMode','priority','phases'])delete signal[field];
   const migrated=new City();assert.equal(migrated.loadDesign(legacy),'');
   assert.equal(migrated.signals.get(junction).automatic,true);assert.equal(migrated.signals.get(junction).yieldMode,'arrival');
-  const before=target.serializeDesign();
   const conflicting=JSON.parse(JSON.stringify(design));conflicting.signals.find(signal=>signal.cell===junction).phases=[['north-straight','west-straight']];
-  assert.ok(target.loadDesign(conflicting));assert.deepEqual(target.serializeDesign(),before);
+  assert.equal(target.loadDesign(conflicting),'');assert.deepEqual(target.serializeDesign(),conflicting,'editable signal conflicts survive save/load');
+  const before=target.serializeDesign(),malformed=JSON.parse(JSON.stringify(conflicting));malformed.signals.find(signal=>signal.cell===junction).phases=[[]];
+  assert.ok(target.loadDesign(malformed));assert.deepEqual(target.serializeDesign(),before);
   assert.ok(target.loadDesign({...design,roads:[...design.roads,{cell:-1,grade:0}]}));
   assert.deepEqual(target.serializeDesign(),before);
   assert.ok(target.loadDesign({...design,levelId:'rush-hour'}));

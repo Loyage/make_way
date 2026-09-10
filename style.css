@@ -47,6 +47,8 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .signal-custom-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .signal-phase-card { padding: 8px; border: 1px solid #d5dfd2; border-radius: 8px; background: #fffef9; }
 .drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.drawer-heading h3{margin:0}.drawer-close{display:none}.signal-phase-card.previewing{border-color:#d6a34e;box-shadow:0 0 0 2px #e9c77b55}.signal-conflict{margin:0!important;color:#a44c42!important;font-size:10px!important}.mobile-info-tabs{display:none}.accessible-map,.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.signal-phase-card.conflicted { border-color: #b85b4f; background: #fff5f1; box-shadow: 0 0 0 2px #b85b4f22; }
+.signal-phase-card.conflicted .signal-phase-heading strong { color: #963e35; }
 .signal-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; margin-top: 8px; }
 .signal-action-grid label { display: flex; align-items: center; gap: 5px; font-size: 9px; }
 .road-inspector.locked .signal-controls { display: none; }
@@ -118,4 +120,119 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 /* Five-day campaign */
 .campaign-progress{margin:-10px 0 24px;padding:15px 18px;border:1px solid #d8dfce;border-radius:13px;background:#f9faf4}.campaign-progress[hidden]{display:none}.campaign-progress>div:first-child{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}.campaign-progress strong{font-size:13px;color:var(--green)}.campaign-progress span,.campaign-progress small{font-size:10px;color:var(--muted)}.campaign-days{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.campaign-days::before{content:'';position:absolute;left:6%;right:6%;top:16px;height:4px;border-radius:3px;background:#e2e7dc}.campaign-day{position:relative;z-index:1;min-width:0;padding:8px 5px 7px;border:1px solid #dce2d7;border-radius:9px;background:var(--paper);color:#8b9588;font-size:10px}.campaign-day strong{display:block;margin-bottom:2px;font-size:11px;color:inherit}.campaign-day.reached{border-color:#9bb497;color:#426c4b}.campaign-day.current{background:#e6efdc;border-color:#6e966d;box-shadow:0 0 0 2px #fffef9}.campaign-day:disabled{opacity:.65}.legend-site{background:#a5aaa5;border:2px dashed #747a75;border-radius:2px}
 @media(max-width:560px){.campaign-progress{padding:13px 10px}.campaign-days{gap:4px}.campaign-day{padding:7px 2px;font-size:8px}.campaign-day strong{font-size:9px}.campaign-progress>small{display:block;margin-top:8px}}
-@media(max-width:760px){.mobile-info-tabs{display:flex;grid-column:1/-1;gap:6px;overflow:auto}.mobile-info-tabs button{flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--muted)}.mobile-info-tabs button.active{background:#e9efdf;color:var(--green);border-color:#9fba98}.sidebar>[data-info-panel]{display:none}.sidebar>[data-info-panel].mobile-active{display:block}.sidebar>.reset{grid-column:1/-1}}
+.preflight-list li.preflight-blocking { border-color: #c9786c; background: #fff5f1; }
+.preflight-list li .tool { margin-top: 8px; width: fit-content; }
+/* Map-first game layout. Manual pages keep their existing typography. */
+.game-page { --muted: #657568; }
+.game-page .app { max-width: 1680px; }
+.game-page [hidden] { display: none !important; }
+.game-page .header { height: 64px; }
+.game-page .header-actions { gap: 14px; }
+.game-page .brand { font-size: 20px; }
+.game-page .brand-icon { width: 34px; height: 34px; font-size: 28px; }
+.game-page .intro { padding: 16px 0 12px; }
+.game-page .intro h1 { font-size: 18px; margin: 6px 0 0; }
+.game-page .chapter { gap: 8px; }
+.game-page .chapter > span { font-size: 28px; letter-spacing: 0; }
+.game-page .chapter small { font-size: 11px; color: var(--muted); }
+.game-page summary { cursor: pointer; color: var(--green); font-size: 12px; }
+.game-page summary:focus-visible { outline: 3px solid #e0ac58; outline-offset: 3px; border-radius: 6px; }
+.game-page .level-selector { margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.game-page .level-selector-heading { display: list-item; padding: 10px 4px; margin: 0; }
+.game-page .level-selector-heading small { margin-left: 12px; font-size: 11px; }
+.game-page .level-selector nav { padding: 4px 0 12px; }
+.game-page .stats { padding: 12px 0; margin-bottom: 14px; }
+.game-page .stat { padding: 0 18px; }
+.game-page .stat strong { font-size: 26px; line-height: 1.5; }
+.game-page .stat .traffic-value { font-size: 19px; line-height: 2; }
+.game-page .stat-label, .game-page .stat-note, .game-page .unit { color: #657568; }
+.game-page .progress { margin-top: 4px; }
+.game-page .workspace { grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; }
+.game-page .board-heading { padding: 13px 16px; }
+.game-page .map-footer { padding: 10px 16px; color: #657568; }
+.game-page .toolbar { padding: 10px 12px; gap: 8px; border-bottom: 1px solid var(--line); }
+.game-page .tools { flex: 1 1 auto; }
+.game-page .tools .tool { flex: 1; }
+.game-page .simulation { width: auto; }
+.game-page .road-inspector { grid-template-columns: minmax(230px, .45fr) minmax(0, 1.55fr); }
+.game-page .signal-phase-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.game-page #undo-design { margin-right: auto; }
+.game-page .tool { color: #566b5b; }
+.game-page .tool.active { color: #24583a; border-color: #91af87; background: #e4eddc; }
+.game-page #start { min-width: 132px; }
+.game-page .road-settings { padding: 10px 14px; gap: 10px 16px; font-size: 11px; color: #657568; }
+.game-page .road-settings a { margin-left: auto; }
+.game-page .design-menu { flex: 1 0 100%; }
+.game-page .design-menu summary { width: fit-content; padding: 5px 0; }
+.game-page .design-menu > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; }
+.game-page .design-menu small { flex: 1 1 160px; }
+.game-page .sidebar { display: flex; gap: 12px; min-width: 0; }
+.game-page .mobile-info-tabs { display: flex; gap: 4px; }
+.game-page .mobile-info-tabs button { flex: 1; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--muted); }
+.game-page .mobile-info-tabs button.active { background: #e9efdf; color: var(--green); border-color: #9fba98; }
+.game-page .sidebar > [data-info-panel] { display: none; }
+.game-page .sidebar > [data-info-panel].mobile-active { display: block; }
+.game-page .mission { padding: 18px; }
+.game-page .mission h2 { margin: 8px 0; }
+.game-page .mission p, .game-page .notes p { color: #596c55; font-size: 12px; line-height: 1.8; }
+.game-page .mission-tip { margin-top: 14px; }
+.game-page .pressure-help { margin-top: 14px; }
+.game-page .pressure-help p { margin: 10px 0; }
+.game-page .pressure-help a { color: var(--green); font-size: 12px; }
+.game-page .footer { padding: 16px 0; }
+.game-page .campaign-progress { margin: 0 0 14px; }
+@media (min-width: 761px) {
+  .game-page .canvas-wrap { width: calc(100% - 32px); margin-inline: auto; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .game-page .workspace { grid-template-columns: minmax(0, 1fr) 220px; }
+  .game-page .toolbar > .tools, .game-page .toolbar > .simulation { flex: 1 1 100%; width: 100%; }
+  .game-page .road-inspector { grid-template-columns: minmax(0, 1fr); }
+  .game-page .signal-controls { border-left: 0; padding-left: 0; }
+}
+@media (min-width: 761px) and (max-width: 900px) {
+  .game-page .signal-phase-list { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .game-page .app { padding: 0 12px; }
+  .game-page .header { height: 56px; }
+  .game-page .header .manual-link { display: inline; font-size: 12px; padding: 12px 0; }
+  .game-page .icon-button { width: 44px; height: 44px; }
+  .game-page .intro { padding: 12px 0 6px; }
+  .game-page .intro h1 { font-size: 16px; }
+  .game-page .level-selector-heading small { font-size: 10px; }
+  .game-page .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 0; padding: 10px 0; }
+  .game-page .stat { padding: 0 10px; }
+  .game-page .stat:nth-child(2) { border-right: 1px solid var(--line); }
+  .game-page .stat:nth-child(3) { border: 0; }
+  .game-page .stat-label { font-size: 11px; }
+  .game-page .stat-label small { display: none; }
+  .game-page #phase-label { display: inline; font-size: 9px; color: #657568; }
+  .game-page .stat strong { font-size: 23px; }
+  .game-page .stat:last-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 7px; flex-wrap: wrap; }
+  .game-page .stat .traffic-value { font-size: 12px; line-height: 1.5; }
+  .game-page .stat:last-child .stat-note { margin-left: auto; }
+  .game-page .workspace { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .game-page .signal-phase-list { grid-template-columns: minmax(0, 1fr); }
+  .game-page .canvas-wrap { margin: 0 6px; }
+  .game-page .board-heading { padding: 10px; gap: 8px; }
+  .game-page .map-size, .game-page .map-footer > span { display: none; }
+  .game-page .toolbar { position: static; padding: 8px; }
+  .game-page .tool, .game-page .speed, .game-page .primary, .game-page .zoom-controls button { min-height: 44px; }
+  .game-page .tools { flex: 1 1 100%; flex-wrap: nowrap; gap: 2px; }
+  .game-page .simulation { width: 100%; }
+  .game-page .tools .tool { padding: 6px 4px; white-space: nowrap; }
+  .game-page .tool > span { font-size: 15px; margin-right: 0; }
+  .game-page .simulation { gap: 4px; }
+  .game-page .simulation .tool { padding: 6px; }
+  .game-page #start { min-width: 0; flex: 1; padding: 10px 8px; }
+  .game-page .speed { min-width: 44px; }
+  .game-page .road-settings { gap: 8px 12px; }
+  .game-page .map-hint { display: none; }
+  .game-page summary { min-height: 44px; align-content: center; }
+  .game-page .chapter-tab { min-height: 44px; }
+  .game-page .sidebar > .reset { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-page *, .game-page *::before, .game-page *::after { transition: none !important; }
+}

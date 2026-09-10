@@ -105,14 +105,17 @@ test('signal suggestions remain conflict-free and junction reports track each en
   const west=car(n-1);city.cars=[west];city.toggle();for(let i=0;i<30;i++)city.step(.05);
   const report=city.junctionReports().find(item=>item.cell===n);assert.ok(report);assert.ok(report.entries.west.maxQueue>=1);
 });
-test('junction control supports entrance priority and safe custom signal phases',()=>{
+test('junction control permits editing conflicts but blocks operation until custom phases are safe',()=>{
   const {city,n}=cross();
   assert.equal(city.setSignal(n,{enabled:false,yieldMode:'priority',priority:['north','east','south','west']}),'');
   const west=car(n-1);west.id=1;const north=car(n-WIDTH,WIDTH);north.id=2;north.route=1;city.cars=[west,north];
   city.toggle();city.step(.05);assert.equal(north.next,n);assert.equal(west.next,null,'higher-priority north entrance goes first');
   city.stop();
   assert.ok(city.setSignal(n,{priority:['north','north','south','west']}));
-  assert.ok(city.setSignal(n,{automatic:false,phases:[['north-straight','west-straight']]}),'conflicting green movements are rejected');
+  assert.equal(city.setSignal(n,{enabled:true,automatic:false,phases:[['north-straight','west-straight']]}),'','conflicting combinations remain editable');
+  const conflictIssue=city.preflightCheck().issues.find(issue=>issue.code==='signal-conflict');
+  assert.equal(conflictIssue.blocking,true);assert.deepEqual(conflictIssue.cells,[n]);assert.match(conflictIssue.detail,/阶段 1/);
+  assert.match(city.toggle(),/地图设计有问题/);assert.equal(city.state,'planning');
   assert.ok(city.setSignal(n,{automatic:false,phases:[]}));assert.ok(city.setSignal(n,{automatic:false,phases:Array.from({length:9},()=>['north-straight'])}));
   assert.equal(city.setSignal(n,{enabled:true,automatic:false,green:4,phases:[['north-straight'],['west-left','east-left']]}),'');
   city.elapsed=0;assert.equal(city.signalPhase(n).stage,'custom');assert.equal(city.canEnter(n,WIDTH,WIDTH),true);assert.equal(city.canEnter(n,1,1),false);

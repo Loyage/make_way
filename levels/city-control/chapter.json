@@ -4,6 +4,7 @@
   "name": "城市调度",
   "english": "CITY CONTROL",
   "levels": [
+    "woodland.json",
     "signal-school.json",
     "multi-route-school.json",
     "rush-hour.json",
