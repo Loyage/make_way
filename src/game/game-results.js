@@ -15,7 +15,8 @@
     const count = valid.length + pending;
     const score = count ? Math.round(bands.reduce((sum, band) => sum + band.count * band.satisfaction, 0) / count) : 0;
     const average = valid.length ? valid.reduce((sum, time) => sum + time, 0) / valid.length : 0;
-    return { count, score, average, bands };
+    const sorted=[...valid].sort((a,b)=>a-b),p95=sorted.length?sorted[Math.max(0,Math.ceil(sorted.length*.95)-1)]:0;
+    return { count, score, average, p95, bands };
   }
   const api = { BANDS, commuteReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -13,9 +13,9 @@
 
 - `src/game/`：玩家页面、游戏指南、样式、Canvas 绘制、输入事件与界面状态
 - `src/admin/`：管理员页面、操作手册、样式与编辑器脚本
-- `src/shared/`：浏览器 / Node 共用的关卡加载、网格寻路、公交、道路容量、车辆模拟与五日任务
+- `src/shared/`：浏览器 / Node 共用的关卡加载与校验、网格寻路、公交、道路容量、车辆模拟与五日任务
 - `src/server/game-server.js`：零依赖、只读、资源白名单式 HTTP 服务实现
-- `src/server/admin-server.js` / `src/server/level-validation.js`：管理员面板 HTTP 服务与关卡数据校验
+- `src/server/admin-server.js`：管理员面板 HTTP 服务；关卡校验位于 `src/shared/level-validation.js`
 - `server.js` / `admin-server.js`：保留原启动命令的轻量兼容入口
 - `built-in-levels.json`：默认章节路径总清单；`levels/<章节>/chapter.json` 保存本章关卡路径，每关独立 JSON
 - `levels.json` / `levels.local/`：管理员生成的可选覆盖清单与分关数据（被 .gitignore 忽略）
@@ -25,7 +25,7 @@
 
 ## 架构约束
 
-1. 浏览器脚本顺序为 `level-catalog.js`、`core-geometry.js`、`core-bus.js`、`core.js`、`core-campaign.js`、其余游戏模块、`game.js`。启动时先递归读取 `built-in-levels.json` 清单，再尝试可选的 `levels.json` 覆盖清单，然后才能创建 `City`。加载后 `TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平列表。
+1. 浏览器脚本顺序为 `level-catalog.js`、`core-geometry.js`、`core-bus.js`、`core.js`、`core-campaign.js`、`level-validation.js`、其余游戏模块、`game.js`。启动时先递归读取 `built-in-levels.json` 清单，再尝试可选的 `levels.json` 覆盖清单，然后才能创建 `City`。加载后 `TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平列表。
 2. 核心和关卡加载器同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore` / `TrafficLevelCatalog`，Node 测试使用 `module.exports`。修改模块边界时须兼容两种环境。
 3. 模拟逻辑应留在 `src/shared/core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `src/game/game.js`。
 4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。

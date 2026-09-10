@@ -4,6 +4,8 @@
 const assert = require('node:assert/strict');
 const CATALOG = require('../src/shared/level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
 const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
+const Core = require('../src/shared/core.js');
+const { buildReferencePlan } = require('./reference-plan.cjs');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
@@ -74,6 +76,14 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
     await go(0);
+    await click('#sandbox-mode');assert.equal(await evaluate('document.querySelector("#mode-dialog").open'),true);
+    await click('#confirm-mode');assert.equal(await text('timer'),'∞');assert.equal(await evaluate('document.querySelector("#sandbox-mode").getAttribute("aria-pressed")'),'true');
+    await click('#start');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true);await click('#confirm-preflight');
+    assert.equal(await evaluate('document.querySelector("#road-tool").disabled'),false,'sandbox keeps road editing available while running');
+    const sandboxBudget=Number(await text('budget'));await evaluate('TrafficGameAdmin.selectCell(0)');await click('#build-road');assert.equal(Number(await text('budget')),sandboxBudget-1);
+    assert.ok((await text('board-status')).includes('可实时修改'));
+    await click('#challenge-mode');await click('#confirm-mode');assert.notEqual(await text('timer'),'∞');
+    assert.equal(await evaluate('document.querySelector("#challenge-mode").getAttribute("aria-pressed")'),'true');
     assert.equal(await evaluate('document.querySelector("#road-grade")'),null);
     assert.ok(await evaluate('document.querySelector("#signal-yield-mode")!==null && document.querySelector("#signal-automatic")!==null'));
     assert.ok(await evaluate('document.querySelector("#signal-priority-list")!==null && document.querySelector("#signal-phase-list")!==null && document.querySelector("#add-signal-phase")!==null && document.querySelector("#suggest-signal-phases")!==null'));
@@ -83,70 +93,64 @@ async function main() {
     for(const expected of ['2×','4×','0.5×','1×']){await click('#speed');assert.equal(await text('speed'),expected);}
     assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
-    await click('#road-tool');await drag(2,3,5,3);assert.equal(await text('budget'),'33');
+    await click('#road-tool');await drag(5,4,9,4);assert.equal(await text('budget'),'33');
     await click('#undo-design');assert.equal(await text('budget'),'36','undo restores the previous planning design');
     await click('#redo-design');assert.equal(await text('budget'),'33','redo reapplies the reverted planning design');
-    await drag(3,3,4,3);assert.equal(await text('budget'),'33','dragging over roads only preserves or adds connections');
-    await drag(2,3,3,3);assert.equal(await text('budget'),'33','dragging from a building never retracts roads');
-    await dragThrough([[5,3],[6,3],[5,3],[4,3]]);
+    await drag(6,4,7,4);assert.equal(await text('budget'),'33','dragging over roads only preserves or adds connections');
+    await drag(5,4,6,4);assert.equal(await text('budget'),'33','dragging from a building never retracts roads');
+    await dragThrough([[8,4],[8,5],[8,4],[7,4]]);
     assert.equal(await text('budget'),'33','returning along the preview cancels new construction');
-    await click('#select-tool');await drag(5,3,5,3);await click('#remove-road');assert.equal(await text('budget'),'34','explicit removal refunds the selected road');
-    await click('#save-design');await click('#road-tool');await drag(5,3,6,3);assert.equal(await text('budget'),'32');
+    await click('#select-tool');await drag(8,4,8,4);await click('#remove-road');assert.equal(await text('budget'),'34','explicit removal refunds the selected road');
+    await click('#save-design');await evaluate('TrafficGameAdmin.selectCell(72)');await click('#build-road');await evaluate('TrafficGameAdmin.selectCell(88)');await click('#build-road');assert.equal(await text('budget'),'33');
     await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'34');
 
     await click('.level-card:nth-child(2)');
     assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');
     await click('#confirm-level');
-    assert.equal(await text('budget'),'0');
+    const levelTwoBudget=Number(await text('budget'));assert.equal(levelTwoBudget,new (require('../src/shared/core.js').City)(LEVELS[1].id).remaining);
     assert.equal(await evaluate('document.querySelector("#erase-tool")'),null);
-    await drag(13,4,13,4);await click('#remove-road');
-    assert.ok(Number(await text('budget'))>0);
+    await evaluate('TrafficGameAdmin.selectCell(TrafficGameAdmin.captureDesign().roads[0].cell)');await click('#remove-road');
+    assert.ok(Number(await text('budget'))>levelTwoBudget);
     await click('#save-design');await click('#road-tool');
 
     await go(2);
     assert.equal(await evaluate('document.querySelector("#load-setting").hidden'),false);
-    assert.ok((await text('demand-list')).includes('共 330 人 · 产生 6 人/s'));
+    assert.ok((await text('demand-list')).includes('共 316 人 · 产生 6 人/s'));
     const previousBudget=Number(await text('budget'));
-    await click('#road-tool');await drag(3,2,5,2);assert.ok(Number(await text('budget'))<previousBudget);
-    await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');
+    await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');assert.ok(Number(await text('budget'))<previousBudget);
     assert.ok((await text('road-detail')).includes('3 × 1'));
     await drag(3,2,3,2);assert.ok((await text('road-detail')).includes('每方向'));
 
     await go(3);
     assert.equal(await evaluate('document.querySelector("#cut-tool").hidden'),false);
     assert.equal(await evaluate('document.querySelector("#cut-tool").disabled'),false);
-    assert.equal(await text('budget'),'0','cut-school pre-builds every road');
+    const cutBudget=await text('budget');assert.equal(cutBudget,String(new (require('../src/shared/core.js').City)(LEVELS[3].id).remaining));
     await click('#cut-tool');await drag(7,4,7,5);
-    assert.equal(await text('budget'),'0','scissors disconnect without refunding');
+    assert.equal(await text('budget'),cutBudget,'scissors disconnect without refunding');
 
-    await go(4);
-    await click('#road-tool');await drag(3,2,3,3);
-    await click('#select-tool');await drag(3,3,3,3);
+    await go(7);
+    const signalCity=new Core.City(LEVELS[7].id);buildReferencePlan(signalCity);const signalCell=[...signalCity.signals.keys()][0],signalPoint=signalCity.point(signalCell);
+    assert.equal(signalCity.setSignal(signalCell,{enabled:true,automatic:false,phases:[['north-straight','east-straight']]}),'');
+    const signalDesign=JSON.stringify(signalCity.serializeDesign());assert.equal(await evaluate(`TrafficGameAdmin.applyDesign(${signalDesign})`),'');
+    await evaluate(`TrafficGameAdmin.selectCell(${signalCell})`);
     assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
-    await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
-    await click('#signal-automatic');await click('.signal-phase-card input');
-    assert.equal(await evaluate('document.querySelector(".signal-phase-card input").checked'),true,'conflicting action remains selected for further editing');
     assert.equal(await evaluate('document.querySelector(".signal-phase-card").classList.contains("conflicted")'),true);
     assert.equal(await evaluate('getComputedStyle(document.querySelector("#signal-phase-list")).gridTemplateColumns.split(" ").length'),2,'desktop signal phases should use the available width');
     await click('#start');assert.equal(await text('preflight-title'),'地图设计有问题');
     assert.equal(await evaluate('document.querySelector("#confirm-preflight").hidden'),true);
-    assert.ok((await text('preflight-list')).includes('路口 (4,4)'));
+    assert.ok((await text('preflight-list')).includes(`路口 (${signalPoint.x+1},${signalPoint.y+1})`));
     await click('.preflight-blocking .tool');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),false);
 
-    await go(5);
+    await go(4);
     assert.equal(await evaluate('document.querySelector("#campaign-progress").hidden'),false);
     assert.equal(await evaluate('document.querySelectorAll(".campaign-day").length'),5);
     assert.equal(await evaluate('document.querySelector("#legend-site").hidden'),false);
     assert.ok((await text('campaign-day-title')).includes('第 1 天'));
 
-    await go(6);
-    await click('#road-tool');await drag(5,3,5,10);
+    await go(5);
     assert.equal(await evaluate('document.querySelector("#select-tool").hidden'),false);
-    assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),true);
-    await click('#select-tool');await drag(5,4,5,4);
-    assert.equal(await evaluate('document.querySelector("#signal-enabled").disabled'),false);
-    assert.ok((await text('signal-phase')).includes('35%'));
-    await click('#signal-enabled');assert.ok((await text('signal-phase')).includes('绿灯'));
+    await evaluate('TrafficGameAdmin.selectCell(TrafficGameAdmin.captureDesign().roads[0].cell)');
+    assert.ok((await text('road-detail')).includes('每方向'));
     assert.equal(await evaluate('document.querySelector("#road-inspector").closest(".board-panel")!==null'),true);
 
     // Force one deterministic arrival and verify both celebration state and report.

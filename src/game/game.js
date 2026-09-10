@@ -8,7 +8,7 @@
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const levels = () => TrafficCore.LEVELS;
   const chapters = () => TrafficCore.CHAPTERS;
-  let city = null, tool = 'view', speed = 1, hover = null, dragging = false;
+  let city = null, tool = 'view', speed = 1, hover = null, dragging = false, gameMode = 'challenge';
   let keyboardAnchor = null;
   let lastCell = null, dragGrade = 0, dragDraft = null, selection = null, selectionAnchor = null;
   let cellSize = 40, lastFrame = 0, accumulator = 0, viewportWidth = 0, viewportHeight = 0;
@@ -18,20 +18,35 @@
   const point = n => TrafficCore.point(n,city?.width||WIDTH);
   const { rounded, line, circle, label, buildingBubble, busSegment, strokeBusConnector, drawBusRoute } = TrafficCanvas.createCanvasTools(ctx, point);
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
-  let connectionRows = [], pendingLevel = null, inspectedCell = null;
+  let connectionRows = [], pendingLevel = null, pendingMode = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
   const arrivalEffects = TrafficEffects.createArrivalEffects();
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
+  const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
+  const PERSONAL_BEST_PREFIX = 'traffic-game-personal-best-v1:';
+  const failedLevels = new Set();
   function storedDesign(levelId = city.level.id) {
     try { return localStorage.getItem(STORAGE_PREFIX + levelId); }
     catch { return null; }
+  }
+  function referenceUnlocked(levelId=city.level.id) {
+    if(failedLevels.has(levelId))return true;
+    try { return localStorage.getItem(REFERENCE_UNLOCK_PREFIX+levelId)==='1'; }
+    catch { return false; }
+  }
+  function unlockReference(levelId=city.level.id) {
+    failedLevels.add(levelId);
+    try { localStorage.setItem(REFERENCE_UNLOCK_PREFIX+levelId,'1'); } catch { /* session unlock still works */ }
   }
   let designAvailable = false;
   function updateDesignControls() {
     designAvailable=storedDesign()!==null;
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
+    const available=Boolean(city.level.referenceDesign)&&referenceUnlocked();
+    $('reference-design').hidden=!available;
+    $('reference-design').disabled=city.state!=='planning';
   }
   function designSnapshot() { return JSON.stringify(city.serializeDesign()); }
   function updateHistoryControls() {
@@ -108,6 +123,10 @@
   }
   function configureLevel() {
     const level = city.level, index = levels().indexOf(level);
+    const sandbox=gameMode==='sandbox';
+    $('challenge-mode').classList.toggle('active',!sandbox);$('challenge-mode').setAttribute('aria-pressed',String(!sandbox));
+    $('sandbox-mode').classList.toggle('active',sandbox);$('sandbox-mode').setAttribute('aria-pressed',String(sandbox));
+    document.body.classList.toggle('sandbox-mode',sandbox);
     const chapterIndex=chapters().findIndex(chapter=>chapter.levels.some(item=>item.id===level.id)),chapter=chapters()[chapterIndex];
     const number = String(index + 1).padStart(2, '0');
     $('level-eyebrow').textContent = `城市实验室 / 第 ${chapterIndex+1} 章 · 第 ${number} 课`;
@@ -122,9 +141,9 @@
     $('target-label').textContent = '全部居民';
     $('target-unit').textContent = `/ ${population} 人`;
     $('mission-title').textContent = level.title;
-    $('mission-description').textContent = campaign?`第 ${campaign.dayIndex+1} 天：在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地。当日总人口送达比例与满意度共同决定收入，结算后可改造路网。`:`在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地，建设与公交预算共 ${city.budget} 点。${level.description}`;
-    $('mission-tip-meta').textContent = campaign?`${campaign.days.length} 日运营 · 当日最高收入 ${campaign.days[campaign.dayIndex].maxIncome} 点`:`第 ${number} 课 · ${level.lesson}`;
-    $('mission-tip').textContent = level.tip;
+    $('mission-description').textContent = sandbox?`沙盒模式不限时间。开始运营后仍可建设、连接、剪断、调整道路等级、道路引导和信号灯，方便观察路网变化；公交规划须停止运营后修改。`:campaign?`第 ${campaign.dayIndex+1} 天：在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地。当日总人口送达比例与满意度共同决定收入，结算后可改造路网。`:`在 ${city.duration} 秒内将全部 ${population} 位居民运抵目的地，建设与公交预算共 ${city.budget} 点。${level.description}`;
+    $('mission-tip-meta').textContent = sandbox?`沙盒实验 · 沿用本关 ${city.budget} 点预算`:campaign?`${campaign.days.length} 日运营 · 当日最高收入 ${campaign.days[campaign.dayIndex].maxIncome} 点`:`第 ${number} 课 · ${level.lesson}`;
+    $('mission-tip').textContent = sandbox?'已占用或被车辆预约的道路仍受拆除与降级保护；停止运营会保留设计并清空本轮交通。':level.tip;
     const demand = $('demand-list');demand.replaceChildren();
     for (const r of city.routes) {
       const row = document.createElement('li');
@@ -209,8 +228,8 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 2200);
   }
   function setTool(value) {
-    if (!['view','select'].includes(value) && city.state !== 'planning') {
-      toast('运营期间只能观察或查看路况，请先停止运营再修改规划'); return;
+    if (!['view','select'].includes(value) && (value==='bus'?city.state!=='planning':!city.canEditDesign())) {
+      toast(city.sandbox&&value==='bus'?'沙盒运营时可实时改路和信号；公交规划请先停止运营':'运营期间只能观察或查看路况，请先停止运营再修改规划'); return;
     }
     if (value === 'cut' && !city.level.features.cut) {
       toast('剪刀工具在本关未开放'); return;
@@ -348,7 +367,7 @@
   function updateInspector() {
     const cells=selectedCells(), n=cells.length===1?cells[0]:null;
     const roads=cells.filter(cell=>city.roads.has(cell)), removable=roads;
-    const planning=city.state==='planning', singleRoad=n!==null&&city.roads.has(n);
+    const planning=city.canEditDesign(), singleRoad=n!==null&&city.roads.has(n);
     inspectedCell=singleRoad?n:null;
     $('selection-title').textContent=cells.length>1?'区域信息':'格子信息';
     $('upgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)<ROAD_TYPES.length-1)||!city.level.features.grade||!planning;
@@ -412,7 +431,7 @@
     }
     updateSignalControls(signal,planning);
     if(signal&&city.level.features.inspect&&!city.level.features.signals)$('signal-phase').textContent+=' · 红绿灯在本关未开放';
-    updateBusLineInspector(n, planning);
+    updateBusLineInspector(n, city.state==='planning');
   }
   function viewBounds() {
     const worldWidth=city.width*cellSize,worldHeight=city.height*cellSize;
@@ -441,7 +460,7 @@
     draw();
   }
   function drawSignalMarkings(n) {
-    const s=cellSize,p=point(n),signal=city.signals.get(n),previewActions=city.state==='planning'&&n===inspectedCell&&signal.enabled&&signal.automatic===false?signal.phases[Math.min(previewSignalPhaseIndex,signal.phases.length-1)]:null;
+    const s=cellSize,p=point(n),signal=city.signals.get(n),previewActions=city.canEditDesign()&&n===inspectedCell&&signal.enabled&&signal.automatic===false?signal.phases[Math.min(previewSignalPhaseIndex,signal.phases.length-1)]:null;
     const links=new Set(city.links(n));
     const width=city.width,rightOf={1:width,[width]:-1,[-1]:-width,[-width]:1};
     // Paint into each incoming quadrant, in driving coordinates: x is forward,
@@ -680,7 +699,7 @@
     const deliveryTotal=city.target;
     $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';
     const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
-    $('timer').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+    $('timer').textContent=city.sandbox?'∞':String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
     const waiting=city.queues.reduce((a,b)=>a+b,0),blocked=[...city.cars,...city.buses].filter(c=>c.blocked>1.5).length;
     const heavy=blocked>3||waiting>18, neutral=['planning','paused','lost'].includes(city.state);
     $('traffic').textContent=city.state==='planning'?'等待出发':city.state==='paused'?'运营已暂停':city.state==='won'?'目标已达成':city.state==='lost'?'本轮已结束':heavy?'有些拥堵':waiting>6?'等待接通':'畅通无阻';
@@ -688,13 +707,14 @@
     const onboard=city.buses.reduce((sum,bus)=>sum+bus.passengers.length,0);
     $('waiting').textContent=`${waiting} 人在住宅等待 · ${city.cars.length} 辆小汽车${city.buses.length?` · ${city.buses.length} 辆公交载客 ${onboard} 人`:''}`;
     const states={planning:'规划中',running:'运营中',paused:'已暂停',won:'目标达成',lost:'运营结束'};
-    $('phase-label').textContent=states[city.state];
-    $('board-status').textContent=city.state==='planning'?'先规划，再出发':`${states[city.state]} · ${speed}× 速度`;
+    $('phase-label').textContent=city.sandbox?`${states[city.state]} · 沙盒`:states[city.state];
+    $('board-status').textContent=city.state==='planning'?(city.sandbox?'沙盒规划，可随时开跑':'先规划，再出发'):`${states[city.state]} · ${speed}× 速度${city.sandbox?' · 可实时修改':''}`;
     $('start').textContent=city.state==='running'?'Ⅱ 暂停运营':city.state==='paused'?'▶ 继续运营':city.state==='planning'?'▶ 开始运营':'本局已结束';
     $('start').disabled=['won','lost'].includes(city.state);
     $('stop').disabled=!['running','paused'].includes(city.state);
-    $('road-tool').disabled=city.state!=='planning';
-    $('cut-tool').disabled=city.state!=='planning';
+    const liveEditable=city.canEditDesign();
+    $('road-tool').disabled=!liveEditable;
+    $('cut-tool').disabled=!liveEditable;
     $('bus-tool').disabled=city.state!=='planning';
     const busLine=city.activeBusLine, planningBus=city.state==='planning';
     const busClosed=Boolean(busLine?.route.length>=3&&busLine.route[0]===busLine.route[busLine.route.length-1]);
@@ -749,40 +769,61 @@
   function showResult() {
     resultShown=true;
     const won=city.state==='won', generated=city.generated.reduce((sum,count)=>sum+count,0);
+    if(!won&&city.level.referenceDesign)unlockReference();
     const report=TrafficResults.commuteReport(city.commuteTimes,Math.max(0,generated-city.delivered));
     pendingCampaignScore=report.score;
     const settlement=campaign?campaign.settlement(report.score):null,finalDay=campaign&&campaign.dayIndex===campaign.days.length-1;
+    const bestKey=`${PERSONAL_BEST_PREFIX}${city.level.id}${campaign?`:day-${campaign.dayIndex+1}`:''}`,currentResult={score:report.score,average:report.average,p95:report.p95,cost:city.budget-city.remaining};
+    let previousBest=null;try{previousBest=JSON.parse(localStorage.getItem(bestKey)||'null');}catch{/* keep session playable without storage */}
+    if(!previousBest||![previousBest.score,previousBest.average,previousBest.p95,previousBest.cost].every(Number.isFinite))previousBest=null;
+    const isBetter=won&&(!previousBest||currentResult.score>previousBest.score||currentResult.score===previousBest.score&&(currentResult.p95<previousBest.p95||currentResult.p95===previousBest.p95&&currentResult.cost<previousBest.cost));
+    if(isBetter)try{localStorage.setItem(bestKey,JSON.stringify(currentResult));}catch{/* best comparison remains optional */}
+    const personalBest=isBetter?currentResult:previousBest;
     $('result-icon').textContent=won?'✳':'⌁';
     $('result-title').textContent=campaign?finalDay?`${campaign.days.length} 天运营完成，城市因你而成长。`:`第 ${campaign.dayIndex+1} 天运营结算`:won?'这座小城，因你而畅通。':'再给小城一个好计划。';
     $('result-description').textContent=campaign?`${won?'全部居民均已抵达':'仍有居民未抵达'}；本日收入 ${settlement.income} 点，由当日总人口送达比例与通勤满意度共同计算。${finalDay?'你仍可关闭报告，从进度条回到任一天重新运营。':'进入下一天后，新建筑可能落成，请先用收入改造交通。'}`:won?'所有居民均已抵达！每一段精心规划的道路，都让生活更近了一点。':'时间到了。'+city.level.tip;
     const summary=document.createElement('strong');summary.textContent=`已产生居民满意度 ${report.score}%`;
-    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
+    const meta=document.createElement('div');meta.textContent=`抵达 ${city.delivered} / ${city.target} 人 · 平均通勤 ${city.delivered?report.average.toFixed(1)+' 秒':'暂无'} · P95 ${city.delivered?report.p95.toFixed(1)+' 秒':'暂无'} · 建设及公交 ${city.budget-city.remaining} 点${campaign?` · 收入 +${settlement.income} 点`:''}`;
     const population=city.passengerBreakdown(),conservation=document.createElement('div');conservation.className='population-conservation';
     conservation.textContent=`总人口 ${population.total} = 未产生 ${population.ungenerated} + 住宅等待 ${population.waiting} + 汽车在途 ${population.carTransit} + 公交在途 ${population.busTransit} + 已抵达 ${population.arrived}`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
     const operations=document.createElement('div');operations.className='operation-report';
+    city.routes.forEach((route,index)=>{const total=route.homes.reduce((sum,home)=>sum+home.passengers,0),delivered=city.byRoute[index]||0,row=document.createElement('p');row.textContent=`${route.name}：送达 ${delivered} / ${total} 人（${total?Math.round(delivered/total*100):0}%）`;operations.append(row);});
+    const peak=Math.max(0,...city.maxHomeQueues),peakIndex=city.maxHomeQueues.indexOf(peak);if(peakIndex>=0){const home=city.homes[peakIndex],p=point(home.cell),row=document.createElement('p');row.textContent=`住宅最大排队：${peak} 人 · ${city.routes[home.route]?.name||'路线'} (${p.x+1},${p.y+1})`;operations.append(row);}
+    for(const hotspot of city.roadHotspots()){const p=point(hotspot.cell),row=document.createElement('p');row.textContent=`道路热点 (${p.x+1},${p.y+1})：受阻 ${hotspot.blockedSeconds.toFixed(1)} 车秒 · 占用 ${hotspot.occupancySeconds.toFixed(1)} 车秒`;operations.append(row);}
     for(const bus of city.busReports().filter(item=>item.boarded||item.alighted||item.rejectedFull)){const row=document.createElement('p');row.textContent=`${bus.name}：上车 ${bus.boarded} · 下车 ${bus.alighted} · 平均载客率 ${Math.round(bus.averageLoadRate*100)}% · 满载拒载 ${bus.rejectedFull} · 周转 ${bus.cycles} 圈`;operations.append(row);}
     for(const junction of city.junctionReports())for(const [entry,data] of Object.entries(junction.entries))if(data.maxQueue){const p=point(junction.cell),row=document.createElement('p');row.textContent=`路口 (${p.x+1},${p.y+1}) ${SIGNAL_ENTRY_NAMES[entry]}：平均等待 ${data.averageWait.toFixed(1)} 秒 · 最大队列 ${data.maxQueue} 辆`;operations.append(row);}
-    $('result-stats').replaceChildren(summary,meta,conservation,distribution,...(operations.childNodes.length?[operations]:[]));
+    const comparison=document.createElement('div');comparison.className='personal-best';comparison.textContent=!personalBest?'尚无通关个人最佳':isBetter&&!previousBest?'首次通关，已记录为个人最佳':isBetter?'刷新个人最佳！':`个人最佳：满意度 ${personalBest.score}% · P95 ${personalBest.p95.toFixed(1)} 秒 · 建设 ${personalBest.cost} 点；本次相差 ${currentResult.score-personalBest.score>=0?'+':''}${currentResult.score-personalBest.score} 分、${(currentResult.p95-personalBest.p95).toFixed(1)} 秒、${currentResult.cost-personalBest.cost} 点`;
+    $('result-stats').replaceChildren(summary,meta,conservation,distribution,comparison,...(operations.childNodes.length?[operations]:[]));
     $('next-level').hidden = campaign?finalDay:!won||levels().indexOf(city.level)===levels().length-1;
     $('next-level').textContent=campaign?'进入下一天规划 ↗':'下一座小城 ↗';
     $('view-city').hidden=Boolean(campaign&&!finalDay);
     $('play-again').textContent=campaign?'重新开始五天':'再规划一次';
+    $('result-reference').hidden=won||!city.level.referenceDesign||Boolean(campaign);
+    updateDesignControls();
     if(finalDay&&!campaign.results[campaign.dayIndex])campaign.advance(report.score);
+    window.dispatchEvent(new CustomEvent('traffic-game-result',{detail:{levelId:city.level.id,won,complete:!campaign||Boolean(finalDay)}}));
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('result-dialog').showModal();
   }
   function reset(levelId = city.level.id) {
     const switching=Boolean(city&&levelId!==city.level.id);
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    const level=levels().find(item=>item.id===levelId);campaign=level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId);
+    const level=levels().find(item=>item.id===levelId);campaign=gameMode==='challenge'&&level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId,{sandbox:gameMode==='sandbox'});
     resetDesignHistory();
     speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;dragging=false;lastCell=null;dragDraft=null;selection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
-    pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
+    pendingLevel=null;pendingMode=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
     window.dispatchEvent(new CustomEvent('traffic-game-levelchange',{detail:{levelId:city.level.id}}));
+  }
+  function switchGameMode(mode) {
+    if(mode===gameMode||!['challenge','sandbox'].includes(mode))return;
+    pendingMode=mode;const label=mode==='sandbox'?'沙盒':'挑战';
+    $('mode-confirm-title').textContent=`切换到${label}模式？`;
+    $('mode-confirm-description').textContent=`当前设计、车辆和运营成绩会被清空。${mode==='sandbox'?'沙盒不限时间且运营中可改路；公交仍须停止后修改。':'挑战恢复关卡时限、规划锁定和胜负结算。'}`;
+    openPausedDialog($('mode-dialog'));
   }
   function eventPoint(event) { const rect=canvas.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
   function eventCell(event) {
@@ -981,6 +1022,23 @@
     if(message){toast(message);return;}
     speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已读取设计，可以重新规划或开始运营');
   };
+  let resetBeforeReference=false;
+  function openReference() {
+    if(!city.level.referenceDesign||!referenceUnlocked())return;
+    resetBeforeReference=city.state!=='planning';
+    if($('result-dialog').open)$('result-dialog').close();
+    $('reference-dialog').showModal();
+  }
+  $('reference-design').onclick=openReference;
+  $('result-reference').onclick=openReference;
+  $('cancel-reference').onclick=()=>{resetBeforeReference=false;$('reference-dialog').close();};
+  $('confirm-reference').onclick=()=>{
+    const levelId=city.level.id,shouldReset=resetBeforeReference;resetBeforeReference=false;$('reference-dialog').close();
+    if(shouldReset)reset(levelId);
+    const message=city.loadDesign(city.level.referenceDesign);
+    if(message){toast('参考答案无法载入：'+message);return;}
+    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已载入参考答案，可以继续修改或开始运营');
+  };
   function beginOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
@@ -1011,6 +1069,8 @@
   $('cancel-stop').onclick=()=>closePausedDialog($('stop-dialog'));
   $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
   $('speed').onclick=()=>{speed=SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length];updateUI();};
+  $('challenge-mode').onclick=()=>switchGameMode('challenge');
+  $('sandbox-mode').onclick=()=>switchGameMode('sandbox');
   $('help').onclick=()=>openPausedDialog($('help-dialog'));
   document.querySelector('.dialog-close').onclick=()=>closePausedDialog($('help-dialog'));
   document.querySelector('.dialog-done').onclick=()=>closePausedDialog($('help-dialog'));
@@ -1031,7 +1091,9 @@
   document.querySelector('[data-info-panel="mission"]').classList.add('mobile-active');
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};
-  for(const id of ['help-dialog','reset-dialog','level-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;closePausedDialog($(id));});
+  $('cancel-mode').onclick=()=>{pendingMode=null;closePausedDialog($('mode-dialog'));};
+  $('confirm-mode').onclick=()=>{delete $('mode-dialog').dataset.resumeOperation;if(pendingMode){gameMode=pendingMode;reset(city.level.id);}};
+  for(const id of ['help-dialog','reset-dialog','level-dialog','mode-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;if(id==='mode-dialog')pendingMode=null;closePausedDialog($(id));});
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
@@ -1114,6 +1176,8 @@
     selectLevel(levelId) { if(TrafficCore.LEVELS.some(item=>item.id===levelId))reset(levelId); },
     currentLevelId() { return city?.level.id||null; },
     selectedCells() { return city?selectedCells():[]; },
+    selectCell(cell) { if(city&&Number.isInteger(cell)&&cell>=0&&cell<city.width*city.height){setTool('select');selection={start:cell,end:cell};keyboardCell=cell;updateUI();draw();} },
+    applyDesign(design) { if(!city||city.state!=='planning')return '请先停止运营';const message=city.loadDesign(design);if(!message){resetDesignHistory();updateUI();draw();}return message; },
     captureDesign() { return city?city.serializeDesign():null; }
   };
   async function bootstrap() {

@@ -11,13 +11,22 @@
     }
   }
 
-  async function loadActiveCatalog({ core, catalogLoader, defaults = 'built-in-levels.json', override = 'levels.json' }) {
+  function catalogProblem(catalog, validator) {
+    const validation = validator?.validateLevelCatalog(catalog);
+    return validation && !validation.ok ? validation.errors[0].message : '';
+  }
+
+  async function loadActiveCatalog({ core, catalogLoader, validator = root.TrafficLevelValidation, defaults = 'built-in-levels.json', override = 'levels.json' }) {
     const builtInCatalog = await catalogLoader.loadCatalog(defaults);
+    const builtInProblem = catalogProblem(builtInCatalog, validator);
+    if (builtInProblem) throw new Error(`默认关卡数据无效：${builtInProblem}`);
     const builtInMessage = core.setLevels(builtInCatalog);
     if (builtInMessage) throw new Error(`默认关卡数据无效：${builtInMessage}`);
     validateRuntimeCatalog(core);
     try {
       const overrideCatalog = await catalogLoader.loadCatalog(override);
+      const overrideProblem = catalogProblem(overrideCatalog, validator);
+      if (overrideProblem) throw new Error(overrideProblem);
       const overrideMessage = core.setLevels(overrideCatalog);
       if (overrideMessage) throw new Error(overrideMessage);
       validateRuntimeCatalog(core);

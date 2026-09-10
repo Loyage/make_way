@@ -20,6 +20,7 @@ const PUBLIC_FILES = {
   '/core-bus.js': asset(SHARED_ROOT, 'core-bus.js', 'text/javascript; charset=utf-8'),
   '/core.js': asset(SHARED_ROOT, 'core.js', 'text/javascript; charset=utf-8'),
   '/core-campaign.js': asset(SHARED_ROOT, 'core-campaign.js', 'text/javascript; charset=utf-8'),
+  '/level-validation.js': asset(SHARED_ROOT, 'level-validation.js', 'text/javascript; charset=utf-8'),
   '/game-results.js': asset(GAME_ROOT, 'game-results.js', 'text/javascript; charset=utf-8'),
   '/game-effects.js': asset(GAME_ROOT, 'game-effects.js', 'text/javascript; charset=utf-8'),
   '/game-canvas.js': asset(GAME_ROOT, 'game-canvas.js', 'text/javascript; charset=utf-8'),
