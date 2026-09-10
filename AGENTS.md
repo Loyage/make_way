@@ -20,7 +20,8 @@
 - `built-in-levels.json`：默认章节路径总清单；`levels/<章节>/chapter.json` 保存本章关卡路径，每关独立 JSON
 - `levels.json` / `levels.local/`：管理员生成的可选覆盖清单与分关数据（被 .gitignore 忽略）
 - `tests/*.test.js`：Node 内置测试运行器执行的逻辑、关卡和服务器测试
-- `tests/browser-smoke.cjs`：通过 CDP 执行的可选浏览器集成测试
+- `tests/browser-smoke.cjs` / `tests/ui-smoke.cjs`：通过 CDP 执行的可选玩家端浏览器集成测试
+- `tests/admin-browser-smoke.cjs`：通过 CDP 执行的可选管理端完整流程测试；在浏览器内拦截管理 API，不写入真实关卡文件
 - `deploy/`：systemd 用户服务安装脚本及 NixOS 网络配置示例
 
 ## 架构约束
@@ -28,21 +29,23 @@
 1. 浏览器脚本顺序为 `level-catalog.js`、`core-geometry.js`、`core-bus.js`、`core.js`、`core-campaign.js`、`level-validation.js`、其余游戏模块、`game.js`。启动时先递归读取 `built-in-levels.json` 清单，再尝试可选的 `levels.json` 覆盖清单，然后才能创建 `City`。加载后 `TrafficCore.CHAPTERS` 保留层级、`TrafficCore.LEVELS` 提供扁平列表。
 2. 核心和关卡加载器同时支持浏览器全局变量与 CommonJS：浏览器使用 `TrafficCore` / `TrafficLevelCatalog`，Node 测试使用 `module.exports`。修改模块边界时须兼容两种环境。
 3. 模拟逻辑应留在 `src/shared/core.js`，不要在核心层访问 DOM、Canvas 或 `localStorage`。界面、绘制和输入逻辑放在 `src/game/game.js`。
-4. 地图固定为 16 × 12。格子使用一维索引 `y * WIDTH + x`；优先使用 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。
+4. 地图默认 16 × 12，关卡可分别配置 8～64 的宽高。格子使用一维索引 `y * width + x`；优先使用带当前地图宽高的 `key()`、`point()` 和 `neighbors()`，避免边界换行错误。
 5. 关卡定义会被递归冻结。每个 `City` 实例必须拥有独立的可变状态，不得修改或在实例间共享可变关卡数据。
 6. 道路连接由 `City.edges` 显式表示。相邻道路格不会自动连接；建筑出口和桥梁岸边也必须显式连接。任何建设、剪断、拆除或存档修改都应维护该规则并调用/触发路径刷新。
 7. 模拟必须保持确定性。测试通常以 `city.step(0.05)` 推进；不要把核心规则绑定到墙钟时间、动画帧率或随机数。
 8. 车辆的当前格、下一格、车道/前后位置和路口冲突区都可能是占用或预约。改动通行规则时，同时检查容量、拆除保护、出口预约、信号相位与自动避让。
 9. `src/server/game-server.js` 只暴露 `PUBLIC_FILES`、`levels/` / `levels.local/` 下的 JSON 和 `/healthz`，只接受 GET/HEAD。新增浏览器资源时必须显式更新白名单、MIME 类型和相应服务器测试；不得暴露项目目录、测试或部署文件。
 10. HTTP 服务启动时会把资源读入内存。部署后更新前端文件需要重启服务。
-11. 管理员面板（`src/server/admin-server.js`）默认绑定所有网卡且**必须设置密码**；密码是唯一防线，对外访问务必使用强密码。面板写入 `levels.json` 清单与 `levels.local/` 分关数据，缺省时回落到默认清单。如只需本机访问，可设置 `ADMIN_HOST=127.0.0.1`。
+11. 管理员面板（`src/server/admin-server.js`）默认绑定 `127.0.0.1` 且**必须设置密码**；显式改用非回环 `ADMIN_HOST` 会对外开放，届时务必使用强密码和 HTTPS。面板写入 `levels.json` 清单与 `levels.local/` 分关数据，缺省时回落到默认清单。
 
 ## 编码约定
 
 - 使用现有的普通 JavaScript 与 `'use strict'` 风格，不引入 TypeScript 或转译步骤。
 - 遵循邻近代码格式；本项目大量使用短辅助函数、分号和单引号。保持改动聚焦，不要顺手格式化整份文件。
-- 玩家可见文本、ARIA 标签和帮助文档要与实际规则保持一致。修改玩法时同步检查 `src/game/index.html`、`README.md` 和相关测试。
-- 凡是涉及操作逻辑或游戏规则的变更（包括工具、输入方式、建设/拆除规则、车辆出行、道路容量、路口通行、运营控制与快捷键），都必须同步写入并更新 `src/game/manual.html` 游戏指南。
+- 所有功能、规则、界面、工作流、配置项和测试入口变更都必须在同一任务中同步更新对应文档，不要等待用户再次提醒，也不能只在对话中说明。
+- 玩家端变更必须同步检查并更新 `src/game/manual.html` 游戏指南；管理员端变更必须同步检查并更新 `src/admin/admin-manual.html` 管理员操作手册。共享规则或同时影响两端的行为必须更新两份手册。
+- `README.md` 维护项目级功能、启动、部署和测试说明；`GAME_IMPROVEMENT_DIRECTIONS.md` 的完成状态须与实际实现一致。玩家可见文本、ARIA 标签和文档统一使用简体中文。
+- 凡是涉及操作逻辑或游戏规则的变更（包括工具、输入方式、建设/拆除规则、车辆出行、道路容量、路口通行、运营控制与快捷键），必须在代码提交前完成上述文档同步。
 - 修改 HTML 元素 `id` 时，同步搜索并更新 `src/game/game.js`、CSS 选择器和浏览器冒烟测试。
 - Canvas 绘制应按 CSS 尺寸和设备像素比工作，并继续支持鼠标、触摸与键盘操作。
 - 设计存档仅保存规划数据，不保存车辆、成绩或计时。修改序列化格式时保留严格校验、原子加载和必要的旧格式迁移。
@@ -91,9 +94,17 @@ node server.js
 ```sh
 chromium --headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser
 node tests/browser-smoke.cjs
+node tests/ui-smoke.cjs
 ```
 
-可通过 `GAME_URL` 和 `CDP_URL` 覆盖默认地址。CDP 调试端口只能监听本机，测试后关闭浏览器。涉及 DOM、Canvas、触摸、响应式布局、对话框、存档或 CSP 的改动应尽量运行该测试。
+管理端流程测试还需启动管理员服务，再执行：
+
+```sh
+ADMIN_PASSWORD=测试密码 node admin-server.js
+node tests/admin-browser-smoke.cjs
+```
+
+可通过 `GAME_URL`、`ADMIN_URL` 和 `CDP_URL` 覆盖默认地址。管理端浏览器测试会拦截 API，不会发布或写入真实关卡。CDP 调试端口只能监听本机，测试后关闭浏览器。涉及 DOM、Canvas、触摸、响应式布局、对话框、存档或 CSP 的改动应尽量运行对应测试。
 
 ## 本地运行与部署注意事项
 
@@ -121,5 +132,6 @@ node tests/browser-smoke.cjs
 - 核心层仍可在无 DOM 的 Node 环境加载
 - 页面仍可在无网络、无第三方资源时运行
 - 新增静态资源已加入服务器白名单和测试
-- 玩家可见规则、README、帮助文本和测试保持一致
+- 玩家功能已同步 `src/game/manual.html`，管理员功能已同步 `src/admin/admin-manual.html`；共享行为已更新两份手册
+- README、改进方向、界面文本、ARIA 标签和测试保持一致
 - 已执行适合改动范围的语法检查和测试，并如实报告未执行的可选浏览器测试

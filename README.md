@@ -183,7 +183,7 @@ node --check src/server/admin-server.js
 
 测试覆盖原版逻辑、全部关卡的数据有效性与可通关性、公交闭环/接客/容量/预算、独立状态、暂停与停止运营、设计存档校验和往返读取、等级差价、各级速度、容量与转向车道、红灯等待、全红切换、路口冲突与占道保护，以及 HTTP 资源白名单、路径遍历防护、并发请求、HEAD 和缓存。
 
-可选浏览器集成测试需要 Node.js 22+ 和 Chromium，无需 npm 依赖。先启动游戏服务，再将本机 Chromium 以 `--headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser` 启动，执行 `node tests/browser-smoke.cjs`。它验证十关切换、五日进度界面、剪刀工具、教学工具解锁、预铺道路预算、拆路退款、设计保存/读取、道路升级、路口信号设置、结算报告和响应式布局；可通过 `GAME_URL` / `CDP_URL` 指定地址。调试端口只应在本机开放，测试后关闭调试浏览器。另可运行 `node tests/ui-smoke.cjs`，以真实指针点击验证 320～1440px 六档宽度下的关卡折叠、信息切换、设计存档、触控尺寸和首屏重点布局；该测试不依赖关卡中的固定建筑坐标。
+可选浏览器集成测试需要 Node.js 22+ 和 Chromium，无需 npm 依赖。先启动游戏服务，再将本机 Chromium 以 `--headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser` 启动，执行 `node tests/browser-smoke.cjs`。它验证十关切换、五日进度界面、剪刀工具、教学工具解锁、预铺道路预算、拆路退款、设计保存/读取、道路升级、路口信号设置、结算报告和响应式布局；可通过 `GAME_URL` / `CDP_URL` 指定地址。调试端口只应在本机开放，测试后关闭调试浏览器。另可运行 `node tests/ui-smoke.cjs`，以真实指针点击验证 320～1440px 六档宽度下的关卡折叠、信息切换、设计存档、触控尺寸和首屏重点布局；该测试不依赖关卡中的固定建筑坐标。启动管理员服务后还可运行 `node tests/admin-browser-smoke.cjs`（可用 `ADMIN_URL` 指定地址），验证登录、星级字段编辑、发布阻止、试玩通关、版本指纹失效、撤销恢复与发布解锁；测试会在 Chromium 内拦截管理 API，不会写入真实关卡文件。
 
 ```text
 src/game/                    玩家页面、指南、样式、Canvas 与界面脚本
