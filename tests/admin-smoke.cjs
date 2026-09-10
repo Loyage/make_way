@@ -43,11 +43,33 @@ async function main() {
     assert.notEqual(await evaluate('getComputedStyle(document.getElementById("panel")).display'), 'none');
 
     // Level list rendered (>= 6 built-in levels).
-    const navCount = await evaluate('document.querySelectorAll("#level-nav button").length');
+    const navCount = await evaluate('document.querySelectorAll("#level-nav .level-row").length');
     assert.ok(navCount >= 6);
     // Editor populated for first level.
     assert.ok((await text('editor-title')).length > 0);
     assert.ok(await evaluate('document.querySelectorAll("#route-list .route-card").length') > 0);
+
+    // Compact workbench: side-by-side on desktop, map first on narrow screens.
+    assert.equal(await evaluate('document.getElementById("basics-section").open'), false);
+    for (const width of [1440, 1024, 768, 390, 320]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      await delay(150);
+      const layout = await evaluate(`(() => {
+        const settings = document.querySelector('.settings-column').getBoundingClientRect();
+        const map = document.querySelector('.map-section').getBoundingClientRect();
+        const canvas = document.getElementById('map');
+        return { overflow: document.documentElement.scrollWidth > innerWidth,
+          beside: map.left >= settings.right, above: map.bottom <= settings.top,
+          canvasWidth: canvas.width, visibleWidth: canvas.getBoundingClientRect().width };
+      })()`);
+      assert.equal(layout.overflow, false, 'no horizontal overflow at ' + width);
+      assert.ok(width >= 1200 ? layout.beside : layout.above, 'workbench placement at ' + width);
+      assert.ok(layout.canvasWidth > 0 && Math.abs(layout.canvasWidth - layout.visibleWidth) <= 1);
+      await evaluate('document.getElementById("basics-section").open = true');
+      assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+      await evaluate('document.getElementById("basics-section").open = false');
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1200, deviceScaleFactor: 1, mobile: false });
 
     // Switch tools and ensure no exception.
     await click('.toolbar [data-tool="tree"]');
@@ -55,7 +77,7 @@ async function main() {
 
     // Create a new level and confirm editor follows.
     await click('#new-level'); await delay(200);
-    const after = await evaluate('document.querySelectorAll("#level-nav button").length');
+    const after = await evaluate('document.querySelectorAll("#level-nav .level-row").length');
     assert.equal(after, navCount + 1);
 
     // No unexpected runtime/console errors (favicon 404 and the intentional
