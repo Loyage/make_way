@@ -17,6 +17,13 @@
   },
   "budget": 34,
   "duration": 55,
+  "starTargets": {
+    "satisfaction": 90,
+    "efficiency": {
+      "maxCost": 16,
+      "maxQueue": 2
+    }
+  },
   "water": [],
   "bridges": [],
   "trees": [
@@ -53,23 +60,58 @@
     "days": [
       {
         "duration": 55,
-        "maxIncome": 18
+        "maxIncome": 18,
+        "starTargets": {
+          "satisfaction": 90,
+          "efficiency": {
+            "maxCost": 16,
+            "maxQueue": 2
+          }
+        }
       },
       {
         "duration": 65,
-        "maxIncome": 20
+        "maxIncome": 20,
+        "starTargets": {
+          "satisfaction": 90,
+          "efficiency": {
+            "maxCost": 35,
+            "maxQueue": 2
+          }
+        }
       },
       {
         "duration": 65,
-        "maxIncome": 22
+        "maxIncome": 22,
+        "starTargets": {
+          "satisfaction": 90,
+          "efficiency": {
+            "maxCost": 48,
+            "maxQueue": 2
+          }
+        }
       },
       {
         "duration": 65,
-        "maxIncome": 24
+        "maxIncome": 24,
+        "starTargets": {
+          "satisfaction": 90,
+          "efficiency": {
+            "maxCost": 68,
+            "maxQueue": 2
+          }
+        }
       },
       {
         "duration": 65,
-        "maxIncome": 26
+        "maxIncome": 26,
+        "starTargets": {
+          "satisfaction": 90,
+          "efficiency": {
+            "maxCost": 92,
+            "maxQueue": 2
+          }
+        }
       }
     ],
     "routes": [

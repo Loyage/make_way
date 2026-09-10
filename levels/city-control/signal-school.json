@@ -17,6 +17,13 @@
   },
   "budget": 110,
   "duration": 130,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 88,
+      "maxQueue": 25
+    }
+  },
   "water": [],
   "bridges": [],
   "trees": [

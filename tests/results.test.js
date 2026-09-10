@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { commuteReport } = require('../src/game/game-results.js');
+const { commuteReport, starReport } = require('../src/game/game-results.js');
 
 test('commute satisfaction groups residents by travel time and weights their score', () => {
   const report = commuteReport([5, 8, 10, 20, 30]);
@@ -17,6 +17,17 @@ test('generated residents who have not arrived count in the lowest satisfaction 
   assert.deepEqual(report.bands.map(band => band.count), [1, 1, 0, 3]);
   assert.equal(report.score, 54);
   assert.equal(report.average, 7.5, 'average commute time still describes completed trips');
+});
+
+test('three star goals are independent and efficiency requires both limits', () => {
+  const targets={satisfaction:80,efficiency:{maxCost:20,maxQueue:5}};
+  assert.deepEqual(starReport(targets,{won:false,score:85,cost:18,maxQueue:6}).earned,['satisfaction']);
+  assert.deepEqual(starReport(targets,{won:true,score:70,cost:20,maxQueue:5}).earned,['completion','efficiency']);
+  assert.equal(starReport(targets,{won:true,score:90,cost:19,maxQueue:4}).count,3);
+});
+
+test('levels without star targets keep star reporting disabled', () => {
+  assert.deepEqual(starReport(null,{won:true,score:100,cost:0,maxQueue:0}),{count:0,earned:[],goals:[]});
 });
 
 test('empty and malformed commute samples produce a stable empty report', () => {

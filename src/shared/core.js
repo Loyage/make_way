@@ -72,6 +72,7 @@
   const BUS_CAPACITY = 12, BUS_SPEED_MULTIPLIER = 1.35, BUS_BOARDING_RATE = 8, BUS_COST = 6;
   const BUS_LINE_COLORS = Object.freeze(['#1686a0', '#d06b47', '#7868b2', '#4f965d', '#c08a28', '#a64f78']);
   const VEHICLE_WIDTH = .085, VEHICLE_LENGTH = .28, BUS_WIDTH = .11, BUS_LENGTH = .46, LANE_WIDTH = .12;
+  const ROUTE_REPLAN_INTERVAL = 1, ROUTE_SWITCH_RATIO = .82, CONGESTION_WEIGHT = 1, MAX_DYNAMIC_DELAY = 4;
   const PHASES = Object.freeze(['horizontal-straight', 'horizontal-left', 'vertical-straight', 'vertical-left']);
   const signalEntries = (width = WIDTH) => ({ north: width, east: -1, south: -width, west: 1 });
   const SIGNAL_ENTRIES = Object.freeze(signalEntries());
@@ -161,6 +162,7 @@
       this.junctionStats = new Map();
       this.maxHomeQueues = this.routes.flatMap(route=>route.homes).map(()=>0);
       this.roadStats = new Map();
+      this.rerouteCount = 0;
       this.state = 'planning';
       this.nextId = 1;
       this.rebuildRoutes();
@@ -270,10 +272,10 @@
     routeConnected(ri) {
       return this.homes.every((h, hi) => h.route !== ri || this.paths[hi] != null);
     }
-    pathCost(path) {
+    pathCost(path, options = {}) {
       if (!path) return Infinity;
       let total = 0;
-      for (let i = 1; i < path.length; i++) total += this.roadTravelCost(path[i - 1], path[i]);
+      for (let i = 1; i < path.length; i++) total += options.dynamic ? this.dynamicRoadTravelCost(path[i - 1],path[i],options.self) : this.roadTravelCost(path[i - 1],path[i]);
       return total;
     }
     roadTravelCost(a, b) {
@@ -282,23 +284,56 @@
       const preferred = [a,b].some(cell => this.roadPolicies.get(cell) === 'prefer');
       return (preferred ? .82 : 1) / (speeds.length ? Math.min(...speeds) : ROAD_TYPES[0].speed);
     }
-    findCarPath(start, goal) { return findWeightedPath(this.roads, start, goal, this.edges, (a,b) => this.roadTravelCost(a,b), this.width, this.height); }
-    bestGoalPath(hi) {
+    dynamicRoadTravelCost(a,b,self=null) {
+      const base=this.roadTravelCost(a,b);
+      if(!Number.isFinite(base)||!this.roads.has(b))return base;
+      const load=this.load(b,self),vehicles=this.occupants(b,self),ratio=Math.min(2,load.ratio);
+      let delay=base*CONGESTION_WEIGHT*ratio*ratio;
+      if(vehicles.length)delay+=Math.min(2,vehicles.reduce((sum,vehicle)=>sum+Math.min(vehicle.blocked||0,2),0)/Math.max(1,load.capacity));
+      const signal=this.signals.get(b);
+      if(signal){
+        const entry=SIGNAL_ENTRY_ORDER.find(name=>signalEntries(this.width)[name]===b-a),stats=entry&&this.junctionStats.get(b)?.entries[entry];
+        if(stats)delay+=Math.min(MAX_DYNAMIC_DELAY,stats.passed?stats.queueSeconds/stats.passed:stats.maxQueue*.25);
+        if(signal.enabled){const phases=signal.automatic?this.automaticSignalPhases(b):signal.phases;delay+=Math.min(MAX_DYNAMIC_DELAY,Math.max(0,(phases.length-1)*signal.green+phases.length*SIGNAL_CLEARANCE)/2);}
+      }
+      return base+delay;
+    }
+    findCarPath(start, goal, options = {}) {
+      const dynamic=Boolean(options.dynamic),self=options.self||null;
+      return findWeightedPath(this.roads,start,goal,this.edges,(a,b)=>dynamic?this.dynamicRoadTravelCost(a,b,self):this.roadTravelCost(a,b),this.width,this.height);
+    }
+    bestGoalPath(hi, options = {}) {
       const home = this.homes[hi];
       let goalIndex = null, path = null, cost = Infinity;
       for (let gi = 0; gi < this.goals.length; gi++) {
         const g = this.goals[gi];
         if (g.route !== home.route) continue;
         if (g.input != null && this.goalAssigned[gi] >= g.input) continue;
-        const candidate = this.findCarPath(home.cell, g.cell), candidateCost = this.pathCost(candidate);
+        const candidate = this.findCarPath(home.cell,g.cell,options),candidateCost=this.pathCost(candidate,options);
         if (candidate && (candidateCost + 1e-9 < cost || Math.abs(candidateCost-cost)<1e-9 && (!path || candidate.length<path.length))) { path = candidate; cost = candidateCost; goalIndex = gi; }
       }
       return { goalIndex, path, cost };
+    }
+    planCarPath(car, force = false) {
+      if(!car||car.done)return null;
+      const goal=car.goal??this.defaultGoalCell(car.route),index=Array.isArray(car.plannedPath)?car.plannedPath.indexOf(car.cell):-1;
+      let current=index>=0?car.plannedPath.slice(index):null;
+      if(current&&!current.slice(1).every((cell,i)=>this.edges.get(current[i])?.has(cell)))current=null;
+      if(!force&&current&&this.elapsed<(car.replanAt??0))return current;
+      const currentCost=this.pathCost(current,{dynamic:true,self:car}),candidate=this.findCarPath(car.cell,goal,{dynamic:true,self:car});
+      if(!candidate){car.replanAt=this.elapsed+ROUTE_REPLAN_INTERVAL;return Number.isFinite(currentCost)?current:null;}
+      const candidateCost=this.pathCost(candidate,{dynamic:true,self:car});
+      const changed=current&&candidate.some((cell,i)=>cell!==current[i])&&(candidateCost<=currentCost*ROUTE_SWITCH_RATIO||!Number.isFinite(currentCost));
+      if(!current||changed){car.plannedPath=candidate;if(changed){car.routeChanges=(car.routeChanges||0)+1;this.rerouteCount++;}current=candidate;}
+      else car.plannedPath=current;
+      car.replanAt=this.elapsed+ROUTE_REPLAN_INTERVAL;
+      return current;
     }
     setRoadPolicy(cells, policy = null) {
       if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Array.isArray(cells) || !['prefer','avoid',null].includes(policy) || cells.some(cell => !Number.isInteger(cell) || !this.roads.has(cell))) return '道路偏好设置无效';
       for (const cell of cells) if (policy === null) this.roadPolicies.delete(cell); else this.roadPolicies.set(cell, policy);
+      for(const car of this.cars)car.replanAt=0;
       this.refreshPaths();return '';
     }
     refreshPaths() {
@@ -334,7 +369,7 @@
       if (!home) return null;
       const matchingGoals = this.goals.map((goal, index) => goal.route === home.route ? index : -1).filter(index => index >= 0);
       const availableGoals = matchingGoals.filter(index => this.goals[index].input == null || this.goalAssigned[index] < this.goals[index].input);
-      const { goalIndex: carGoalIndex, path } = this.bestGoalPath(homeIndex);
+      const dynamic=['running','paused'].includes(this.state),{ goalIndex: carGoalIndex, path } = this.bestGoalPath(homeIndex,dynamic?{dynamic:true}:{});
       let busGoalIndex = null, busLine = null;
       for (const line of this.busLines) for (const goalIndex of availableGoals) if (this.busCanServe(home.cell, this.goals[goalIndex].cell, line)) {
         busGoalIndex = goalIndex; busLine = line; break;
@@ -359,7 +394,7 @@
         const speeds = [path[i - 1], path[i]].filter(cell => this.roads.has(cell)).map(cell => this.roadType(cell).speed);
         freeFlowTime += 1 / (speeds.length ? Math.min(...speeds) : ROAD_TYPES[0].speed);
       }
-      return { homeIndex, carGoalIndex, busGoalIndex, busLineId: busLine?.id || null, assignedGoalIndices, path, distance: path ? path.length - 1 : null, freeFlowTime, bottlenecks, reason };
+      return { homeIndex, carGoalIndex, busGoalIndex, busLineId: busLine?.id || null, assignedGoalIndices, path, distance: path ? path.length - 1 : null, freeFlowTime, bottlenecks, dynamic, reason };
     }
     signalConflicts(actions) {
       if(!Array.isArray(actions))return [];
@@ -461,8 +496,8 @@
       }
       return -1;
     }
-    load(n) {
-      const cars = this.occupants(n);
+    load(n, self = null) {
+      const cars = this.occupants(n,self);
       if (this.signals.has(n)) {
         if (!this.signals.get(n).enabled) return { used: cars.length, capacity: 1, total: cars.length, ratio: cars.length };
         let mask = 0;
@@ -577,6 +612,7 @@
       this.junctionStats = new Map();
       this.maxHomeQueues = this.homes.map(()=>0);
       this.roadStats = new Map();
+      this.rerouteCount = 0;
       this.resetBusStats();
       this.state = 'planning';
       this.nextId = 1;
@@ -814,7 +850,7 @@
             const heading = path[1] - path[0];
             if (this.available(home.cell, heading) && this.available(path[1], heading)) {
               const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
-              this.cars.push({ id: this.nextId++, route: home.route, homeIndex: hi, goalIndex, goal: this.goals[goalIndex].cell, commuteStarted, cell: home.cell, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0 });
+              this.cars.push({ id: this.nextId++, route: home.route, homeIndex: hi, goalIndex, goal: this.goals[goalIndex].cell, commuteStarted, cell: home.cell, next: null, heading, cellHeading: heading, lane: 0, cellLane: 0, cellSlot: 1, progress: 0, blocked: 0, plannedPath:path, replanAt:this.elapsed+ROUTE_REPLAN_INTERVAL, routeChanges:0 });
               this.goalAssigned[goalIndex]++;
               this.departedByHome[hi]++;
               this.queues[hi]--;
@@ -827,8 +863,7 @@
       for (const car of this.cars) if (!car.done && car.next === null) {
         const goal = car.goal ?? this.defaultGoalCell(car.route), exit = car.cellMovement?.exitCell;
         // Once admitted, finish the committed turn even if other roads change.
-        plans.set(car, exit === undefined ? this.findCarPath(car.cell, goal)
-          : [car.cell, ...(this.findCarPath(exit, goal) || [exit])]);
+        plans.set(car,exit===undefined?this.planCarPath(car):[car.cell,...(this.findCarPath(exit,goal,{dynamic:true,self:car})||[exit])]);
       }
       for(const [node] of this.signals){
         const counts=Object.fromEntries(SIGNAL_ENTRY_ORDER.map(entry=>[entry,0])),entries=signalEntries(this.width);
@@ -923,7 +958,7 @@
     }
   }
   installBusMethods(City, { BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, BUS_LINE_COLORS });
-  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, routeHomes, routeGoals, WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath, findWeightedPath };
+  api = { City, ROAD_TYPES, SIGNAL_CLEARANCE, PHASES, SIGNAL_ACTIONS, SIGNAL_ENTRY_ORDER, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, LANE_WIDTH, ROUTE_REPLAN_INTERVAL, ROUTE_SWITCH_RATIO, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, movement, movementsConflict, vehiclePosition, LEVELS, CHAPTERS, setLevels, routeHomes, routeGoals, WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, BUDGET, DURATION, TARGET, ROUTES, key, point, neighbors, findPath, findWeightedPath };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
     Object.assign(api, require('./core-campaign.js')(api));

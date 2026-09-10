@@ -41,6 +41,13 @@
     <label class="admin-wide">规划提示<textarea id="admin-tip" rows="3"></textarea></label>
   </div></details>
 
+  <details><summary>星级挑战</summary><div class="admin-section-body admin-grid">
+    <label>满意度星（%）<input id="admin-star-satisfaction" type="number" min="0" max="100"></label>
+    <label>效率星最高建设点<input id="admin-star-cost" type="number" min="0"></label>
+    <label>效率星最大住宅排队<input id="admin-star-queue" type="number" min="0"></label>
+    <small class="admin-wide">三颗星分别对应通关、满意度和效率；效率星须同时满足建设点数与住宅排队限制。</small>
+  </div></details>
+
   <details><summary>开放功能</summary><div id="admin-features" class="admin-section-body admin-checks">
     <label><input data-feature="grade" type="checkbox">道路等级</label><label><input data-feature="load" type="checkbox">道路负荷</label>
     <label><input data-feature="cut" type="checkbox">剪断工具</label><label><input data-feature="inspect" type="checkbox">路况检查</label>
@@ -57,7 +64,7 @@
 
   <details><summary>多日任务</summary><div class="admin-section-body">
     <label class="admin-inline"><input id="admin-campaign-enabled" type="checkbox">启用多日任务</label>
-    <div id="admin-campaign-fields"><label>日期<select id="admin-campaign-day"></select></label><div class="admin-grid"><label>当日时长<input id="admin-day-duration" type="number" min="1"></label><label>最高收入<input id="admin-day-income" type="number" min="0"></label></div><div class="admin-row"><button id="admin-add-day" class="tool" type="button">＋一天</button><button id="admin-delete-day" class="tool admin-danger" type="button">删除末日</button></div></div>
+    <div id="admin-campaign-fields"><label>日期<select id="admin-campaign-day"></select></label><div class="admin-grid"><label>当日时长<input id="admin-day-duration" type="number" min="1"></label><label>最高收入<input id="admin-day-income" type="number" min="0"></label><label>当日满意度星（%）<input id="admin-day-star-satisfaction" type="number" min="0" max="100"></label><label>当日效率星最高建设点<input id="admin-day-star-cost" type="number" min="0"></label><label>当日效率星最大住宅排队<input id="admin-day-star-queue" type="number" min="0"></label></div><div class="admin-row"><button id="admin-add-day" class="tool" type="button">＋一天</button><button id="admin-delete-day" class="tool admin-danger" type="button">删除末日</button></div></div>
     <small>建筑解锁和升级的高级条件可继续通过 JSON 配置维护；此处负责日期、时长与收入。</small>
   </div></details>
 

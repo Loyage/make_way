@@ -18,7 +18,17 @@
     const sorted=[...valid].sort((a,b)=>a-b),p95=sorted.length?sorted[Math.max(0,Math.ceil(sorted.length*.95)-1)]:0;
     return { count, score, average, p95, bands };
   }
-  const api = { BANDS, commuteReport };
+  function starReport(targets, metrics) {
+    if (!targets || typeof targets !== 'object') return { count: 0, earned: [], goals: [] };
+    const efficiency=targets.efficiency||{},score=Number(metrics?.score)||0,cost=Number(metrics?.cost)||0,maxQueue=Number(metrics?.maxQueue)||0;
+    const goals=[
+      { id:'completion',label:'完成运输目标',earned:Boolean(metrics?.won) },
+      { id:'satisfaction',label:`满意度达到 ${targets.satisfaction}%`,earned:score>=targets.satisfaction },
+      { id:'efficiency',label:`建设不超过 ${efficiency.maxCost} 点，最大住宅排队不超过 ${efficiency.maxQueue} 人`,earned:cost<=efficiency.maxCost&&maxQueue<=efficiency.maxQueue }
+    ];
+    return { count:goals.filter(goal=>goal.earned).length,earned:goals.filter(goal=>goal.earned).map(goal=>goal.id),goals };
+  }
+  const api = { BANDS, commuteReport, starReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficResults = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

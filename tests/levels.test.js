@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
 const { validateLevelCatalog } = require('../src/shared/level-validation.js');
+const { commuteReport, starReport } = require('../src/game/game-results.js');
 
 const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
@@ -39,6 +40,8 @@ for (const level of LEVELS) {
     }
     assert.equal(city.state,'won',`${city.delivered}/${city.target}, roads ${level.budget-city.remaining}, deliveries ${city.byRoute}`);
     assert.ok(city.byRoute.every(n=>n>0));assert.ok(city.remaining>=0);
+    const report=commuteReport(city.commuteTimes,Math.max(0,city.generated.reduce((sum,count)=>sum+count,0)-city.delivered));
+    assert.equal(starReport(level.starTargets,{won:true,score:report.score,cost:city.budget-city.remaining,maxQueue:Math.max(0,...city.maxHomeQueues)}).count,3,'reference plan should demonstrate all three star goals');
   });
   test(`${level.name}: isolated demand loses at its own deadline`, () => {
     const city = new City(level.id);city.edges.clear();city.refreshPaths();city.toggle();

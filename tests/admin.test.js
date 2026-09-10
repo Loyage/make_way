@@ -82,6 +82,14 @@ test('shared validation collects independent problems with navigation metadata',
   assert.ok(result.errors.some(issue=>issue.levelId===second.id&&issue.path.endsWith('.duration')));
 });
 
+test('shared validation checks level and campaign-day star targets', () => {
+  const catalog=JSON.parse(JSON.stringify(defaultLevels())),level=catalog.chapters[0].levels[0];
+  level.starTargets.satisfaction=101;
+  let result=validateLevelCatalog(catalog);assert.equal(result.ok,false);assert.ok(result.errors.some(issue=>issue.path.endsWith('.starTargets')));
+  level.starTargets.satisfaction=90;const campaign=catalog.chapters.flatMap(chapter=>chapter.levels).find(item=>item.campaign);campaign.campaign.days[1].starTargets.efficiency.maxQueue=-1;
+  result=validateLevelCatalog(catalog);assert.equal(result.ok,false);assert.ok(result.errors.some(issue=>issue.path.includes('campaign.days[1].starTargets')));
+});
+
 test('validateLevels accepts complete tutorial reference designs and rejects mismatches', () => {
   const source=defaultLevels(),levelId=source.chapters[0].levels[0].id;
   setLevels(source);
@@ -161,7 +169,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.body,/id="admin-inspector"/);assert.match(page.body,/id="admin-add-chapter"/);assert.match(page.body,/id="admin-chapter"/);
-  assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);
+  assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);assert.match(page.body,/id="admin-star-satisfaction"/);assert.match(page.body,/id="admin-day-star-queue"/);
   assert.match(page.body,/id="admin-selection"/);assert.match(page.body,/id="admin-capture-roads"/);assert.match(page.body,/data-terrain="water"/);
   assert.match(page.body,/id="admin-capture-reference"/);assert.match(page.body,/id="admin-delete-reference"/);assert.match(page.body,/id="reference-design"/);
   assert.match(page.body,/id="admin-verify-play"/);assert.match(page.body,/id="admin-trial-status"/);assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);

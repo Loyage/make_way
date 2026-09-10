@@ -112,6 +112,7 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .level-card.selected { background: #e9efdf; border-color: #7ea079; box-shadow: inset 0 0 0 1px #7ea079; }
 .level-card.selected .level-number { color: var(--green); }
 .level-card.selected::after { content: '●'; position: absolute; right: 11px; top: 10px; font-size: 8px; color: var(--green); }
+.level-stars { display: block; margin-top: 6px; color: #b67a26; font-size: 11px; font-weight: 700; }
 .chapter small { max-width: 125px; }
 @media (max-width: 760px) {
   .level-card { flex-basis: 138px; padding: 10px; }
@@ -180,6 +181,9 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .game-page .mission h2 { margin: 8px 0; }
 .game-page .mission p, .game-page .notes p { color: #596c55; font-size: 12px; line-height: 1.8; }
 .game-page .mission-tip { margin-top: 14px; }
+.game-page .star-goals, .game-page .star-report { margin-top: 12px; padding: 10px 12px; border: 1px solid #e5d7b6; border-radius: 10px; background: #fff9e9; }
+.game-page .star-goals p, .game-page .star-report p { margin: 3px 0; color: #81745d; font-size: 11px; line-height: 1.5; }
+.game-page .star-goals p.earned, .game-page .star-report p.earned { color: #a86816; font-weight: 700; }
 .game-page .pressure-help { margin-top: 14px; }
 .game-page .pressure-help p { margin: 10px 0; }
 .game-page .pressure-help a { color: var(--green); font-size: 12px; }

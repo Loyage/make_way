@@ -43,6 +43,8 @@ async function main() {
   }
   try {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
+    await send('Page.navigate',{url});
+    for(let attempt=0;attempt<40;attempt++){try{if(await evaluate(`location.origin===${JSON.stringify(new URL(url).origin)}`))break;}catch{/* navigation is still replacing the initial document */}await delay(50);}
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
@@ -164,7 +166,10 @@ async function main() {
     await click('#confirm-preflight');await delay(150);
     assert.equal(await evaluate('document.querySelector("#result-dialog").open'),true);
     assert.ok((await text('result-stats')).includes('居民满意度 100%'));
+    assert.ok((await text('result-stats')).includes('动态改道 0 次'));
     assert.ok((await text('result-stats')).includes('轻松通勤 1 人'));
+    assert.ok((await text('result-stats')).includes('★ 完成运输目标'));
+    assert.equal(await evaluate('document.querySelector(".level-card.selected .level-stars").textContent'),'★ 3/3');
 
     for(const width of [320,390,760,768,1024,1440]){
       await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<760});await delay(60);

@@ -75,6 +75,30 @@ test('private cars choose free-flow travel time and honor road guidance',()=>{
   assert.equal(city.setRoadPolicy(fastCells,null),'');assert.equal(city.setRoadPolicy([key(2,5)],'prefer'),'');
   const design=city.serializeDesign();assert.deepEqual(design.roadPolicies,[{cell:key(2,5),policy:'prefer'}]);
 });
+test('dynamic routing avoids saturated roads and only switches after a meaningful saving',()=>{
+  const city=street(),home=key(1,5),goal=key(9,5);city.runtimeBudget=100;
+  for(let x=1;x<=9;x++)city.edit(key(x,4));
+  city.connect(home,key(1,4));for(let x=1;x<9;x++)city.connect(key(x,4),key(x+1,4));city.connect(key(9,4),goal);
+  const direct=city.findCarPath(home,goal),traveler={...car(home),goal,plannedPath:direct,replanAt:1,routeChanges:0};
+  const blockers=[];for(let x=2;x<=8;x++)blockers.push(car(key(x,5)),car(key(x,5),1,0,null,0));
+  city.cars=[traveler,...blockers];
+  assert.equal(city.findCarPath(home,goal,{dynamic:true,self:traveler})[1],key(1,4),'live load should make the detour cheaper');
+  assert.equal(city.planCarPath(traveler)[1],key(2,5),'the cooldown keeps the current route stable');
+  city.elapsed=1;assert.equal(city.planCarPath(traveler)[1],key(1,4));assert.equal(traveler.routeChanges,1);assert.equal(city.rerouteCount,1);
+  city.cars=[traveler,car(key(2,5))];city.elapsed=1.5;assert.equal(city.planCarPath(traveler)[1],key(1,4),'a route is retained until the next review');
+  city.elapsed=2;assert.equal(city.planCarPath(traveler)[1],key(1,4),'a marginal saving does not cause route flapping');assert.equal(city.rerouteCount,1);
+  city.cars=[traveler];city.elapsed=3;assert.equal(city.planCarPath(traveler)[1],key(2,5));assert.equal(city.rerouteCount,2);
+  traveler.replanAt=99;assert.equal(city.setRoadPolicy(Array.from({length:7},(_,i)=>key(i+2,5)),'avoid'),'');
+  assert.equal(traveler.replanAt,0);assert.equal(city.planCarPath(traveler)[1],key(1,4),'a new car ban forces immediate replanning');
+});
+test('dynamic route cost accounts for signal cycles',()=>{
+  const city=street(),home=key(1,5),goal=key(9,5),junction=key(5,5);city.runtimeBudget=100;
+  for(let x=1;x<=9;x++)city.edit(key(x,4));
+  city.connect(home,key(1,4));for(let x=1;x<9;x++)city.connect(key(x,4),key(x+1,4));city.connect(key(9,4),goal);
+  city.connect(junction,junction+WIDTH);assert.equal(city.setSignal(junction,true),'');
+  assert.equal(city.findCarPath(home,goal)[1],key(2,5));
+  assert.equal(city.findCarPath(home,goal,{dynamic:true})[1],key(1,4),'the controlled junction should add expected waiting cost');
+});
 test('faster road grades actually improve vehicle travel speed',()=>{
   const slow=street(),fast=street();
   for(const n of fast.roads)fast.edit(n,false,2);

@@ -17,6 +17,13 @@
   },
   "budget": 36,
   "duration": 90,
+  "starTargets": {
+    "satisfaction": 90,
+    "efficiency": {
+      "maxCost": 9,
+      "maxQueue": 2
+    }
+  },
   "water": [
     102,
     103,

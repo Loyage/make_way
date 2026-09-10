@@ -12,6 +12,14 @@ const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES, BUS_CO
 const { normalizeCatalog } = catalogApi;
 
 function isCoord(n, width = WIDTH, height = HEIGHT) { return Number.isInteger(n) && n >= 0 && n < width * height; }
+function starTargetError(targets) {
+  if (!targets || typeof targets !== 'object' || Array.isArray(targets)) return 'starTargets 必须是对象';
+  if (!Number.isInteger(targets.satisfaction) || targets.satisfaction < 0 || targets.satisfaction > 100) return 'starTargets.satisfaction 必须是 0 至 100 的整数';
+  if (!targets.efficiency || typeof targets.efficiency !== 'object' || Array.isArray(targets.efficiency)) return 'starTargets.efficiency 必须是对象';
+  if (!Number.isInteger(targets.efficiency.maxCost) || targets.efficiency.maxCost < 0) return 'starTargets.efficiency.maxCost 必须是非负整数';
+  if (!Number.isInteger(targets.efficiency.maxQueue) || targets.efficiency.maxQueue < 0) return 'starTargets.efficiency.maxQueue 必须是非负整数';
+  return '';
+}
 function validateLevelsFirst(data) {
   const catalog = normalizeCatalog(data);
   if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.chapters) || !catalog.chapters.length) return '章节数据必须包含非空 chapters 数组';
@@ -41,6 +49,7 @@ function validateLevelsFirst(data) {
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || height < MIN_MAP_SIZE || height > MAX_MAP_SIZE) return `关卡「${level.id}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`;
     if (!Number.isInteger(level.budget) || level.budget < 1) return `关卡「${level.id}」的预算无效`;
     if (!Number.isFinite(level.duration) || level.duration < 1) return `关卡「${level.id}」的时长无效`;
+    if (level.starTargets !== undefined) { const message=starTargetError(level.starTargets);if(message)return `关卡「${level.id}」的 ${message}`; }
     // features
     const features = level.features || {};
     for (const name of ['grade', 'load', 'cut', 'inspect', 'signals']) {
@@ -199,6 +208,7 @@ function validateLevelsFirst(data) {
         const day = level.campaign.days[dayIndex];
         if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
         if (!Number.isInteger(day.maxIncome) || day.maxIncome < 0) return `关卡「${level.id}」第 ${dayIndex + 1} 天的最高收入无效`;
+        if (day.starTargets !== undefined) { const message=starTargetError(day.starTargets);if(message)return `关卡「${level.id}」第 ${dayIndex + 1} 天的 ${message}`; }
         if (legacy) {
           if (!Array.isArray(day.routes)) return `关卡「${level.id}」不能混用新旧多日任务格式`;
           const dayLevel = { ...level, duration: day.duration, routes: day.routes };
@@ -294,6 +304,8 @@ function validateLevelCatalog(data) {
       if (!dimensionsValid) add(`关卡「${levelId || li + 1}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`, {...details,path:`${base}.width`});
       if (!Number.isInteger(level.budget)||level.budget<1) add(`关卡「${levelId || li + 1}」的预算无效`, {...details,path:`${base}.budget`});
       if (!Number.isFinite(level.duration)||level.duration<1) add(`关卡「${levelId || li + 1}」的时长无效`, {...details,path:`${base}.duration`});
+      if(level.starTargets!==undefined){const message=starTargetError(level.starTargets);if(message)add(`关卡「${levelId || li + 1}」的 ${message}`,{...details,path:`${base}.starTargets`});}
+      if(Array.isArray(level.campaign?.days))level.campaign.days.forEach((day,di)=>{if(day?.starTargets!==undefined){const message=starTargetError(day.starTargets);if(message)add(`关卡「${levelId || li + 1}」第 ${di+1} 天的 ${message}`,{...details,path:`${base}.campaign.days[${di}].starTargets`});}});
       const features=level.features;
       if (!features || typeof features!=='object') add(`关卡「${levelId || li + 1}」的 features 必须是对象`, {...details,path:`${base}.features`});
       else {
