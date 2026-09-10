@@ -138,7 +138,7 @@
     $('bus-tool').hidden = !level.features.bus;
     $('bus-controls').hidden = !level.features.bus;
     $('legend-bus').hidden = !level.features.bus;
-    $('show-load').checked = level.features.load;
+    $('show-load').checked = false;
     if (tool === 'cut' && !level.features.cut || tool === 'bus' && !level.features.bus) setTool('view');
     if(visibleChapterIndex!==chapterIndex)showChapter(chapterIndex);
     else levelButtons.forEach(button=>{
@@ -158,8 +158,8 @@
     updateDesignControls();renderCampaignProgress();buildAccessibleMap();
   }
   function accessibleCellLabel(cell) {
-    const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
-    let content=city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
+    const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),site=city.pendingBuildings.get(cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
+    let content=city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:site?`${site.kind==='home'?'住宅':'目的地'}建设用地，${campaignConditionText(site)}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
     if(city.roads.has(cell)){const policy=city.roadPolicies.get(cell);if(policy)content+=policy==='prefer'?'，汽车偏好':'，汽车禁行';content+=`，占用或驶入 ${city.load(cell).total} 辆`;}
     return `第 ${p.y+1} 行第 ${p.x+1} 列，${content}${selection?.start===cell&&selection?.end===cell?'，已选择':''}`;
   }
@@ -237,6 +237,20 @@
     const cells=selectedCells();if(tool!=='select'||cells.length!==1)return null;
     const homeIndex=city.homes.findIndex(home=>home.cell===cells[0]);
     return homeIndex<0?null:city.homeTravelInfo(homeIndex);
+  }
+  function campaignConditionText(site) {
+    const condition=site.condition||{},results=campaign?.results||[],day=campaign?campaign.dayIndex+1:1;
+    const delivered=results.reduce((sum,result)=>sum+result.delivered,0),income=results.reduce((sum,result)=>sum+result.income,0),satisfaction=results.length?results.at(-1).satisfaction:null,parts=[];
+    if(condition.day)parts.push(`日期达到第 ${condition.day} 天（当前第 ${day} 天）`);
+    if(condition.delivered)parts.push(`累计送达 ${delivered} / ${condition.delivered} 人`);
+    if(condition.income)parts.push(`累计收入 ${income} / ${condition.income} 点`);
+    if(condition.satisfaction)parts.push(`上一日满意度 ${satisfaction===null?'尚无':satisfaction+'%'} / ${condition.satisfaction}%`);
+    return `解锁条件${parts.length>1?'（需全部满足）':''}：${parts.join(' · ')||'下一日结算后确认'}`;
+  }
+  function removeSelectedRoads() {
+    const roads=selectedCells().filter(n=>city.roads.has(n));if(!roads.length)return;
+    const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:true,grade:0}))));
+    toast(message||`已拆除 ${roads.length} 格道路，建设预算已返还`);updateUI();draw();
   }
   function updateBusVisibilityControls() {
     const panel=$('bus-line-visibility'), ids=new Set(city.busLines.map(line=>line.id));
@@ -340,6 +354,8 @@
     $('upgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)<ROAD_TYPES.length-1)||!city.level.features.grade||!planning;
     $('downgrade-road').disabled=!roads.some(cell=>(city.roadGrades.get(cell)||0)>0)||!city.level.features.grade||!planning;
     $('remove-road').disabled=!removable.length||!planning;
+    $('quick-remove-road').hidden=tool!=='select'||dragging||!removable.length||!planning;
+    $('quick-remove-road').textContent=`⌫ 拆除所选${removable.length>1?' '+removable.length+' 格':''}道路`;
     $('prefer-road').disabled=!roads.length||!planning;
     $('avoid-road').disabled=!roads.length||!planning;
     $('clear-road-policy').disabled=!roads.some(cell=>city.roadPolicies.has(cell))||!planning;
@@ -390,7 +406,8 @@
         const site=city.pendingBuildings.get(n);
         const kind=site?`${site.kind==='home'?'住宅':'目的地'}建设用地`:city.bridges.has(n)?'桥梁（空）':city.water.has(n)?'水面':city.trees.has(n)?'绿地':'空地';
         $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${kind}${site?site.conditional?' · 达成条件后落成':` · ${site.daysUntil} 天后落成`:''}`;
-        $('road-load').textContent=site?'建设期间不可铺路，请为建筑和出口预留空间。':kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';$('signal-phase').textContent='';
+        $('road-load').textContent=site?'建设期间不可铺路，请为建筑和出口预留空间。':kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';
+        $('signal-phase').textContent=site?campaignConditionText(site):'';
       }
     }
     updateSignalControls(signal,planning);
@@ -938,11 +955,8 @@
   $('prefer-road').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,'prefer'));toast(message||`已将 ${roads.length} 格设为汽车偏好道路`);updateUI();draw();};
   $('avoid-road').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,'avoid'));toast(message||`已将 ${roads.length} 格设为小汽车禁行，公交仍可通行`);updateUI();draw();};
   $('clear-road-policy').onclick=()=>{const roads=selectedCells().filter(cell=>city.roads.has(cell)),message=mutateDesign(()=>city.setRoadPolicy(roads,null));toast(message||'已清除选区道路引导');updateUI();draw();};
-  $('remove-road').onclick=()=>{
-    const roads=selectedCells().filter(n=>city.roads.has(n));if(!roads.length)return;
-    const message=mutateDesign(()=>city.transact(roads.map(cell=>({type:'edit',cell,erase:true,grade:0}))));
-    toast(message||`已拆除 ${roads.length} 格道路，建设预算已返还`);updateUI();draw();
-  };
+  $('remove-road').onclick=removeSelectedRoads;
+  $('quick-remove-road').onclick=removeSelectedRoads;
   $('undo-design').onclick=()=>restoreDesign(designHistoryIndex-1);
   $('redo-design').onclick=()=>restoreDesign(designHistoryIndex+1);
   $('save-design').onclick=()=>{

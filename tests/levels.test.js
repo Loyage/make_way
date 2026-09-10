@@ -92,6 +92,7 @@ test('multi-day campaign pays for quality, reveals construction, and replays che
   const campaign=new CampaignSession('growing-city');
   assert.equal(campaign.days.length,5);assert.equal(campaign.city.pendingBuildings.size,8);
   assert.equal(campaign.city.pendingBuildings.get(20).daysUntil,1);
+  assert.equal(campaign.city.pendingBuildings.get(20).condition.day,2);
   assert.match(campaign.city.edit(20),/建设用地/);
   assert.equal(campaign.city.edit(0),'');
   assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);

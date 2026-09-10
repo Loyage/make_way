@@ -101,8 +101,8 @@
       const sites = [];
       for (const route of this.level.campaign.routes) for (const [kind, buildings] of [['home', routeHomes(route)], ['goal', routeGoals(route)]]) for (const building of buildings) {
         if (active.has(building.cell)) continue;
-        const unlockDay = building.unlock?.day || 1;
-        sites.push({ cell: building.cell, kind, daysUntil: Math.max(0, unlockDay - dayIndex - 1), conditional: Boolean(building.unlock?.delivered || building.unlock?.income || building.unlock?.satisfaction) });
+        const condition = clone(building.unlock || {}), unlockDay = condition.day || 1;
+        sites.push({ cell: building.cell, kind, daysUntil: Math.max(0, unlockDay - dayIndex - 1), conditional: Boolean(condition.delivered || condition.income || condition.satisfaction), condition });
       }
       return sites;
     }

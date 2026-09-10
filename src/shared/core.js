@@ -139,7 +139,7 @@
       this.runtimeBudget = options.budget;
       this.runtimeDuration = options.duration;
       this.deadlineMode = Boolean(options.deadlineMode);
-      this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site }]));
+      this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site, condition: site.condition ? { ...site.condition } : undefined }]));
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
       this.roads = new Set();
