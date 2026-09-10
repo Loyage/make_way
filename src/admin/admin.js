@@ -98,15 +98,26 @@
   function fillSelect(select,items,value){select.replaceChildren(...items);select.value=String(value);}
   function uniqueId(prefix, values) { let n=values.length+1,id=`${prefix}-${n}`;while(values.some(item=>item.id===id))id=`${prefix}-${++n}`;return id; }
   function currentCellFallback(offset=0){const target=level();return Math.min((target.width||16)*(target.height||12)-1,2*(target.width||16)+2+offset);}
+  function buildingCells(target = level()) { return new Set((target?.campaign?.routes||target?.routes||[]).flatMap(item=>[...item.homes,...item.goals].map(building=>building.cell))); }
+  function detachInitialCell(target,cell,removeRoad=false) {
+    if(removeRoad)target.initialRoads=(target.initialRoads||[]).filter(road=>road.cell!==cell);
+    target.initialEdges=(target.initialEdges||[]).filter(([a,b])=>a!==cell&&b!==cell);
+  }
+  function cleanupVacatedBuilding(target,cell) { if(!buildingCells(target).has(cell))detachInitialCell(target,cell); }
+  function moveBuilding(building,cell) {
+    const target=level(),previous=building.cell;if(previous===cell)return;
+    building.cell=cell;cleanupVacatedBuilding(target,previous);detachInitialCell(target,cell,true);
+    target.water=target.water.filter(value=>value!==cell);target.bridges=target.bridges.filter(value=>value!==cell);target.trees=target.trees.filter(value=>value!==cell);
+  }
 
   function renderBuildings(kind) {
     const list=$(kind==='home'?'admin-homes':'admin-goals'),items=route()?.[kind==='home'?'homes':'goals']||[];list.replaceChildren();
     items.forEach((building,index)=>{
       const card=document.createElement('div');card.className='admin-building-card';
       const head=document.createElement('div');head.className='admin-card-title';head.innerHTML=`<strong>${kind==='home'?'住宅':'目的地'} ${index+1}</strong><span>格 ${building.cell}</span>`;
-      const remove=document.createElement('button');remove.type='button';remove.className='tool admin-danger';remove.textContent='删除';remove.disabled=items.length<=1;remove.onclick=()=>commit(()=>items.splice(index,1));head.append(remove);card.append(head);
+      const remove=document.createElement('button');remove.type='button';remove.className='tool admin-danger';remove.textContent='删除';remove.disabled=items.length<=1;remove.onclick=()=>commit(()=>{const target=level(),cell=building.cell;items.splice(index,1);cleanupVacatedBuilding(target,cell);});head.append(remove);card.append(head);
       const make=(labelText,type,value,onchange)=>{const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.type=type;input.value=value??'';input.onchange=()=>commit(()=>onchange(input.value));label.append(input);return label;};
-      card.append(make('格子索引','number',building.cell,value=>building.cell=Number(value)));
+      card.append(make('格子索引','number',building.cell,value=>moveBuilding(building,Number(value))));
       if(kind==='home')card.append(make('产生率（人/秒）','number',building.generationRate??building.rate,value=>{building.generationRate=Number(value);delete building.rate;}),make('总人口','number',building.passengers,value=>building.passengers=Number(value)));
       else card.append(make('标签','text',building.label,value=>building.label=value),make('输入上限（空为不限）','number',building.input,value=>{if(value==='')delete building.input;else building.input=Number(value);}));
       if(level().campaign){
@@ -116,7 +127,7 @@
         building.upgrades.forEach((upgrade,ui)=>{upgrade.condition||={day:1};const stage=document.createElement('div');stage.className='admin-upgrade';const stageHead=document.createElement('div');stageHead.textContent=`升级 ${ui+1}`;const del=document.createElement('button');del.type='button';del.className='tool admin-danger';del.textContent='删除';del.onclick=()=>commit(()=>building.upgrades.splice(ui,1));stageHead.append(del);stage.append(stageHead,conditionFields(upgrade.condition,''));if(kind==='home'){stage.append(make('产生率（空为不变）','number',upgrade.generationRate,value=>{if(value==='')delete upgrade.generationRate;else upgrade.generationRate=Number(value);}),make('人口（空为不变）','number',upgrade.passengers,value=>{if(value==='')delete upgrade.passengers;else upgrade.passengers=Number(value);}));}else stage.append(make('输入上限（空为无限）','number',upgrade.input,value=>upgrade.input=value===''?null:Number(value)));growth.append(stage);});
         const add=document.createElement('button');add.type='button';add.className='tool';add.textContent='＋升级阶段';add.onclick=()=>commit(()=>{const upgrade={condition:{day:Math.min(2,level().campaign.days.length)}};if(kind==='home')upgrade.passengers=building.passengers;else upgrade.input=building.input??null;building.upgrades.push(upgrade);});growth.append(add);card.append(growth);
       }
-      const locate=document.createElement('button');locate.type='button';locate.className='tool';locate.textContent='移动到地图所选首格';locate.onclick=()=>{const cells=selectedCells();if(!cells.length)return setStatus('请先在地图中选择一个格子','invalid');commit(()=>building.cell=cells[0]);};card.append(locate);list.append(card);
+      const locate=document.createElement('button');locate.type='button';locate.className='tool';locate.textContent='移动到地图所选首格';locate.onclick=()=>{const cells=selectedCells();if(!cells.length)return setStatus('请先在地图中选择一个格子','invalid');commit(()=>moveBuilding(building,cells[0]));};card.append(locate);list.append(card);
     });
   }
   function render() {
@@ -155,7 +166,7 @@
     $('admin-route').onchange=()=>{routeIndex=Number($('admin-route').value);render();};
     for(const [id,property] of [['admin-route-name','name'],['admin-route-color','color'],['admin-route-light','light']])$(id).onchange=()=>commit(()=>route()[property]=$(id).value);
     $('admin-add-route').onclick=()=>commit(()=>{const width=level().width||16;routes().push({name:'新路线 → 目的地',color:'#638d69',light:'#dae6cb',homes:[{cell:currentCellFallback(),generationRate:1,passengers:60}],goals:[{cell:currentCellFallback(width+5),label:'目的地'}]});routeIndex=routes().length-1;});
-    $('admin-delete-route').onclick=()=>{if(routes().length<=1)return setStatus('每关至少保留一条路线','invalid');if(confirm(`删除路线「${route().name}」？`))commit(()=>{routes().splice(routeIndex,1);routeIndex=Math.max(0,routeIndex-1);});};
+    $('admin-delete-route').onclick=()=>{if(routes().length<=1)return setStatus('每关至少保留一条路线','invalid');if(confirm(`删除路线「${route().name}」？`))commit(()=>{const target=level(),cells=[...route().homes,...route().goals].map(building=>building.cell);routes().splice(routeIndex,1);routeIndex=Math.max(0,routeIndex-1);for(const cell of cells)cleanupVacatedBuilding(target,cell);});};
     $('admin-add-home').onclick=()=>commit(()=>route().homes.push({cell:currentCellFallback(route().homes.length),generationRate:1,passengers:60}));
     $('admin-add-goal').onclick=()=>commit(()=>route().goals.push({cell:currentCellFallback((level().width||16)+route().goals.length+4),label:'目的地'}));
     $('admin-add-chapter').onclick=()=>commit(()=>{const id=uniqueId('chapter',chapters());chapters().push({id,name:'新章节',english:'NEW CHAPTER',levels:[]});chapterIndex=chapters().length-1;levelIndex=0;},{preview:false});
@@ -175,7 +186,7 @@
     $('admin-add-day').onclick=()=>commit(()=>{const days=level().campaign.days;if(days.length>=30)return;days.push(clone(days.at(-1)));dayIndex=days.length-1;});
     $('admin-delete-day').onclick=()=>{if(level().campaign.days.length<=2)return setStatus('多日任务至少保留两天','invalid');commit(()=>{level().campaign.days.pop();dayIndex=Math.min(dayIndex,level().campaign.days.length-1);});};
     for(const button of document.querySelectorAll('[data-terrain]'))button.onclick=()=>{const cells=selectedCells();if(!cells.length)return setStatus('请先选择地图格子','invalid');const occupied=new Set(routes().flatMap(item=>[...item.homes,...item.goals].map(building=>building.cell)));if(cells.some(cell=>occupied.has(cell)))return setStatus('建筑所在格不能修改地形','invalid');commit(()=>{const target=level(),chosen=new Set(cells),remove=name=>target[name]=target[name].filter(cell=>!chosen.has(cell));remove('water');remove('bridges');remove('trees');if(button.dataset.terrain==='water')target.water.push(...cells);if(button.dataset.terrain==='bridge'){target.water.push(...cells);target.bridges.push(...cells);}if(button.dataset.terrain==='tree')target.trees.push(...cells);target.water=[...new Set(target.water)];target.bridges=[...new Set(target.bridges)];target.trees=[...new Set(target.trees)];if(button.dataset.terrain!=='bridge'){target.initialRoads=(target.initialRoads||[]).filter(road=>!chosen.has(road.cell));target.initialEdges=(target.initialEdges||[]).filter(([a,b])=>!chosen.has(a)&&!chosen.has(b));}});};
-    $('admin-place-building').onclick=()=>{const cells=selectedCells(),parts=$('admin-building-target').value.split(':');if(!cells.length||parts.length!==3)return setStatus('请先选择地图格子和建筑','invalid');commit(()=>{const [kind,ri,bi]=parts,building=routes()[Number(ri)][kind==='h'?'homes':'goals'][Number(bi)];building.cell=cells[0];level().water=level().water.filter(cell=>cell!==cells[0]);level().bridges=level().bridges.filter(cell=>cell!==cells[0]);level().trees=level().trees.filter(cell=>cell!==cells[0]);});};
+    $('admin-place-building').onclick=()=>{const cells=selectedCells(),parts=$('admin-building-target').value.split(':');if(!cells.length||parts.length!==3)return setStatus('请先选择地图格子和建筑','invalid');commit(()=>{const [kind,ri,bi]=parts,building=routes()[Number(ri)][kind==='h'?'homes':'goals'][Number(bi)];moveBuilding(building,cells[0]);});};
     $('admin-capture-roads').onclick=()=>{const design=window.TrafficGameAdmin.captureDesign();commit(()=>{level().version=2;level().initialRoads=design.roads.map(road=>({cell:road.cell,grade:road.grade}));level().initialEdges=design.edges.map(([a,b])=>[a,b]);});setStatus('已将当前道路、等级和显式连接写入关卡草稿；道路引导、信号和公交不属于初始关卡定义','valid');};
     $('admin-capture-reference').onclick=()=>{if(level().campaign)return setStatus('多日任务暂不支持单一参考答案','invalid');const design=window.TrafficGameAdmin.captureDesign();commit(()=>level().referenceDesign=clone(design));setStatus('已将当前完整设计保存为参考答案草稿','valid');};
     $('admin-delete-reference').onclick=()=>{if(!level().referenceDesign)return;if(confirm('删除本关参考答案？'))commit(()=>delete level().referenceDesign);};
