@@ -41,6 +41,12 @@ async function main() {
     await click(`.level-card[data-level-id="${level.id}"]`);
     if(await evaluate('document.querySelector("#level-dialog").open'))await click('#confirm-level');
   }
+  async function cancelPausedDialog(openSelector,dialogSelector,cancelSelector,label){
+    await click(openSelector);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(dialogSelector)}).open`),true,`${label} opens`);
+    const paused=await text('timer');await delay(350);assert.equal(await text('timer'),paused,`${label} freezes operation`);
+    await click(cancelSelector);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(dialogSelector)}).open`),false,`${label} closes`);
+    await delay(350);assert.notEqual(await text('timer'),paused,`${label} cancellation resumes operation`);
+  }
   try {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Page.navigate',{url});
@@ -96,6 +102,20 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(5,4,9,4);assert.equal(await text('budget'),'33');
+    const operatingDesign=await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())');
+    await click('#start');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true);await click('#confirm-preflight');
+    await click('#speed');await click('#speed');await delay(350);assert.notEqual(await text('timer'),'01:30','operation must advance before dialog checks');
+    await cancelPausedDialog('#help','#help-dialog','#help-dialog .dialog-close','help dialog');
+    await cancelPausedDialog('#reset','#reset-dialog','#cancel-reset','reset dialog');
+    await cancelPausedDialog('#sandbox-mode','#mode-dialog','#cancel-mode','mode dialog');
+    assert.equal(await evaluate('document.querySelector("#challenge-mode").getAttribute("aria-pressed")'),'true','cancelled mode switch preserves challenge mode');
+    await cancelPausedDialog('.level-card:nth-child(2)','#level-dialog','#cancel-level','level dialog');
+    assert.equal(await text('map-name'),LEVELS[0].name,'cancelled level switch preserves the current level');
+    await cancelPausedDialog('#stop','#stop-dialog','#cancel-stop','stop dialog');
+    await click('#stop');await click('#confirm-stop');
+    assert.equal(await text('timer'),'01:30','confirmed stop clears elapsed operation time');
+    assert.equal(await text('traffic'),'等待出发');
+    assert.equal(await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())'),operatingDesign,'confirmed stop preserves the design');
     await click('#undo-design');assert.equal(await text('budget'),'36','undo restores the previous planning design');
     await click('#redo-design');assert.equal(await text('budget'),'33','redo reapplies the reverted planning design');
     await drag(6,4,7,4);assert.equal(await text('budget'),'33','dragging over roads only preserves or adds connections');
@@ -182,7 +202,7 @@ async function main() {
       if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 10 progressive levels, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 10 progressive levels, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

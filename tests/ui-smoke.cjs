@@ -1,7 +1,28 @@
 'use strict';
 // Optional map-first UI checks: Node.js 22+, game server and local CDP browser.
 const assert = require('node:assert/strict');
+const zlib = require('node:zlib');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function inspectPng(base64) {
+  const file=Buffer.from(base64,'base64');
+  assert.ok(file.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'screenshot must be PNG');
+  const width=file.readUInt32BE(16),height=file.readUInt32BE(20),bitDepth=file[24],colorType=file[25],interlace=file[28],parts=[];
+  for(let offset=8;offset<file.length;){const length=file.readUInt32BE(offset),type=file.subarray(offset+4,offset+8).toString();if(type==='IDAT')parts.push(file.subarray(offset+8,offset+8+length));offset+=length+12;}
+  assert.equal(bitDepth,8);assert.equal(interlace,0);assert.ok([2,6].includes(colorType),`unsupported screenshot color type ${colorType}`);
+  const channels=colorType===6?4:3,stride=width*channels,raw=zlib.inflateSync(Buffer.concat(parts)),colors=new Set();let previous=Buffer.alloc(stride),nonLight=0,samples=0;
+  const paeth=(a,b,c)=>{const p=a+b-c,pa=Math.abs(p-a),pb=Math.abs(p-b),pc=Math.abs(p-c);return pa<=pb&&pa<=pc?a:pb<=pc?b:c;};
+  for(let y=0,offset=0;y<height;y++){
+    const filter=raw[offset++],row=Buffer.allocUnsafe(stride);assert.ok(filter<=4,`unsupported PNG filter ${filter}`);
+    for(let x=0;x<stride;x++){
+      const value=raw[offset++],left=x>=channels?row[x-channels]:0,up=previous[x],upperLeft=x>=channels?previous[x-channels]:0;
+      row[x]=(value+(filter===0?0:filter===1?left:filter===2?up:filter===3?Math.floor((left+up)/2):filter===4?paeth(left,up,upperLeft):NaN))&255;
+    }
+    if(y%8===0)for(let x=0;x<width;x+=8){const at=x*channels,r=row[at],g=row[at+1],b=row[at+2];colors.add(`${r>>4}:${g>>4}:${b>>4}`);if(r+g+b<735)nonLight++;samples++;}
+    previous=row;
+  }
+  return {width,height,bytes:file.length,colors:colors.size,nonLightRatio:nonLight/samples};
+}
 
 async function main() {
   const endpoint = process.env.CDP_URL || 'http://127.0.0.1:9333';
@@ -39,8 +60,9 @@ async function main() {
     await send('Page.reload'); await delay(700);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'), false);
     assert.equal(await evaluate('document.querySelector(".design-menu").open'), false);
-    for (const width of [320, 390, 760, 768, 1024, 1440]) {
-      await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: width < 761 ? 2 : 1, mobile: width < 761 });
+    const profiles=[{width:320,dpr:2,mobile:true},{width:390,dpr:2,mobile:true},{width:760,dpr:2,mobile:true},{width:768,dpr:1,mobile:false},{width:1024,dpr:1,mobile:false},{width:1440,dpr:2,mobile:false}];
+    for (const {width,dpr,mobile} of profiles) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor:dpr, mobile });
       await delay(150);
       assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, `overflow at ${width}px`);
       await click('#level-picker > summary');
@@ -61,17 +83,25 @@ async function main() {
       await click('#cancel-load');
       await click('.design-menu > summary');
       if (width <= 760) assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button, .zoom-controls button")).filter(button=>button.getClientRects().length).every(button=>button.getBoundingClientRect().height>=44)'), true, `touch targets at ${width}px`);
-      await evaluate('window.scrollTo(0,0)');
-      assert.equal(await evaluate('document.querySelector("canvas").getBoundingClientRect().top < 400'), true, `map must appear near the top at ${width}px`);
+      await evaluate('window.scrollTo(0,0)');await delay(100);
+      const mapPosition=await evaluate('({top:document.querySelector("canvas").getBoundingClientRect().top,height:innerHeight})');
+      assert.ok(mapPosition.top<mapPosition.height*.55,`map must appear in the upper viewport at ${width}px (actual ${mapPosition.top})`);
       assert.equal(await evaluate('document.querySelector(".toolbar").getBoundingClientRect().bottom <= document.querySelector(".canvas-wrap").getBoundingClientRect().top'), true, `toolbar must stay above the map at ${width}px`);
       if (width > 760) {
         assert.equal(await evaluate('document.querySelector("#start").getBoundingClientRect().bottom <= innerHeight'), true, `operation button must fit the desktop viewport at ${width}px`);
         assert.equal(await evaluate('document.querySelector(".canvas-wrap").getBoundingClientRect().width / document.querySelector(".board-panel").getBoundingClientRect().width > .9'), true, `map must use the desktop workspace width at ${width}px`);
       }
       assert.equal(await evaluate('Array.from(document.querySelectorAll("[hidden]")).every(element=>getComputedStyle(element).display==="none")'), true);
+      const canvasScale=await evaluate('(()=>{const canvas=document.querySelector("canvas"),rect=canvas.getBoundingClientRect();return {x:canvas.width/rect.width,y:canvas.height/rect.height};})()');
+      assert.ok(Math.abs(canvasScale.x-dpr)<.02&&Math.abs(canvasScale.y-dpr)<.02,`canvas DPR at ${width}px @${dpr}x`);
+      const screenshot=inspectPng((await send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false})).data);
+      assert.deepEqual([screenshot.width,screenshot.height],[width*dpr,900*dpr],`screenshot dimensions at ${width}px @${dpr}x`);
+      assert.ok(screenshot.bytes>width*900*dpr*dpr/200,`screenshot has meaningful compressed content at ${width}px @${dpr}x`);
+      assert.ok(screenshot.colors>40,`screenshot retains UI color detail at ${width}px @${dpr}x`);
+      assert.ok(screenshot.nonLightRatio>.05&&screenshot.nonLightRatio<.95,`screenshot is neither blank nor fully obscured at ${width}px @${dpr}x`);
     }
     assert.deepEqual(errors, []);
-    console.log('UI smoke passed: six viewport sizes, catalog, information panels, save/load, touch targets and map priority.');
+    console.log('UI smoke passed: six viewport screenshots, mobile and desktop high DPR, catalog, information panels, save/load, touch targets and map priority.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`); ws.close();
   }
