@@ -29,13 +29,20 @@ function getPassword() { return process.env.ADMIN_PASSWORD || process.env.PI_ADM
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 const asset = (root, filename, type) => ({ filename: path.join(root, filename), type });
+const GAME_ROOT = path.join(PROJECT_ROOT, 'src/game');
 const ADMIN_FILES = {
   '/level-catalog.js': asset(SHARED_ROOT, 'level-catalog.js', 'text/javascript; charset=utf-8'),
   '/core-geometry.js': asset(SHARED_ROOT, 'core-geometry.js', 'text/javascript; charset=utf-8'),
   '/core-bus.js': asset(SHARED_ROOT, 'core-bus.js', 'text/javascript; charset=utf-8'),
   '/core.js': asset(SHARED_ROOT, 'core.js', 'text/javascript; charset=utf-8'),
   '/core-campaign.js': asset(SHARED_ROOT, 'core-campaign.js', 'text/javascript; charset=utf-8'),
-  '/admin.html': asset(ADMIN_ROOT, 'admin.html', 'text/html; charset=utf-8'),
+  '/manual.html': asset(GAME_ROOT, 'manual.html', 'text/html; charset=utf-8'),
+  '/style.css': asset(GAME_ROOT, 'style.css', 'text/css; charset=utf-8'),
+  '/game-results.js': asset(GAME_ROOT, 'game-results.js', 'text/javascript; charset=utf-8'),
+  '/game-effects.js': asset(GAME_ROOT, 'game-effects.js', 'text/javascript; charset=utf-8'),
+  '/game-canvas.js': asset(GAME_ROOT, 'game-canvas.js', 'text/javascript; charset=utf-8'),
+  '/game-bootstrap.js': asset(GAME_ROOT, 'game-bootstrap.js', 'text/javascript; charset=utf-8'),
+  '/game.js': asset(GAME_ROOT, 'game.js', 'text/javascript; charset=utf-8'),
   '/admin-manual.html': asset(ADMIN_ROOT, 'admin-manual.html', 'text/html; charset=utf-8'),
   '/admin.css': asset(ADMIN_ROOT, 'admin.css', 'text/css; charset=utf-8'),
   '/admin.js': asset(ADMIN_ROOT, 'admin.js', 'text/javascript; charset=utf-8')
@@ -126,6 +133,16 @@ async function loadAssets() {
   for (const [url, descriptor] of Object.entries(ADMIN_FILES)) {
     assets.set(url, { body: await fsp.readFile(descriptor.filename), type: descriptor.type });
   }
+  const gamePage=await fsp.readFile(path.join(GAME_ROOT,'index.html'),'utf8');
+  const panel=await fsp.readFile(path.join(ADMIN_ROOT,'admin-panel.html'),'utf8');
+  const adminPage=gamePage
+    .replace('<title>慢行小城 · Make Way · 交通规划小游戏</title>','<title>慢行小城 · Make Way · 管理员城市控制台</title>')
+    .replace('<link rel="stylesheet" href="style.css">','<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="admin.css">')
+    .replace('<body class="game-page">','<body class="game-page admin-page">')
+    .replace('</aside>\n      </div>\n      <section id="accessible-map"',`</aside>\n${panel}\n      </div>\n      <section id="accessible-map"`)
+    .replace('<script src="game.js"></script>','<script src="admin.js"></script><script src="game.js"></script>');
+  if(!adminPage.includes('id="admin-inspector"'))throw new Error('Unable to compose unified administrator page');
+  assets.set('/admin.html',{body:Buffer.from(adminPage),type:'text/html; charset=utf-8'});
   return assets;
 }
 

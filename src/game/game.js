@@ -782,6 +782,7 @@
     arrivalEffects.reset();
     pendingLevel=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
+    window.dispatchEvent(new CustomEvent('traffic-game-levelchange',{detail:{levelId:city.level.id}}));
   }
   function eventPoint(event) { const rect=canvas.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
   function eventCell(event) {
@@ -1103,13 +1104,30 @@
     updateUI();draw();requestAnimationFrame(frame);
   }
   new ResizeObserver(resize).observe(canvas);
+  window.TrafficGameAdmin = {
+    applyCatalog(catalog, levelId) {
+      const message=TrafficCore.setLevels(catalog);if(message)throw new Error(message);
+      TrafficGameBootstrap.validateRuntimeCatalog(TrafficCore);
+      const requested=TrafficCore.LEVELS.some(item=>item.id===levelId)?levelId:TrafficCore.LEVELS[0].id;
+      buildLevelButtons();reset(requested);
+    },
+    selectLevel(levelId) { if(TrafficCore.LEVELS.some(item=>item.id===levelId))reset(levelId); },
+    currentLevelId() { return city?.level.id||null; },
+    selectedCells() { return city?selectedCells():[]; },
+    captureDesign() { return city?city.serializeDesign():null; }
+  };
   async function bootstrap() {
     try {
-      await TrafficGameBootstrap.loadActiveCatalog({ core: TrafficCore, catalogLoader: TrafficLevelCatalog });
+      if(window.TrafficAdminReady) {
+        const catalog=await window.TrafficAdminReady,message=TrafficCore.setLevels(catalog);
+        if(message)throw new Error(message);
+        TrafficGameBootstrap.validateRuntimeCatalog(TrafficCore);
+      } else await TrafficGameBootstrap.loadActiveCatalog({ core: TrafficCore, catalogLoader: TrafficLevelCatalog });
       city = new City(TrafficCore.LEVELS[0].id);
       resetDesignHistory();
       buildLevelButtons();
       configureLevel();resize();setTool('view');updateUI();requestAnimationFrame(frame);
+      window.dispatchEvent(new CustomEvent('traffic-game-ready',{detail:{levelId:city.level.id}}));
     } catch (error) {
       console.error(error);
       $('toast').textContent = '关卡数据加载失败，请确认游戏服务正常运行后刷新页面。';

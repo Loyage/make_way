@@ -1,0 +1,73 @@
+<div id="admin-login" class="admin-login-overlay">
+  <form id="admin-login-form" class="admin-login-card">
+    <span class="brand-icon">⌂</span>
+    <div class="eyebrow">ADMINISTRATOR ACCESS</div>
+    <h1>进入城市控制台</h1>
+    <p>登录后将进入与玩家完全相同的城市，并在右侧获得关卡定义编辑权限。</p>
+    <input id="admin-password" type="password" autocomplete="current-password" aria-label="管理员密码" placeholder="管理员密码">
+    <p id="admin-login-error" class="admin-error" role="alert"></p>
+    <button class="primary" type="submit">进入管理员面板</button>
+  </form>
+</div>
+<aside id="admin-inspector" class="admin-inspector" aria-label="管理员详细信息和修改栏目" hidden>
+  <header class="admin-inspector-head">
+    <div><div class="eyebrow">GOD MODE · 关卡定义</div><strong>城市控制台</strong></div>
+    <button id="admin-collapse" class="tool" type="button" aria-expanded="true">收起</button>
+  </header>
+  <div class="admin-publish-bar">
+    <span id="admin-dirty"><i></i>草稿已同步预览</span>
+    <div><button id="admin-undo" class="tool" type="button" disabled>↶</button><button id="admin-redo" class="tool" type="button" disabled>↷</button></div>
+    <button id="admin-publish" class="primary" type="button">保存并发布</button>
+  </div>
+  <div id="admin-validation" class="admin-validation">等待校验</div>
+
+  <details open><summary>章节与关卡</summary><div class="admin-section-body">
+    <label>章节<select id="admin-chapter"></select></label>
+    <div class="admin-row"><button id="admin-add-chapter" class="tool" type="button">＋章节</button><button id="admin-edit-chapter" class="tool" type="button">编辑章节</button><button id="admin-delete-chapter" class="tool admin-danger" type="button">删除</button></div>
+    <label>关卡<select id="admin-level"></select></label>
+    <div class="admin-row"><button id="admin-add-level" class="tool" type="button">＋关卡</button><button id="admin-duplicate-level" class="tool" type="button">复制</button><button id="admin-move-level" class="tool" type="button">移至章节</button><button id="admin-move-up" class="tool" type="button">↑</button><button id="admin-move-down" class="tool" type="button">↓</button><button id="admin-delete-level" class="tool admin-danger" type="button">删除</button></div>
+  </div></details>
+
+  <details open><summary>关卡信息</summary><div class="admin-section-body admin-grid">
+    <label>ID<input id="admin-id" type="text"></label><label>中文名<input id="admin-name" type="text"></label>
+    <label>英文名<input id="admin-english" type="text"></label><label>难度<input id="admin-difficulty" type="text"></label>
+    <label>课时<input id="admin-lesson" type="text"></label><label>预算<input id="admin-budget" type="number" min="1"></label>
+    <label>时长（秒）<input id="admin-duration" type="number" min="1"></label><label>公交上限<input id="admin-bus-limit" type="number" min="1" max="6"></label>
+    <label>地图宽度<input id="admin-width" type="number" min="8" max="64"></label><label>地图高度<input id="admin-height" type="number" min="8" max="64"></label><button id="admin-apply-size" class="tool admin-wide" type="button">应用地图尺寸</button>
+    <label class="admin-wide">任务标题<input id="admin-title" type="text"></label>
+    <label class="admin-wide">任务描述<textarea id="admin-description" rows="3"></textarea></label>
+    <label class="admin-wide">规划提示<textarea id="admin-tip" rows="3"></textarea></label>
+  </div></details>
+
+  <details><summary>开放功能</summary><div id="admin-features" class="admin-section-body admin-checks">
+    <label><input data-feature="grade" type="checkbox">道路等级</label><label><input data-feature="load" type="checkbox">道路负荷</label>
+    <label><input data-feature="cut" type="checkbox">剪断工具</label><label><input data-feature="inspect" type="checkbox">路况检查</label>
+    <label><input data-feature="signals" type="checkbox">红绿灯</label><label><input data-feature="bus" type="checkbox">公交线路</label>
+  </div></details>
+
+  <details open><summary>路线与建筑</summary><div class="admin-section-body">
+    <label>路线<select id="admin-route"></select></label>
+    <div class="admin-grid"><label>路线名称<input id="admin-route-name" type="text"></label><label>主色<input id="admin-route-color" type="color"></label><label>浅色<input id="admin-route-light" type="color"></label></div>
+    <div class="admin-row"><button id="admin-add-route" class="tool" type="button">＋路线</button><button id="admin-delete-route" class="tool admin-danger" type="button">删除路线</button></div>
+    <div class="admin-building-head"><strong>住宅</strong><button id="admin-add-home" class="tool" type="button">＋住宅</button></div><div id="admin-homes" class="admin-building-list"></div>
+    <div class="admin-building-head"><strong>目的地</strong><button id="admin-add-goal" class="tool" type="button">＋目的地</button></div><div id="admin-goals" class="admin-building-list"></div>
+  </div></details>
+
+  <details><summary>多日任务</summary><div class="admin-section-body">
+    <label class="admin-inline"><input id="admin-campaign-enabled" type="checkbox">启用多日任务</label>
+    <div id="admin-campaign-fields"><label>日期<select id="admin-campaign-day"></select></label><div class="admin-grid"><label>当日时长<input id="admin-day-duration" type="number" min="1"></label><label>最高收入<input id="admin-day-income" type="number" min="0"></label></div><div class="admin-row"><button id="admin-add-day" class="tool" type="button">＋一天</button><button id="admin-delete-day" class="tool admin-danger" type="button">删除末日</button></div></div>
+    <small>建筑解锁和升级的高级条件可继续通过 JSON 配置维护；此处负责日期、时长与收入。</small>
+  </div></details>
+
+  <details open><summary>地图选区 · 世界编辑</summary><div class="admin-section-body">
+    <p id="admin-selection">请在上方切换到“选择”，然后点击或框选地图。</p>
+    <div class="admin-row admin-map-actions"><button data-terrain="clear" class="tool" type="button">空地</button><button data-terrain="water" class="tool" type="button">水面</button><button data-terrain="bridge" class="tool" type="button">桥梁</button><button data-terrain="tree" class="tool" type="button">树木</button></div>
+    <label>建筑目标<select id="admin-building-target"></select></label>
+    <button id="admin-place-building" class="tool" type="button">把所选建筑移动到首格</button>
+    <button id="admin-capture-roads" class="tool" type="button">将当前玩家路网设为初始道路</button>
+    <small>道路、等级和连接直接使用上方玩家工具规划；完成后点击“设为初始道路”。地形和建筑修改会立即重建草稿预览。</small>
+  </div></details>
+
+  <footer class="admin-inspector-footer"><button id="admin-reload" class="tool" type="button">放弃草稿并重新载入</button><a class="tool" href="admin-manual.html" target="_blank" rel="noopener">管理员手册</a><button id="admin-logout" class="tool" type="button">退出</button></footer>
+</aside>
+<button id="admin-expand" class="admin-expand" type="button" hidden>打开城市控制台</button>

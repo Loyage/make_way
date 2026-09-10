@@ -132,15 +132,14 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const page = await request(port, '/', 'GET', null, { Cookie: cookie.split(';')[0] });
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
-  assert.match(page.body,/id="new-chapter"/);assert.match(page.body,/id="f-chapter"/);
-  assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="f-campaign-day-count"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
-  assert.match(page.body,/id="f-map-width"/);assert.match(page.body,/id="f-map-height"/);assert.match(page.body,/data-tool="view"/);
-  assert.match(page.body,/id="apply-shift"/);assert.match(page.body,/id="sim-start"/);assert.match(page.body,/id="undo"/);assert.match(page.body,/src="core.js"/);
-  assert.match(page.body,/href="admin-manual.html"/);
+  assert.match(page.body,/id="admin-inspector"/);assert.match(page.body,/id="admin-add-chapter"/);assert.match(page.body,/id="admin-chapter"/);
+  assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);
+  assert.match(page.body,/id="admin-selection"/);assert.match(page.body,/id="admin-capture-roads"/);assert.match(page.body,/data-terrain="water"/);
+  assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);
+  assert.match(page.body,/src="admin.js"><\/script><script src="game.js"/);assert.match(page.body,/href="admin-manual.html"/);
+  assert.match(page.body,/id="start"/);assert.match(page.body,/id="road-tool"/);assert.match(page.body,/id="road-inspector"/);
   const manual=await request(port,'/admin-manual.html','GET',null,{Cookie:cookie.split(';')[0]});
-  assert.equal(manual.status,200);assert.match(manual.body,/管理员操作手册/);
-  assert.match(page.body,/id="save-preset"/);assert.match(page.body,/id="load-preset"/);assert.match(page.body,/id="preset-select"/);assert.match(page.body,/id="overwrite-default"/);
-  assert.match(page.body,/坐标系：地图中心为原点/);
+  assert.equal(manual.status,200);assert.match(manual.body,/管理员操作手册/);assert.match(manual.body,/权限更高的游玩面板/);
 
   const logout=await request(port,'/api/logout','POST',null,{Cookie:cookie.split(';')[0]});
   assert.equal(logout.status,200);

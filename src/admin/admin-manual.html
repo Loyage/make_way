@@ -1,71 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f3ec">
-  <title>管理员操作手册 · 慢行小城</title>
-  <link rel="stylesheet" href="admin.css">
-</head>
-<body>
-  <div class="admin-manual-shell">
-    <header class="header">
-      <a class="brand manual-brand" href="./" aria-label="返回管理员面板"><span class="brand-icon">⌂</span><span>慢行小城<small>ADMINISTRATOR HANDBOOK</small></span></a>
-      <a class="tool manual-link" href="./">返回管理员面板</a>
-    </header>
-    <main class="admin-manual-main">
-      <section class="admin-manual-hero">
-        <div class="eyebrow">LEVEL EDITOR GUIDE</div>
-        <h1>管理员操作手册</h1>
-        <p>用于创建、校验、仿真和发布关卡配置。建议先另存配置备份，再编辑并保存；玩家服务会在启动时载入资源，发布后还需重启游戏服务。</p>
-      </section>
-      <nav class="admin-manual-nav" aria-label="管理员操作手册目录">
-        <a href="#catalog">章节与关卡</a><a href="#basics">基础参数</a><a href="#routes">路线与建筑</a><a href="#map">地图编辑</a><a href="#campaign">多日任务</a><a href="#history">撤销与校验</a><a href="#simulation">仿真</a><a href="#publish">保存与发布</a>
-      </nav>
-
-      <section id="catalog" class="admin-manual-section">
-        <h2>章节与关卡</h2>
-        <ul><li>左侧可新建章节和关卡；关卡顺序就是玩家界面的课程序号。</li><li>章节可修改名称、英文名和 id。仅空章节可删除，含关卡时需先移动或删除其中关卡。</li><li>关卡可复制、删除、移动到其他章节，或用上下按钮调整同章顺序。所有 id 只能使用小写字母、数字和连字符，且必须唯一。</li></ul>
-      </section>
-
-      <section id="basics" class="admin-manual-section">
-        <h2>基础信息与地图尺寸</h2>
-        <p class="section-hint">宽屏采用「章节目录 / 关卡参数 / 地图工作区」并排布局，可一边编辑路线一边查看地图；窄屏地图位于参数上方，手机端章节目录位于顶部。「基础信息」默认收起，点击标题可展开。整体挪动、仿真与校验位于地图下方，保存与配置管理仍在章节目录中。</p>
-        <ul><li>名称、英文名、难度、课时名、标题、描述和提示都会显示给玩家，请完整填写。</li><li>预算按道路格等级和公交车辆扣除；时长单位为秒；关卡目标自动等于所有住宅人口之和，无需单独填写。</li><li>地图宽高可设为 8～64 格。应用新尺寸时内容按中心保持位置；若建筑会越界，调整会被拒绝，其他越界地形或道路可能被裁剪。</li><li>功能开关决定玩家能否使用道路等级、负荷、剪刀、路况、信号灯和公交。公交线路上限可设为 1～6。</li></ul>
-      </section>
-
-      <section id="routes" class="admin-manual-section">
-        <h2>路线与建筑</h2>
-        <ul><li>每条路线至少包含一个住宅和一个目的地，并使用名称、主色和浅色区分。</li><li>住宅设置居民产生率和总人口；目的地设置标签及可选输入上限。不同建筑不能重叠，也不能位于水面或树木上。</li><li>坐标以地图中心为原点：向右为 +x，向上为 +y。可直接修改坐标，也可先选择当前路线及住宅/目的地，再用地图工具放置。</li><li>目的地总输入容量必须容纳对应路线的全部住宅人口；输入容量留空表示不限。</li></ul>
-      </section>
-
-      <section id="map" class="admin-manual-section">
-        <h2>地图编辑与整体挪动</h2>
-        <ul><li>观察工具用于拖动地图；普通滚轮滚动页面，按住 Ctrl 滚动或触控板双指捏合才缩放地图。水面、桥梁、树木、住宅、目的地和初始道路工具用于绘制，地图外观与游戏画面保持一致。桥梁必须位于水面上。</li><li>初始道路按当前道路等级绘制，连接必须逐段明确建立；相邻格不会自动连通。擦除工具会删除地形、道路或连接。</li><li>“整体挪动”按中心坐标同时移动地形、初始道路和多日任务的全部潜在建筑。任一内容越界时整次移动取消。</li></ul>
-      </section>
-
-      <section id="campaign" class="admin-manual-section">
-        <h2>多日任务</h2>
-        <ul><li>启用后可设置 2～30 天，每天只配置运营时长和最高收入；当日目标自动等于当时已解锁住宅的总人口。</li><li>路线与建筑不再按天重复配置。管理员一次建立全部潜在住宅和工作单位，再为每栋建筑设置最早日期、累计送达、累计收入和上一日满意度条件；非零条件必须同时满足。</li><li>每栋住宅可添加多个升级阶段，阶段可更新居民产生率和总人口；工作单位升级可更新接收上限。阶段也使用同一组条件，并按列表顺序应用。</li><li>未解锁建筑会作为灰色工地预览，且不可铺路。旧版逐日 routes 数据载入管理员面板时会自动迁移。</li></ul>
-      </section>
-
-      <section id="history" class="admin-manual-section">
-        <h2>撤销、重做与校验</h2>
-        <ul><li>面板保留最多 60 步编辑历史。点击页首“撤销 / 重做”，或使用 <kbd>Ctrl/Command + Z</kbd>、<kbd>Ctrl/Command + Shift + Z</kbd>。</li><li>连续拖动画图作为一步记录。重新载入磁盘或载入另一份配置会建立新的历史起点。</li><li>编辑后会自动校验；也可点击“立即校验”。必须处理红色错误后才能保存，错误通常会指出具体章节、关卡、日期或坐标。</li></ul>
-      </section>
-
-      <section id="simulation" class="admin-manual-section">
-        <h2>初始道路仿真</h2>
-        <ul><li>选择关卡和日期后点击“开始仿真”，可用 1×、2×、4×、0.5× 切换速度，观察送达、时间、在途车辆和住宅等待。</li><li>仿真直接使用游戏核心规则，但只测试当前配置中的初始道路，不会修改关卡数据。</li><li>开始编辑会自动停止仿真。仿真通过不代表所有玩家方案都可通关，仍需结合预算、总人口和关卡测试检查。</li></ul>
-      </section>
-
-      <section id="publish" class="admin-manual-section">
-        <h2>保存、备份与发布</h2>
-        <ol><li>先用“另存为配置”创建不可重名的备份；“载入配置”会替换当前未保存内容。</li><li>“保存到 levels.json”会更新路径清单，并把每关分别写入 levels.local/ 的章节文件夹；“覆盖默认配置”会重建 levels/ 分关数据并更新 built-in-levels.json 清单，操作前务必确认。</li><li>保存成功后重启游戏服务，再打开玩家界面核对章节、关卡和实际玩法。游戏服务启动时会把静态资源读入内存，不重启不会看到更新。</li></ol>
-        <p class="admin-manual-warning"><strong>安全提醒：</strong>管理员面板默认监听所有网卡，密码是唯一访问防线。对外开放时必须设置强密码；仅本机使用时建议设置 <code>ADMIN_HOST=127.0.0.1</code>。</p>
-        <a class="tool manual-link" href="./">← 返回管理员面板</a>
-      </section>
-    </main>
-  </div>
-</body>
-</html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>慢行小城 · 管理员操作手册</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="admin.css"></head>
+<body><div class="admin-manual-shell"><header class="header"><a class="brand manual-brand" href="./"><span class="brand-icon">⌂</span><span>慢行小城<small>ADMINISTRATOR HANDBOOK</small></span></a><a class="tool manual-link" href="./">返回城市控制台</a></header><main class="admin-manual-main">
+<section class="admin-manual-hero"><div class="eyebrow">GOD MODE GUIDE</div><h1>管理员操作手册</h1><p>管理员端现在就是一个权限更高的游玩面板：地图、工具、运营和玩家看到的完全一致，右侧城市控制台负责修改章节、关卡及关卡内定义。所有修改先进入草稿预览，明确发布前不会写入磁盘。</p></section>
+<nav class="admin-manual-nav"><a href="#workflow">工作流</a><a href="#catalog">章节关卡</a><a href="#world">世界编辑</a><a href="#routes">路线建筑</a><a href="#campaign">多日任务</a><a href="#publish">发布</a></nav>
+<section id="workflow" class="admin-manual-section"><h2>统一工作流</h2><ol><li>在上方按普通玩家方式观察、规划道路并运行城市。</li><li>在右侧修改关卡定义。合法修改会立即重建当前城市，让管理员直接看到玩家实际体验。</li><li>用撤销、重做调整草稿；状态栏会持续进行服务器端结构校验。</li><li>确认后点击“保存并发布”。发布写入 <code>levels.json</code> 和 <code>levels.local/</code>，公开游戏服务重启后生效。</li></ol><p class="admin-manual-warning">重建预览会清空当前运行和未捕获的玩家路网。要保留上方规划，请先点击“将当前玩家路网设为初始道路”。</p></section>
+<section id="catalog" class="admin-manual-section"><h2>章节与关卡</h2><ul><li>控制台可新建、编辑和删除空章节；章节 ID 只能包含小写字母、数字和连字符。</li><li>关卡可新建、复制、删除和调整同章顺序。关卡顺序就是玩家看到的顺序。</li><li>关卡信息包含名称、标题、任务说明、提示、预算、时长、公交上限和功能开关；修改后直接以玩家界面预览。</li><li>至少必须保留一个章节和一个关卡，每关至少保留一条完整路线。</li></ul></section>
+<section id="world" class="admin-manual-section"><h2>地图与初始道路</h2><ul><li>先用玩家工具栏切换“选择”，点击单格或拖出矩形；控制台会显示所选格子。</li><li>“空地 / 水面 / 桥梁 / 树木”批量修改选区。建筑格不能直接覆盖为地形；应先移动建筑。</li><li>道路使用玩家的拖拽、剪刀、升级和降级工具编辑，因此操作结果与真实游戏完全一致。</li><li>道路完成后必须点击“将当前玩家路网设为初始道路”，将道路等级和显式连接写回草稿。汽车引导、信号配置和公交线路属于玩家方案，不会成为关卡初始定义。</li></ul></section>
+<section id="routes" class="admin-manual-section"><h2>路线与建筑</h2><ul><li>每条路线可设置名称、主色和浅色，并包含多个住宅和目的地。</li><li>住宅配置格子索引、居民产生率和总人口；目的地配置标签和可选输入上限。</li><li>可在建筑卡片直接填写格子索引，也可先选地图格，再点击“移动到地图所选首格”。</li><li>目的地总接收能力必须覆盖同路线住宅总人口，建筑不能重叠、越界或位于水面和树木上。</li></ul></section>
+<section id="campaign" class="admin-manual-section"><h2>多日任务</h2><ul><li>启用后可设置 2～30 天的时长和最高收入；第 1 天时长同时作为关卡基础时长。</li><li>路线与建筑编辑的是全部潜在建筑，草稿会同步生成第 1 天基础路线。</li><li>展开每栋建筑的“解锁与升级”，可按日期、累计送达、累计收入和上一日满意度设置联合条件，并添加住宅人口/产生率或目的地输入上限的升级阶段。</li></ul></section>
+<section id="publish" class="admin-manual-section"><h2>草稿、校验与发布</h2><ul><li>右侧橙点表示存在未发布草稿；绿色校验提示表示可发布。校验失败时先按具体错误修正。</li><li>撤销与重做覆盖章节、关卡、参数、建筑和地形修改，最多保留 60 步。</li><li>“放弃草稿并重新载入”会恢复磁盘版本。“保存并发布”只在完整校验通过后写盘。</li><li>游戏服务启动时会将静态资源读入内存，因此发布后需要重启 <code>traffic-game.service</code> 才能让公开玩家看到更新。</li></ul><p class="admin-manual-warning"><strong>安全提醒：</strong>管理员服务默认监听所有网卡，密码是唯一访问防线。对外开放必须设置强密码；仅本机使用建议设置 <code>ADMIN_HOST=127.0.0.1</code>。</p><a class="tool manual-link" href="./">← 返回城市控制台</a></section>
+</main></div></body></html>
