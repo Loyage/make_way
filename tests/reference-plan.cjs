@@ -14,7 +14,7 @@ function completeCrossing(city) {
 function buildReferencePlan(city) {
   if(city.level.id==='demolition-school') {
     for(const n of [...city.roads]) assert.equal(city.edit(n,true),'');
-    line(city,2,2,0,2);line(city,0,2,0,6);line(city,0,6,2,6);line(city,2,6,2,8);return;
+    line(city,4,2,2,2);line(city,2,2,2,6);line(city,2,6,4,6);line(city,4,6,4,8);return;
   }
   if(city.level.id==='avenue-school') {
     line(city,2,5,13,5,1);line(city,2,8,13,8,2);return;

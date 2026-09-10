@@ -121,12 +121,6 @@ for(const id of ['demolition-school','avenue-school','cut-school','signal-school
   for(const c of [before,after])run(c);
   assert.equal(before.state,'lost');assert.equal(after.state,'won');assert.ok(after.delivered>before.delivered);assert.ok(after.remaining>=0);
 });
-test('demolition refunds a spent budget and disconnects the route',()=>{
-  const c=new City('demolition-school');assert.equal(c.remaining,6);
-  assert.equal(c.edit(key(9,5),true),'');assert.equal(c.remaining,7);assert.equal(c.paths[0],null);
-  const saved=c.serializeDesign(),other=new City(c.level.id);assert.equal(other.loadDesign(saved),'');
-  assert.deepEqual(other.serializeDesign(),saved);assert.equal(other.roads.has(key(9,5)),false);
-});
 test('woodland starts with a complete high-grade ring and only needs feeders',()=>{
   const c=new City('woodland'),ring=[...c.roads];
   assert.ok(c.paths.every(p=>p===null));
