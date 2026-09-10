@@ -58,10 +58,12 @@ test('validateLevels rejects chapter and level structural problems', () => {
   const crossRoute=JSON.parse(JSON.stringify(good)),crossLevel=first(crossRoute);
   crossLevel.routes.push({name:'占位',color:'#638d69',light:'#dae6cb',homes:[{cell:crossLevel.routes[0].goals[0].cell,rate:1,passengers:60}],goals:[{cell:crossLevel.routes[0].homes[0].cell+1,label:'终'}]});
   assert.match(validateLevels(crossRoute),/重叠/);
-  const badDays=JSON.parse(JSON.stringify(good)),campaignLevel=badDays.chapters[0].levels.find(level=>level.id==='growing-city');campaignLevel.campaign.days.pop();
-  assert.match(validateLevels(badDays),/正好包含 5 天/);
-  const impossibleDay=JSON.parse(JSON.stringify(good)),dayLevel=impossibleDay.chapters[0].levels.find(level=>level.id==='growing-city');dayLevel.campaign.days[2].routes[0].goals.forEach(goal=>goal.input=1);
-  assert.match(validateLevels(impossibleDay),/第 3 天.*最多可接收/);
+  const variableDays=JSON.parse(JSON.stringify(good)),variableCampaign=variableDays.chapters[0].levels.find(level=>level.id==='growing-city');variableCampaign.campaign.days.push({duration:70,maxIncome:28});
+  assert.equal(validateLevels(variableDays),'');
+  const badDays=JSON.parse(JSON.stringify(good)),campaignLevel=badDays.chapters[0].levels.find(level=>level.id==='growing-city');campaignLevel.campaign.days.length=1;
+  assert.match(validateLevels(badDays),/2 至 30 天/);
+  const impossiblePotential=JSON.parse(JSON.stringify(good)),potentialLevel=impossiblePotential.chapters[0].levels.find(level=>level.id==='growing-city');potentialLevel.campaign.routes[0].goals[0].input=1;
+  assert.match(validateLevels(impossiblePotential),/潜在建筑.*住宅总人口.*最多可接收/);
   const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].duration++;
   assert.match(validateLevels(mismatchedFirst),/必须与第 1 天一致/);
 });
@@ -131,7 +133,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.body,/id="new-chapter"/);assert.match(page.body,/id="f-chapter"/);
-  assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
+  assert.match(page.body,/id="f-campaign"/);assert.match(page.body,/id="f-campaign-day-count"/);assert.match(page.body,/id="campaign-days"/);assert.match(page.body,/id="f-day-income"/);
   assert.match(page.body,/id="f-map-width"/);assert.match(page.body,/id="f-map-height"/);assert.match(page.body,/data-tool="view"/);
   assert.match(page.body,/id="apply-shift"/);assert.match(page.body,/id="sim-start"/);assert.match(page.body,/id="undo"/);assert.match(page.body,/src="core.js"/);
   assert.match(page.body,/href="admin-manual.html"/);

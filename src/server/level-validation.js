@@ -1,6 +1,6 @@
 'use strict';
 // Structural and gameplay validation shared by the administrator API and tests.
-const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES } = require('../shared/core.js');
+const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES, materializeCampaignRoutes } = require('../shared/core.js');
 const { normalizeCatalog } = require('../shared/level-catalog.js');
 
 function isCoord(n, width = WIDTH, height = HEIGHT) { return Number.isInteger(n) && n >= 0 && n < width * height; }
@@ -126,21 +126,55 @@ function validateLevels(data) {
       if (initialCost > level.budget) return `关卡「${level.id}」的初始道路需要 ${initialCost} 点，超过预算 ${level.budget}`;
     }
     if (level.campaign !== undefined) {
-      if (!level.campaign || !Array.isArray(level.campaign.days) || level.campaign.days.length !== 5) return `关卡「${level.id}」的多日任务必须正好包含 5 天`;
+      if (!level.campaign || !Array.isArray(level.campaign.days) || level.campaign.days.length < 2 || level.campaign.days.length > 30) return `关卡「${level.id}」的多日任务天数必须为 2 至 30 天`;
+      const legacy = level.campaign.days.some(day => Array.isArray(day?.routes));
       for (let dayIndex = 0; dayIndex < level.campaign.days.length; dayIndex++) {
         const day = level.campaign.days[dayIndex];
         if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
         if (!Number.isInteger(day.maxIncome) || day.maxIncome < 0) return `关卡「${level.id}」第 ${dayIndex + 1} 天的最高收入无效`;
-        const dayLevel = { ...level, duration: day.duration, routes: day.routes };
-        delete dayLevel.campaign;
-        const dayError = validateLevels({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
-        if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
+        if (legacy) {
+          if (!Array.isArray(day.routes)) return `关卡「${level.id}」不能混用新旧多日任务格式`;
+          const dayLevel = { ...level, duration: day.duration, routes: day.routes };
+          delete dayLevel.campaign;
+          const dayError = validateLevels({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
+          if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
+        } else if (day.routes !== undefined) return `关卡「${level.id}」不能混用新旧多日任务格式`;
       }
       const firstDay = level.campaign.days[0];
-      if (level.duration !== firstDay.duration || JSON.stringify(level.routes) !== JSON.stringify(firstDay.routes)) return `关卡「${level.id}」的基础路线和时长必须与第 1 天一致`;
-      const firstCells = new Set(firstDay.routes.flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)));
-      const futureCells = new Set(level.campaign.days.slice(1).flatMap(day => day.routes).flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)).filter(cell => !firstCells.has(cell)));
-      for (const edge of level.initialEdges || []) if (futureCells.has(edge[0]) || futureCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;
+      if (level.duration !== firstDay.duration) return `关卡「${level.id}」的基础时长必须与第 1 天一致`;
+      if (legacy) {
+        if (JSON.stringify(level.routes) !== JSON.stringify(firstDay.routes)) return `关卡「${level.id}」的基础路线必须与第 1 天一致`;
+        const firstCells = new Set(firstDay.routes.flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)));
+        const futureCells = new Set(level.campaign.days.slice(1).flatMap(day => day.routes).flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)).filter(cell => !firstCells.has(cell)));
+        for (const edge of level.initialEdges || []) if (futureCells.has(edge[0]) || futureCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;
+      } else {
+        const validateCondition = (condition, label) => {
+          if (!condition || typeof condition !== 'object') return `${label}缺少条件`;
+          if (condition.day !== undefined && (!Number.isInteger(condition.day) || condition.day < 1 || condition.day > level.campaign.days.length)) return `${label}的日期条件无效`;
+          for (const field of ['delivered','income']) if (condition[field] !== undefined && (!Number.isInteger(condition[field]) || condition[field] < 0)) return `${label}的 ${field} 条件无效`;
+          if (condition.satisfaction !== undefined && (!Number.isFinite(condition.satisfaction) || condition.satisfaction < 0 || condition.satisfaction > 100)) return `${label}的满意度条件无效`;
+          return '';
+        };
+        if (!Array.isArray(level.campaign.routes) || !level.campaign.routes.length) return `关卡「${level.id}」的多日任务必须包含潜在路线`;
+        const potentialLevel={...level,routes:level.campaign.routes};delete potentialLevel.campaign;
+        const potentialError=validateLevels({version:1,chapters:[{id:'campaign-potential',name:'多日任务校验',english:'CAMPAIGN CHECK',levels:[potentialLevel]}]});
+        if(potentialError)return `关卡「${level.id}」的潜在建筑：${potentialError}`;
+        for (const route of level.campaign.routes) for (const [kind, buildings] of [['住宅',route.homes],['工作单位',route.goals]]) for (const building of buildings) {
+          let error=validateCondition(building.unlock,`${kind} ${building.cell} 的解锁`);if(error)return `关卡「${level.id}」${error}`;
+          if (!Array.isArray(building.upgrades)) return `关卡「${level.id}」${kind} ${building.cell} 的 upgrades 必须是数组`;
+          for (const upgrade of building.upgrades) {
+            error=validateCondition(upgrade.condition,`${kind} ${building.cell} 的升级`);if(error)return `关卡「${level.id}」${error}`;
+            if (kind==='住宅' && ((upgrade.generationRate === undefined && upgrade.passengers === undefined) || (upgrade.generationRate !== undefined && (!Number.isFinite(upgrade.generationRate) || upgrade.generationRate <= 0)) || (upgrade.passengers !== undefined && (!Number.isInteger(upgrade.passengers) || upgrade.passengers <= 0)))) return `关卡「${level.id}」住宅 ${building.cell} 的升级参数无效`;
+            if (kind==='工作单位' && (!Object.hasOwn(upgrade,'input') || upgrade.input !== null && (!Number.isInteger(upgrade.input) || upgrade.input <= 0))) return `关卡「${level.id}」工作单位 ${building.cell} 的升级输入上限无效`;
+          }
+        }
+        const firstRoutes=materializeCampaignRoutes(level,0,[]);
+        if (!firstRoutes.length) return `关卡「${level.id}」第 1 天至少需要一条已解锁的完整路线`;
+        if (JSON.stringify(level.routes)!==JSON.stringify(firstRoutes)) return `关卡「${level.id}」的基础路线必须与第 1 天已解锁路线一致`;
+        const firstCells=new Set(firstRoutes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+        const pendingCells=new Set(level.campaign.routes.flatMap(route=>[...route.homes,...route.goals]).map(building=>building.cell).filter(cell=>!firstCells.has(cell)));
+        for (const edge of level.initialEdges || []) if (pendingCells.has(edge[0]) || pendingCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未解锁建筑工地`;
+      }
     }
   }
   return '';

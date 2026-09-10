@@ -35,13 +35,14 @@
   const keyCoord = (x, y) => y * mapWidth() + x;
   const point = n => ({ x: n % mapWidth(), y: Math.floor(n / mapWidth()) });
   const allLevels = () => chapters().flatMap(chapter => chapter.levels);
-  const activeRoutes = () => current()?.campaign?.days?.[activeCampaignDay]?.routes || current()?.routes || [];
-  const allRoutes = level => level?.campaign?.days?.flatMap(day => day.routes || []) || level?.routes || [];
+  const activeRoutes = () => current()?.campaign?.routes || current()?.routes || [];
+  const allRoutes = level => level?.campaign?.routes || level?.routes || [];
   const currentRoute = () => activeRoutes()[activeRoute] || null;
   const currentHome = () => currentRoute()?.homes?.[activeHome] || null;
   const currentGoal = () => currentRoute()?.goals?.[activeGoal] || null;
   const routePopulation = routes => routes.reduce((sum,route)=>sum+(route.homes||[]).reduce((total,home)=>total+Number(home.passengers||0),0),0);
-  function removeLegacyTargets(data){for(const level of data.chapters.flatMap(chapter=>chapter.levels)){delete level.target;for(const day of level.campaign?.days||[])delete day.target;}return data;}
+  const previewResults = dayIndex => Array.from({length:dayIndex},()=>({delivered:Number.MAX_SAFE_INTEGER,income:Number.MAX_SAFE_INTEGER,satisfaction:100}));
+  function removeLegacyTargets(data){for(const level of data.chapters.flatMap(chapter=>chapter.levels)){delete level.target;for(const day of level.campaign?.days||[])delete day.target;if(level.campaign)TrafficCore.migrateCampaignLevel(level);}return data;}
   const cellToXY = n => ({ x: n % mapWidth() - Math.floor(mapWidth()/2), y: Math.floor((mapHeight()-1)/2) - Math.floor(n / mapWidth()) });
   const xyToCell = (x, y) => { const col=x+Math.floor(mapWidth()/2),row=Math.floor((mapHeight()-1)/2)-y;return Number.isInteger(x)&&Number.isInteger(y)&&col>=0&&col<mapWidth()&&row>=0&&row<mapHeight()?keyCoord(col,row):null; };
   function removeInitialEdgesAt(level,cells) { const removed=new Set(cells);level.initialEdges=(level.initialEdges||[]).filter(([a,b])=>!removed.has(a)&&!removed.has(b)); }
@@ -61,7 +62,8 @@
     currentChapterIndex=Math.min(currentChapterIndex,Math.max(0,chapters().length-1));currentLevelIndex=currentLevelIndex===null?null:Math.min(currentLevelIndex,Math.max(0,(currentChapter()?.levels.length||1)-1));
     activeCampaignDay=0;activeRoute=0;activeHome=0;activeGoal=0;updateHistoryButtons();updateDirtyStatus();renderAll();scheduleValidation();
   }
-  function markDirty() { if(simulationCity)stopSimulation();if(!historyBatching)commitHistory();updateDirtyStatus();scheduleValidation(); }
+  function syncCampaignBases(){for(const level of allLevels())if(level.campaign?.routes){level.routes=TrafficCore.materializeCampaignRoutes(level,0,[]);level.duration=level.campaign.days[0].duration;}}
+  function markDirty() { syncCampaignBases();if(simulationCity)stopSimulation();if(!historyBatching)commitHistory();updateDirtyStatus();scheduleValidation(); }
 
   // ── API ───────────────────────────────────────────────────────────────
   async function api(path, options = {}) {
@@ -128,9 +130,9 @@
     const homeCount = route ? route.homes.length : 0;
     const goalCount = route ? route.goals.length : 0;
     $('tool-home').textContent = `住宅${homeCount ? ` ${activeHome + 1}/${homeCount}` : '（无，点击新增）'}`;
-    $('tool-goal').textContent = `目的地${goalCount ? ` ${activeGoal + 1}/${goalCount}` : '（无，点击新增）'}`;
+    $('tool-goal').textContent = `工作单位${goalCount ? ` ${activeGoal + 1}/${goalCount}` : '（无，点击新增）'}`;
     if (tool === 'home' || tool === 'goal') {
-      const names = { home: `住宅 ${activeHome + 1}（路线 ${activeRoute + 1}，共 ${homeCount} 个）`, goal: `目的地 ${activeGoal + 1}（路线 ${activeRoute + 1}，共 ${goalCount} 个）` };
+      const names = { home: `住宅 ${activeHome + 1}（路线 ${activeRoute + 1}，共 ${homeCount} 个）`, goal: `工作单位 ${activeGoal + 1}（路线 ${activeRoute + 1}，共 ${goalCount} 个）` };
       $('map-status').textContent = '当前工具：' + names[tool];
     } else {
       $('map-status').textContent = '当前工具：' + TOOL_HINTS[tool];
@@ -205,20 +207,18 @@
     $('f-campaign').checked=enabled;$('campaign-editor').hidden=!enabled;
     $('f-duration').disabled=enabled;
     if(!enabled)return;
-    if(!Array.isArray(level.campaign.days)||level.campaign.days.length!==5)return;
-    activeCampaignDay=Math.min(activeCampaignDay,4);
-    level.routes=level.campaign.days[0].routes;
+    if(!Array.isArray(level.campaign.days)||level.campaign.days.length<2)return;
+    activeCampaignDay=Math.min(activeCampaignDay,level.campaign.days.length-1);
     level.duration=level.campaign.days[0].duration;
+    $('f-campaign-day-count').value=level.campaign.days.length;
     const tabs=$('campaign-days');tabs.replaceChildren();
-    level.campaign.days.forEach((day,index)=>{const button=document.createElement('button');button.type='button';button.className='tool'+(index===activeCampaignDay?' active':'');button.textContent=`第 ${index+1} 天`;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(index===activeCampaignDay));button.onclick=()=>{activeCampaignDay=index;activeRoute=0;activeHome=0;activeGoal=0;renderCampaign();renderRoutes();draw();};tabs.append(button);});
-    const day=level.campaign.days[activeCampaignDay];$('f-day-duration').value=day.duration;$('f-day-population').value=routePopulation(day.routes);$('f-day-income').value=day.maxIncome;
-    $('copy-prev-day').disabled=activeCampaignDay===0;$('copy-next-day').disabled=activeCampaignDay===4;
+    level.campaign.days.forEach((day,index)=>{const button=document.createElement('button');button.type='button';button.className='tool'+(index===activeCampaignDay?' active':'');button.textContent=`第 ${index+1} 天`;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(index===activeCampaignDay));button.onclick=()=>{activeCampaignDay=index;renderCampaign();draw();};tabs.append(button);});
+    const day=level.campaign.days[activeCampaignDay];$('f-day-duration').value=day.duration;$('f-day-income').value=day.maxIncome;
   }
   function renderRoutes() {
     const list = $('route-list'); list.replaceChildren();
     const level = current(),routes=activeRoutes(),population=routePopulation(routes);
-    $('f-population').value=level?.campaign?routePopulation(level.campaign.days[0].routes):population;
-    if(level?.campaign)$('f-day-population').value=population;
+    $('f-population').value=level?.campaign?routePopulation(TrafficCore.materializeCampaignRoutes(level,0,[])):population;
     routes.forEach((route, ri) => {
       if (!Array.isArray(route.homes)) route.homes = [];
       if (!Array.isArray(route.goals)) route.goals = [];
@@ -251,6 +251,24 @@
         inp.onchange = () => { onchange(inp.value); markDirty(); };
         l.append(inp); return l;
       };
+      const conditionEditor = (building, kind) => {
+        const box=document.createElement('div');box.className='building-growth';
+        const title=document.createElement('strong');title.textContent='解锁条件（各项同时满足）';box.append(title);
+        building.unlock ||= {day:1};building.upgrades ||= [];
+        const addConditionFields=(parent,condition)=>{
+          const fields=[['day','最早第几天',1],['delivered','累计送达',0],['income','累计收入',0],['satisfaction','上一日满意度',0]];
+          const grid=document.createElement('div');grid.className='condition-grid';
+          for(const [field,labelText,fallback] of fields){const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.type='number';input.min=field==='day'?'1':'0';input.max=field==='satisfaction'?'100':'';input.step='1';input.value=condition[field]??fallback;input.onchange=()=>{condition[field]=Number(input.value);markDirty();draw();};label.append(input);grid.append(label);}parent.append(grid);
+        };
+        addConditionFields(box,building.unlock);
+        building.upgrades.forEach((upgrade,index)=>{upgrade.condition||={day:1};const stage=document.createElement('div');stage.className='upgrade-stage';const head=document.createElement('div');head.textContent=`升级阶段 ${index+1}`;const remove=document.createElement('button');remove.type='button';remove.className='tool danger-btn';remove.textContent='删除阶段';remove.onclick=()=>{building.upgrades.splice(index,1);markDirty();renderRoutes();};head.append(remove);stage.append(head);addConditionFields(stage,upgrade.condition);
+          const values=document.createElement('div');values.className='condition-grid';
+          if(kind==='home')for(const [field,labelText] of [['generationRate','升级后产生率'],['passengers','升级后总人口']])values.append(mkText(labelText,upgrade[field]??'',value=>{upgrade[field]=Number(value);}));
+          else values.append(mkText('升级后输入上限（留空不限）',upgrade.input??'',value=>{upgrade.input=value===''?null:Number(value);}));
+          stage.append(values);box.append(stage);
+        });
+        const add=document.createElement('button');add.type='button';add.className='tool';add.textContent='＋ 添加升级阶段';add.onclick=()=>{const upgrade={condition:{day:Math.min((building.unlock.day||1)+1,current().campaign.days.length)}};if(kind==='home'){upgrade.generationRate=building.generationRate??building.rate;upgrade.passengers=building.passengers;}else upgrade.input=building.input??null;building.upgrades.push(upgrade);markDirty();renderRoutes();};box.append(add);return box;
+      };
 
       const homesTitle = document.createElement('strong'); homesTitle.textContent = '住宅（输出）';
       card.append(homesTitle);
@@ -265,18 +283,18 @@
         use.onclick = () => { activeRoute = ri; activeHome = hi; renderRoutes(); draw(); };
         const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
         del.onclick = () => { if(route.homes.length===1){toast('每条路线至少保留一个住宅');return;}removeInitialEdgesAt(level,[h.cell]);route.homes.splice(hi, 1); if (activeHome >= route.homes.length) activeHome = Math.max(0, route.homes.length - 1); markDirty(); renderRoutes(); draw(); };
-        row.append(use, del); card.append(row);
+        row.append(use, del); card.append(row);if(level.campaign)card.append(conditionEditor(h,'home'));
       });
       const addHome = document.createElement('button'); addHome.className = 'tool'; addHome.textContent = '＋ 住宅';
-      addHome.onclick = () => { route.homes.push({ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }); activeRoute = ri; activeHome = route.homes.length - 1; markDirty(); renderRoutes(); draw(); };
+      addHome.onclick = () => { const home={ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 };if(level.campaign){home.unlock={day:1};home.upgrades=[];}route.homes.push(home); activeRoute = ri; activeHome = route.homes.length - 1; markDirty(); renderRoutes(); draw(); };
       card.append(addHome);
 
-      const goalsTitle = document.createElement('strong'); goalsTitle.textContent = '目的地（输入）';
+      const goalsTitle = document.createElement('strong'); goalsTitle.textContent = '工作单位（输入）';
       card.append(goalsTitle);
       route.goals.forEach((g, gi) => {
         const row = document.createElement('div'); row.className = 'route-card-grid';
         row.append(
-          mkXY(`目的地${gi + 1} 坐标 (x, y)`, g.cell, v => { removeInitialEdgesAt(level,[g.cell]);g.cell = v; }),
+          mkXY(`工作单位${gi + 1} 坐标 (x, y)`, g.cell, v => { removeInitialEdgesAt(level,[g.cell]);g.cell = v; }),
           mkText('标签 label', g.label, v => { g.label = v; }),
           mkText('输入上限 input（留空为不限）', g.input ?? '', v => { g.input = v === '' ? undefined : Number(v); })
         );
@@ -284,10 +302,10 @@
         use.onclick = () => { activeRoute = ri; activeGoal = gi; renderRoutes(); draw(); };
         const del = document.createElement('button'); del.className = 'tool danger-btn'; del.textContent = '删除';
         del.onclick = () => { if(route.goals.length===1){toast('每条路线至少保留一个目的地');return;}removeInitialEdgesAt(level,[g.cell]);route.goals.splice(gi, 1); if (activeGoal >= route.goals.length) activeGoal = Math.max(0, route.goals.length - 1); markDirty(); renderRoutes(); draw(); };
-        row.append(use, del); card.append(row);
+        row.append(use, del); card.append(row);if(level.campaign)card.append(conditionEditor(g,'goal'));
       });
-      const addGoal = document.createElement('button'); addGoal.className = 'tool'; addGoal.textContent = '＋ 目的地';
-      addGoal.onclick = () => { route.goals.push({ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '目的地' }); activeRoute = ri; activeGoal = route.goals.length - 1; markDirty(); renderRoutes(); draw(); };
+      const addGoal = document.createElement('button'); addGoal.className = 'tool'; addGoal.textContent = '＋ 工作单位';
+      addGoal.onclick = () => { const goal={ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '工作单位' };if(level.campaign){goal.unlock={day:1};goal.upgrades=[];}route.goals.push(goal); activeRoute = ri; activeGoal = route.goals.length - 1; markDirty(); renderRoutes(); draw(); };
       card.append(addGoal);
 
       const colorRow = document.createElement('div'); colorRow.className = 'color-row';
@@ -380,7 +398,7 @@
     const level=current(),dx=Number($('shift-x').value),dy=Number($('shift-y').value);if(!level)return;
     if(!Number.isInteger(dx)||!Number.isInteger(dy)){toast('整体挪动量必须是整数');return;}if(dx===0&&dy===0){toast('请输入非零挪动量');return;}
     const translate=cell=>{const x=cell%mapWidth()+dx,y=Math.floor(cell/mapWidth())-dy;return x>=0&&x<mapWidth()&&y>=0&&y<mapHeight()?keyCoord(x,y):null;};
-    const routeGroups=[level.routes,...(level.campaign?.days||[]).map(day=>day.routes)].filter(Boolean),buildings=[...new Set(routeGroups.flatMap(routes=>routes.flatMap(route=>[...(route.homes||[]),...(route.goals||[])])))];
+    const buildings=allRoutes(level).flatMap(route=>[...(route.homes||[]),...(route.goals||[])]);
     const cells=[...level.water,...level.bridges,...level.trees,...(level.initialEdges||[]).flatMap(edge=>edge.slice(0,2)),...buildings.map(building=>building.cell)];
     if(cells.some(cell=>translate(cell)===null)){toast('移动后会有内容超出地图边界，操作已取消');return;}
     level.water=level.water.map(translate);level.bridges=level.bridges.map(translate);level.trees=level.trees.map(translate);level.initialEdges=(level.initialEdges||[]).map(([a,b,grade])=>[translate(a),translate(b),grade]);
@@ -476,7 +494,7 @@
     for(const n of bridges){const{x,y}=point(n),horizontal=(x>0&&bridges.has(n-1))||(x<mapWidth()-1&&bridges.has(n+1)),cx=(x+.5)*s,cy=(y+.5)*s;if(horizontal){line(x*s,cy-s*.38,(x+1)*s,cy-s*.38,'#8d9b89',s*.04);line(x*s,cy+s*.38,(x+1)*s,cy+s*.38,'#8d9b89',s*.04);}else{line(cx-s*.38,y*s,cx-s*.38,(y+1)*s,'#8d9b89',s*.04);line(cx+s*.38,y*s,cx+s*.38,(y+1)*s,'#8d9b89',s*.04);}}
     for(const n of level.trees){const{x,y}=point(n),cx=(x+.5)*s,cy=(y+.48)*s;circle(cx+s*.04,cy+s*.16,s*.25,'#cddcbc');line(cx,cy,cx,cy+s*.31,'#a5b18d',s*.055);circle(cx-s*.1,cy,s*.19,'#a9c398');circle(cx+s*.1,cy+s*.015,s*.19,'#9ab88a');circle(cx,cy-s*.13,s*.19,'#b3cba1');}
     activeRoutes().forEach(route=>{(route.homes||[]).forEach(home=>drawBuilding(home,route,true));(route.goals||[]).forEach(goal=>drawBuilding(goal,route,false));});
-    if(level.campaign){const active=new Set(activeRoutes().flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell))),sites=new Map();for(let day=activeCampaignDay+1;day<level.campaign.days.length;day++)for(const route of level.campaign.days[day].routes)for(const building of [...route.homes,...route.goals])if(!active.has(building.cell)&&!sites.has(building.cell))sites.set(building.cell,day-activeCampaignDay);for(const [cell,days] of sites)drawSite(cell,days);}
+    if(level.campaign){const materialized=TrafficCore.materializeCampaignRoutes(level,activeCampaignDay,previewResults(activeCampaignDay)),active=new Set(materialized.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));for(const route of level.campaign.routes)for(const building of [...route.homes,...route.goals])if(!active.has(building.cell))drawSite(building.cell,Math.max(0,(building.unlock?.day||1)-activeCampaignDay-1));}
     const route=currentRoute();if(route){const home=route.homes?.[activeHome],goal=route.goals?.[activeGoal];if(home)markActive(home.cell,route.color);if(goal)markActive(goal.cell,route.color);}
     if(simulationCity)drawSimulationVehicles();
     if(hover!==null){const{x,y}=point(hover);ctx.strokeStyle=tool==='erase'?'#c68b56':'#6d936b';ctx.lineWidth=2;ctx.strokeRect(x*s+1,y*s+1,s-2,s-2);}ctx.restore();
@@ -520,7 +538,7 @@
     const level=current();if(!level)return false;
     try {
       const copy=JSON.parse(JSON.stringify(catalog)),problem=TrafficCore.setLevels(copy);if(problem)throw new Error(problem);
-      const day=level.campaign?.days?.[activeCampaignDay];simulationCity=new TrafficCore.City(level.id,day?{routes:day.routes,duration:day.duration}:{});simulationLevelId=level.id;simulationDay=activeCampaignDay;simulationCity.toggle();simulationAccumulator=0;simulationLast=0;updateSimulationUI();return true;
+      const day=level.campaign?.days?.[activeCampaignDay],routes=day?TrafficCore.materializeCampaignRoutes(level,activeCampaignDay,previewResults(activeCampaignDay)):level.routes;simulationCity=new TrafficCore.City(level.id,day?{routes,duration:day.duration}:{});simulationLevelId=level.id;simulationDay=activeCampaignDay;simulationCity.toggle();simulationAccumulator=0;simulationLast=0;updateSimulationUI();return true;
     } catch(error){stopSimulation(false);toast('无法开始仿真：'+error.message);return false;}
   }
   function toggleSimulation() {
@@ -576,7 +594,8 @@
   $('add-route').onclick = () => {
     const level = current(),routes=activeRoutes(); if (!level) return;
     const c = COLORS[routes.length % COLORS.length];
-    routes.push({ name: '新路线 → 目的地', color: c.color, light: c.light, homes: [{ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 }], goals: [{ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '目的地' }] });
+    const home={ cell: keyCoord(3, 3), generationRate: 1, passengers: 60 },goal={ cell: keyCoord(Math.max(0,mapWidth()-3),Math.max(0,mapHeight()-3)), label: '工作单位' };if(level.campaign){home.unlock={day:1};home.upgrades=[];goal.unlock={day:1};goal.upgrades=[];}
+    routes.push({ name: '新路线 → 工作单位', color: c.color, light: c.light, homes: [home], goals: [goal] });
     activeRoute = routes.length - 1; activeHome = 0; activeGoal = 0; markDirty(); renderRoutes(); draw();
   };
 
@@ -584,11 +603,11 @@
   $('f-campaign').onchange=()=>{
     const level=current();if(!level)return;
     if($('f-campaign').checked){
-      const routes=JSON.parse(JSON.stringify(level.routes));
-      level.campaign={days:Array.from({length:5},(_,index)=>({duration:level.duration,maxIncome:18+index*2,routes:JSON.parse(JSON.stringify(routes))}))};
-      activeCampaignDay=0;level.routes=level.campaign.days[0].routes;
+      level.campaign={days:Array.from({length:5},(_,index)=>({duration:level.duration,maxIncome:18+index*2})),routes:JSON.parse(JSON.stringify(level.routes))};
+      for(const route of level.campaign.routes)for(const building of [...route.homes,...route.goals]){building.unlock={day:1};building.upgrades=[];}
+      activeCampaignDay=0;
     }else{
-      level.routes=JSON.parse(JSON.stringify(level.campaign.days[0].routes));level.duration=level.campaign.days[0].duration;delete level.campaign;activeCampaignDay=0;
+      level.duration=level.campaign.days[0].duration;level.routes=JSON.parse(JSON.stringify(level.campaign.routes));for(const route of level.routes)for(const building of [...route.homes,...route.goals]){delete building.unlock;delete building.upgrades;}delete level.campaign;activeCampaignDay=0;
     }
     activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderEditor();
   };
@@ -597,8 +616,7 @@
     const prop=id==='f-day-duration'?'duration':'maxIncome';day[prop]=Number($(id).value);
     if(activeCampaignDay===0)level.duration=day.duration;markDirty();
   };
-  $('copy-prev-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===0)return;level.campaign.days[activeCampaignDay]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay-1]));activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
-  $('copy-next-day').onclick=()=>{const level=current();if(!level?.campaign||activeCampaignDay===4)return;level.campaign.days[activeCampaignDay+1]=JSON.parse(JSON.stringify(level.campaign.days[activeCampaignDay]));activeCampaignDay++;activeRoute=0;activeHome=0;activeGoal=0;markDirty();renderCampaign();renderRoutes();draw();};
+  $('f-campaign-day-count').onchange=()=>{const level=current(),count=Number($('f-campaign-day-count').value);if(!level?.campaign||!Number.isInteger(count)||count<2||count>30){toast('任务天数必须是 2 至 30 的整数');renderCampaign();return;}const days=level.campaign.days;if(count<days.length&&!confirm(`缩短为 ${count} 天会删除末尾日期设置，确定继续？`)){renderCampaign();return;}while(days.length<count){const previous=days.at(-1);days.push({duration:previous.duration,maxIncome:previous.maxIncome});}days.length=count;for(const route of level.campaign.routes)for(const building of [...route.homes,...route.goals]){if((building.unlock?.day||1)>count)building.unlock.day=count;for(const upgrade of building.upgrades||[])if((upgrade.condition?.day||1)>count)upgrade.condition.day=count;}activeCampaignDay=Math.min(activeCampaignDay,count-1);markDirty();renderCampaign();draw();};
   $('f-chapter').onchange=()=>{
     const level=current(),targetIndex=chapters().findIndex(chapter=>chapter.id===$('f-chapter').value);if(!level||targetIndex<0||targetIndex===currentChapterIndex)return;
     currentChapter().levels.splice(currentLevelIndex,1);chapters()[targetIndex].levels.push(level);currentChapterIndex=targetIndex;currentLevelIndex=chapters()[targetIndex].levels.length-1;markDirty();renderAll();toast('关卡已移动到所选章节');

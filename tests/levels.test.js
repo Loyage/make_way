@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
+const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
 
 const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
@@ -70,7 +70,24 @@ test('two chapters contain ten progressively unlocked levels, including the five
   assert.throws(()=>new City('missing'),RangeError);
   assert.throws(()=>{LEVELS[0].budget=999;},TypeError);
 });
-test('five-day campaign pays for quality, reveals construction, and replays checkpoints', () => {
+test('legacy per-day campaign routes migrate to potential buildings', () => {
+  const source=JSON.parse(JSON.stringify(LEVELS.find(item=>item.id==='growing-city'))),potential=source.campaign.routes;
+  source.campaign.days=source.campaign.days.map((day,index)=>({...day,routes:materializeCampaignRoutes(source,index,Array.from({length:index},()=>({delivered:2000,income:100,satisfaction:100})))}));
+  source.routes=source.campaign.days[0].routes;delete source.campaign.routes;migrateCampaignLevel(source);
+  assert.equal(source.campaign.routes.length,potential.length);assert.ok(source.campaign.days.every(day=>!Object.hasOwn(day,'routes')));
+  assert.equal(materializeCampaignRoutes(source,1,[{delivered:42,income:18,satisfaction:100}]).length,2);
+});
+
+test('multi-day campaign conditions unlock and upgrade potential buildings', () => {
+  assert.equal(conditionMet({day:2,delivered:40,income:10,satisfaction:80},2,[{delivered:40,income:10,satisfaction:80}]),true);
+  assert.equal(conditionMet({day:2,delivered:41},2,[{delivered:40,income:20,satisfaction:100}]),false);
+  const level=LEVELS.find(item=>item.id==='growing-city');
+  assert.equal(materializeCampaignRoutes(level,0,[]).length,1);
+  const day2=materializeCampaignRoutes(level,1,[{delivered:42,income:18,satisfaction:100}]);
+  assert.equal(day2.length,2);assert.equal(day2[0].homes[0].passengers,200);
+});
+
+test('multi-day campaign pays for quality, reveals construction, and replays checkpoints', () => {
   assert.equal(campaignIncome(50,100,80,20),12);
   const campaign=new CampaignSession('growing-city');
   assert.equal(campaign.days.length,5);assert.equal(campaign.city.pendingBuildings.size,8);
@@ -87,7 +104,7 @@ test('five-day campaign pays for quality, reveals construction, and replays chec
   assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
 });
 
-test('five-day campaign rewards rebuilding into affordable routes without intersections', () => {
+test('multi-day campaign rewards rebuilding into affordable routes without intersections', () => {
   const campaign=new CampaignSession('growing-city');
   const plans=[
     [[1,2,1,0],[1,0,14,0],[14,0,14,2]],
