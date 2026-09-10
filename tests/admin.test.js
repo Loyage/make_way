@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { validateLevels, normalizeCatalog, defaultLevels, createAdminServer } = require('../admin-server.js');
+const { validateLevelCatalog } = require('../src/shared/level-validation.js');
 const { setLevels, City, WIDTH, HEIGHT } = require('../src/shared/core.js');
 
 function request(port, url, method = 'GET', body = null, headers = {}) {
@@ -47,7 +48,7 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.match(validateLevels(impossible),/住宅总人口.*最多可接收/);
   const fractional=JSON.parse(JSON.stringify(good));first(fractional).routes[0].homes[0].passengers=1.5;
   assert.match(validateLevels(fractional),/passengers/);
-  const roadOnTree=JSON.parse(JSON.stringify(good)),roadLevel=first(roadOnTree),roadCell=roadLevel.trees[0];roadLevel.initialEdges=[[roadCell,roadCell+1,0]];
+  const roadOnTree=JSON.parse(JSON.stringify(good)),roadLevel=first(roadOnTree),roadCell=roadLevel.trees[0];roadLevel.initialRoads=[{cell:roadCell,grade:0}];roadLevel.initialEdges=[];
   assert.match(validateLevels(roadOnTree),/不可建设地形/);
   const dupHome=JSON.parse(JSON.stringify(good)),homeLevel=first(dupHome);
   homeLevel.routes[0].homes.push({cell:homeLevel.routes[0].homes[0].cell,rate:4,passengers:60});
@@ -66,6 +67,30 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.match(validateLevels(impossiblePotential),/潜在建筑.*住宅总人口.*最多可接收/);
   const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].duration++;
   assert.match(validateLevels(mismatchedFirst),/必须与第 1 天一致/);
+});
+
+test('shared validation collects independent problems with navigation metadata', () => {
+  const catalog=JSON.parse(JSON.stringify(defaultLevels())),first=catalog.chapters[0].levels[0],second=catalog.chapters[1].levels[0];
+  first.name='';first.budget=0;first.features.grade='yes';first.water.push(WIDTH*HEIGHT);
+  second.duration=0;
+  const result=validateLevelCatalog(catalog);
+  assert.equal(result.ok,false);assert.ok(result.errors.length>=5);
+  assert.ok(result.errors.some(issue=>issue.levelId===first.id&&issue.path.endsWith('.name')));
+  assert.ok(result.errors.some(issue=>issue.levelId===first.id&&issue.path.endsWith('.budget')));
+  assert.ok(result.errors.some(issue=>issue.levelId===first.id&&issue.path.endsWith('.features.grade')));
+  assert.ok(result.errors.some(issue=>issue.levelId===first.id&&issue.cell===WIDTH*HEIGHT));
+  assert.ok(result.errors.some(issue=>issue.levelId===second.id&&issue.path.endsWith('.duration')));
+});
+
+test('validateLevels accepts complete tutorial reference designs and rejects mismatches', () => {
+  const source=defaultLevels(),levelId=source.chapters[0].levels[0].id;
+  setLevels(source);
+  const design=new City(levelId).serializeDesign(),good=JSON.parse(JSON.stringify(defaultLevels()));
+  const level=good.chapters[0].levels[0];
+  level.referenceDesign=design;
+  assert.equal(validateLevels(good),'');
+  level.referenceDesign.levelId='another-level';
+  assert.match(validateLevels(good),/referenceDesign 格式无效/);
 });
 
 test('validateLevels accepts per-level map sizes and rejects invalid dimensions', () => {
@@ -98,7 +123,7 @@ test('admin server refuses to start without an explicit password', async () => {
 test('admin server gates /api/levels behind login and writes levels.json', async t => {
   const { createAdminServer } = require('../admin-server.js');
   process.env.ADMIN_PASSWORD = 'test-secret';
-  const server = await createAdminServer({ port: 0, host: '127.0.0.1' });
+  const server = await createAdminServer({ port: 0, host: '127.0.0.1', secureCookie: true });
   await new Promise(resolve => server.once('listening', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
   const port = server.address().port;
@@ -116,6 +141,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.equal(goodLogin.status, 200);
   const cookie = (goodLogin.headers['set-cookie'] || []).find(c => c.startsWith('traffic_admin='));
   assert.ok(cookie);
+  assert.match(cookie, /; Secure$/);
 
   // Authenticated GET returns the default level set.
   const list = await request(port, '/api/levels', 'GET', null, { Cookie: cookie.split(';')[0] });
@@ -126,7 +152,9 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const valid=await request(port,'/api/validate','POST',JSON.stringify(catalog),{Cookie:cookie.split(';')[0]});
   assert.equal(valid.status,200);
   const invalid=JSON.parse(JSON.stringify(catalog));invalid.chapters[0].levels[0].routes[0].goals.forEach(goal=>goal.input=1);
-  assert.equal((await request(port,'/api/validate','POST',JSON.stringify(invalid),{Cookie:cookie.split(';')[0]})).status,400);
+  const invalidResponse=await request(port,'/api/validate','POST',JSON.stringify(invalid),{Cookie:cookie.split(';')[0]});
+  assert.equal(invalidResponse.status,400);
+  const validationBody=JSON.parse(invalidResponse.body);assert.ok(Array.isArray(validationBody.errors));assert.equal(validationBody.errors[0].levelId,invalid.chapters[0].levels[0].id);
 
   // Static assets are served.
   const page = await request(port, '/', 'GET', null, { Cookie: cookie.split(';')[0] });
@@ -135,7 +163,8 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.match(page.body,/id="admin-inspector"/);assert.match(page.body,/id="admin-add-chapter"/);assert.match(page.body,/id="admin-chapter"/);
   assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);
   assert.match(page.body,/id="admin-selection"/);assert.match(page.body,/id="admin-capture-roads"/);assert.match(page.body,/data-terrain="water"/);
-  assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);
+  assert.match(page.body,/id="admin-capture-reference"/);assert.match(page.body,/id="admin-delete-reference"/);assert.match(page.body,/id="reference-design"/);
+  assert.match(page.body,/id="admin-verify-play"/);assert.match(page.body,/id="admin-trial-status"/);assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);
   assert.match(page.body,/src="admin.js"><\/script><script src="game.js"/);assert.match(page.body,/href="admin-manual.html"/);
   assert.match(page.body,/id="start"/);assert.match(page.body,/id="road-tool"/);assert.match(page.body,/id="road-inspector"/);
   const manual=await request(port,'/admin-manual.html','GET',null,{Cookie:cookie.split(';')[0]});
@@ -144,6 +173,14 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const logout=await request(port,'/api/logout','POST',null,{Cookie:cookie.split(';')[0]});
   assert.equal(logout.status,200);
   assert.equal((await request(port,'/api/levels','GET',null,{Cookie:cookie.split(';')[0]})).status,401,'logout must revoke the server-side session');
+});
+
+test('admin server binds to loopback by default', async t => {
+  process.env.ADMIN_PASSWORD = 'test-secret';
+  const server = await createAdminServer({ port: 0 });
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  assert.equal(server.address().address, '127.0.0.1');
 });
 
 test('admin server saves named presets and overwrites the default config', async t => {
@@ -172,4 +209,20 @@ test('admin server saves named presets and overwrites the default config', async
 
   try { assert.equal((await request(port, '/api/default', 'PUT', body, auth)).status, 200); }
   finally { fs.writeFileSync(BUILT_IN, backup); }
+});
+
+test('admin server rate-limits repeated login failures by source', async t => {
+  process.env.ADMIN_PASSWORD = 'test-secret';
+  const server = await createAdminServer({ port: 0, host: '127.0.0.1' });
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const port = server.address().port;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const response = await request(port, '/api/login', 'POST', JSON.stringify({ password: 'wrong' }));
+    assert.equal(response.status, 401);
+  }
+  const blocked = await request(port, '/api/login', 'POST', JSON.stringify({ password: 'wrong' }));
+  assert.equal(blocked.status, 429);
+  assert.ok(Number(blocked.headers['retry-after']) > 0);
+  assert.equal((await request(port, '/api/login', 'POST', JSON.stringify({ password: 'test-secret' }))).status, 429);
 });

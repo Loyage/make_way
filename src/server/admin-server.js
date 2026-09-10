@@ -1,6 +1,6 @@
 'use strict';
-// Administrator panel server. Password-protected; binds to all interfaces by
-// default (override with ADMIN_HOST). Persists a path-only levels.json manifest
+// Administrator panel server. Password-protected; binds to loopback by default
+// (set ADMIN_HOST explicitly for remote access). Persists a path-only levels.json manifest
 // plus one JSON file per level below levels.local/.
 const http = require('node:http');
 const fs = require('node:fs');
@@ -9,24 +9,25 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { setLevels } = require('../shared/core.js');
 const { normalizeCatalog, loadCatalogSync, writeCatalog } = require('../shared/level-catalog.js');
-const { validateLevels } = require('./level-validation.js');
+const { validateLevels, validateLevelCatalog } = require('../shared/level-validation.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const ADMIN_ROOT = path.join(PROJECT_ROOT, 'src/admin');
 const SHARED_ROOT = path.join(PROJECT_ROOT, 'src/shared');
-const HOST = process.env.ADMIN_HOST || '::';
+const HOST = process.env.ADMIN_HOST || '127.0.0.1';
 const PORT = Number(process.env.ADMIN_PORT || process.env.PORT || 8080);
 const LEVELS_PATH = path.join(PROJECT_ROOT, 'levels.json');
 const LEVELS_DATA_DIR = path.join(PROJECT_ROOT, 'levels.local');
 const BUILT_IN_LEVELS_PATH = path.join(PROJECT_ROOT, 'built-in-levels.json');
 const BUILT_IN_LEVELS_DIR = path.join(PROJECT_ROOT, 'levels');
-// Listening beyond loopback exposes this panel to the network. The admin
-// password (and a future TLS layer) is then the only barrier; keep it strong.
+// Listening beyond loopback exposes this panel to the network. Keep the
+// password strong and terminate HTTPS in a trusted reverse proxy.
 const isLoopback = host => host === '127.0.0.1' || host === 'localhost' || host === '::1';
-// Refuse to start without an explicitly configured password. The panel binds to
-// all interfaces by default, so a built-in credential would make it unsafe.
 function getPassword() { return process.env.ADMIN_PASSWORD || process.env.PI_ADMIN_PASSWORD || ''; }
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const LOGIN_WINDOW_MS = 60 * 1000;
+const LOGIN_BLOCK_MS = 5 * 60 * 1000;
+const LOGIN_FAILURE_LIMIT = 5;
 
 const asset = (root, filename, type) => ({ filename: path.join(root, filename), type });
 const GAME_ROOT = path.join(PROJECT_ROOT, 'src/game');
@@ -36,6 +37,7 @@ const ADMIN_FILES = {
   '/core-bus.js': asset(SHARED_ROOT, 'core-bus.js', 'text/javascript; charset=utf-8'),
   '/core.js': asset(SHARED_ROOT, 'core.js', 'text/javascript; charset=utf-8'),
   '/core-campaign.js': asset(SHARED_ROOT, 'core-campaign.js', 'text/javascript; charset=utf-8'),
+  '/level-validation.js': asset(SHARED_ROOT, 'level-validation.js', 'text/javascript; charset=utf-8'),
   '/manual.html': asset(GAME_ROOT, 'manual.html', 'text/html; charset=utf-8'),
   '/style.css': asset(GAME_ROOT, 'style.css', 'text/css; charset=utf-8'),
   '/game-results.js': asset(GAME_ROOT, 'game-results.js', 'text/javascript; charset=utf-8'),
@@ -57,6 +59,7 @@ const SECURITY_HEADERS = {
 
 // ── Minimal session store (single user, single device) ──────────────────────
 const sessions = new Map(); // token -> { expires }
+const loginAttempts = new Map(); // source -> { failures, windowStarted, blockedUntil }
 function pruneSessions() {
   const now = Date.now();
   for (const [token, session] of sessions) if (session.expires <= now) sessions.delete(token);
@@ -81,6 +84,27 @@ function authenticated(req) {
 function timingSafeEqual(a, b) {
   const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
   return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+function loginSource(req) { return req.socket.remoteAddress || 'unknown'; }
+function loginBlock(source, now = Date.now()) {
+  const attempt = loginAttempts.get(source);
+  if (!attempt || attempt.blockedUntil <= now) return 0;
+  return attempt.blockedUntil - now;
+}
+function recordLoginFailure(source, now = Date.now()) {
+  let attempt = loginAttempts.get(source);
+  if (!attempt || now - attempt.windowStarted >= LOGIN_WINDOW_MS) attempt = { failures: 0, windowStarted: now, blockedUntil: 0 };
+  attempt.failures++;
+  if (attempt.failures >= LOGIN_FAILURE_LIMIT) attempt.blockedUntil = now + LOGIN_BLOCK_MS;
+  loginAttempts.set(source, attempt);
+  return loginBlock(source, now);
+}
+function clearLoginFailures(source) { loginAttempts.delete(source); }
+function pruneLoginAttempts(now = Date.now()) {
+  for (const [source, attempt] of loginAttempts) if (attempt.blockedUntil <= now && now - attempt.windowStarted >= LOGIN_WINDOW_MS) loginAttempts.delete(source);
+}
+function sessionCookie(token, secureCookie, maxAge = SESSION_TTL_MS / 1000) {
+  return `traffic_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secureCookie ? '; Secure' : ''}`;
 }
 
 // ── Split level-catalog storage ─────────────────────────────────────────────
@@ -159,25 +183,33 @@ function send(res, status, body, headers = {}) {
   res.end(data);
 }
 
-async function handleApi(req, res, pathname, adminPassword) {
+async function handleApi(req, res, pathname, adminPassword, secureCookie) {
   pruneSessions();
+  pruneLoginAttempts();
   if (pathname === '/api/login' && req.method === 'POST') {
+    const source = loginSource(req), blockedFor = loginBlock(source);
+    if (blockedFor) {
+      send(res, 429, { error: '登录失败次数过多，请稍后再试' }, { 'Retry-After': Math.ceil(blockedFor / 1000) });
+      return true;
+    }
     let body = '';
     req.on('data', chunk => { body += chunk; if (body.length > 4096) req.destroy(); });
     req.on('end', () => {
       let password = '';
       try { password = JSON.parse(body || '{}').password || ''; } catch { /* ignore */ }
-      if (!timingSafeEqual(password, adminPassword)) return send(res, 401, { error: '密码错误' });
+      if (!timingSafeEqual(password, adminPassword)) {
+        const blocked = recordLoginFailure(source);
+        return send(res, blocked ? 429 : 401, { error: blocked ? '登录失败次数过多，请稍后再试' : '密码错误' }, blocked ? { 'Retry-After': Math.ceil(blocked / 1000) } : {});
+      }
+      clearLoginFailures(source);
       const token = issueSession();
-      send(res, 200, { ok: true }, {
-        'Set-Cookie': `traffic_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_MS / 1000}`
-      });
+      send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(token, secureCookie) });
     });
     return true;
   }
   if (pathname === '/api/logout' && req.method === 'POST') {
     sessions.delete(sessionToken(req));
-    send(res, 200, { ok: true }, { 'Set-Cookie': 'traffic_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
+    send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', secureCookie, 0) });
     return true;
   }
   if (!authenticated(req)) { send(res, 401, { error: '未登录' }); return true; }
@@ -192,9 +224,9 @@ async function handleApi(req, res, pathname, adminPassword) {
     req.on('end', () => {
       let catalog;
       try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
-      const error = validateLevels(catalog);
-      if(error)return send(res,400,{error});
-      send(res, 200, { ok: true });
+      const validation = validateLevelCatalog(catalog);
+      if (!validation.ok) return send(res, 400, { error: validation.errors[0].message, errors: validation.errors });
+      send(res, 200, validation);
     });
     return true;
   }
@@ -256,7 +288,7 @@ async function handleApi(req, res, pathname, adminPassword) {
   return false;
 }
 
-async function createAdminServer({ port = PORT, host = HOST } = {}) {
+async function createAdminServer({ port = PORT, host = HOST, secureCookie = process.env.ADMIN_SECURE_COOKIE === '1' } = {}) {
   if (!/^\d+$/.test(String(port)) || port < 0 || port > 65535) throw new Error('ADMIN_PORT/PORT must be an integer between 0 and 65535');
   const adminPassword = getPassword();
   if (!adminPassword) throw new Error('ADMIN_PASSWORD or PI_ADMIN_PASSWORD must be set');
@@ -267,7 +299,7 @@ async function createAdminServer({ port = PORT, host = HOST } = {}) {
     try { pathname = decodeURIComponent(req.url.split('?')[0]); }
     catch { return send(res, 400, { error: 'Bad request' }); }
     if (pathname.startsWith('/api/')) {
-      try { if (await handleApi(req, res, pathname, adminPassword)) return; }
+      try { if (await handleApi(req, res, pathname, adminPassword, secureCookie)) return; }
       catch (error) { return send(res, 500, { error: error.message }); }
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Method not allowed' });

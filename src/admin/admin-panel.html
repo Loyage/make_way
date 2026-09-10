@@ -17,9 +17,11 @@
   <div class="admin-publish-bar">
     <span id="admin-dirty"><i></i>草稿已同步预览</span>
     <div><button id="admin-undo" class="tool" type="button" disabled>↶</button><button id="admin-redo" class="tool" type="button" disabled>↷</button></div>
+    <button id="admin-verify-play" class="tool admin-verify-play" type="button">验证并试玩</button>
     <button id="admin-publish" class="primary" type="button">保存并发布</button>
   </div>
-  <div id="admin-validation" class="admin-validation">等待校验</div>
+  <div id="admin-trial-status" class="admin-trial-status">已发布关卡无需重复试玩；修改关卡后须实际通关才能发布。</div>
+  <div id="admin-validation" class="admin-validation" role="status" aria-live="polite">等待校验</div>
 
   <details open><summary>章节与关卡</summary><div class="admin-section-body">
     <label>章节<select id="admin-chapter"></select></label>
@@ -57,6 +59,12 @@
     <label class="admin-inline"><input id="admin-campaign-enabled" type="checkbox">启用多日任务</label>
     <div id="admin-campaign-fields"><label>日期<select id="admin-campaign-day"></select></label><div class="admin-grid"><label>当日时长<input id="admin-day-duration" type="number" min="1"></label><label>最高收入<input id="admin-day-income" type="number" min="0"></label></div><div class="admin-row"><button id="admin-add-day" class="tool" type="button">＋一天</button><button id="admin-delete-day" class="tool admin-danger" type="button">删除末日</button></div></div>
     <small>建筑解锁和升级的高级条件可继续通过 JSON 配置维护；此处负责日期、时长与收入。</small>
+  </div></details>
+
+  <details><summary>教程参考答案</summary><div class="admin-section-body">
+    <p id="admin-reference-status">本关尚未设置参考答案。</p>
+    <div class="admin-row"><button id="admin-capture-reference" class="tool" type="button">保存当前完整设计为参考答案</button><button id="admin-delete-reference" class="tool admin-danger" type="button">删除参考答案</button></div>
+    <small>请先使用上方玩家工具完成可通关设计，再保存为参考答案。答案包含道路、连接、等级、引导、信号灯与公交线路；玩家首次失败后才可载入。</small>
   </div></details>
 
   <details open><summary>地图选区 · 世界编辑</summary><div class="admin-section-body">

@@ -12,6 +12,7 @@ escape_unit() {
 }
 # Admin password: prefer ADMIN_PASSWORD, then fall back to the local .env file.
 PASSWORD="${ADMIN_PASSWORD:-}"
+ADMIN_BIND="${ADMIN_HOST:-127.0.0.1}"
 if [[ -f "$ROOT/.env" ]]; then
   source "$ROOT/.env"
   PASSWORD="${PASSWORD:-$ADMIN_PASSWORD}"
@@ -30,7 +31,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStart="$(escape_unit "$NODE")" "$(escape_unit "$ROOT/admin-server.js")"
-Environment=ADMIN_HOST=::
+Environment=ADMIN_HOST="$(escape_unit "$ADMIN_BIND")"
 Environment=ADMIN_PORT=8080
 Environment=ADMIN_PASSWORD="$(escape_unit "$PASSWORD")"
 Restart=on-failure

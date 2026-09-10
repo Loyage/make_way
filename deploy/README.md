@@ -28,13 +28,13 @@ bash deploy/install-service.sh
 
 ## 1.1 管理员面板服务
 
-管理员面板是**独立、需要密码**的服务，端口 **8080**，默认绑定所有网卡（`[::]:8080`），用于创建关卡、编辑地图与分层关卡数据库（`levels.json` 清单及 `levels.local/` 分关文件）。它不与游戏服务（8180）共用端口。
+管理员面板是**独立、需要密码**的服务，端口 **8080**，默认仅绑定本机（`127.0.0.1:8080`），用于创建关卡、编辑地图与分层关卡数据库（`levels.json` 清单及 `levels.local/` 分关文件）。它不与游戏服务（8180）共用端口。
 
 ```sh
 ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
 ```
 
-它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本固定 `ADMIN_HOST=::`（同时接受 IPv4 与 IPv6），并额外给服务开放对项目目录的写权限（`ReadWritePaths`）以便写入关卡清单和分关目录；除此之外的安全隔离与游戏服务一致。
+它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本默认写入 `ADMIN_HOST=127.0.0.1`；如确需同时接受 IPv4 与 IPv6，可在安装时显式执行 `ADMIN_HOST=:: ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh`。服务会额外获得项目目录的写权限（`ReadWritePaths`）以便写入关卡清单和分关目录；除此之外的安全隔离与游戏服务一致。
 
 面板保存关卡后更新项目根目录 `levels.json` 路径清单，并把各关写入 `levels.local/<章节>/`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
 
@@ -42,7 +42,7 @@ ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
 systemctl --user restart traffic-game.service
 ```
 
-面板对外可达，**唯一防线是密码**。务必设置强密码；若要限制为仅本机访问，把 unit 里的 `ADMIN_HOST=::` 改为 `127.0.0.1` 或运行 `ADMIN_HOST=127.0.0.1 node admin-server.js`。
+面板会按来源限制连续失败登录（1 分钟内失败 5 次会封禁 5 分钟），但远程开放时仍须使用强密码，并应通过可信反向代理提供 HTTPS。TLS 在代理处终止时设置 `ADMIN_SECURE_COOKIE=1`，使登录会话 Cookie 带上 `Secure` 属性；不要在纯 HTTP 访问下开启该选项。
 
 ## 2. 稍后应用 NixOS 网络与开机配置
 
