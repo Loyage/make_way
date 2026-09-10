@@ -4,8 +4,8 @@
   "english": "FIVE DAYS OF GROWTH",
   "difficulty": "章节挑战",
   "title": "经营五天，每天重画一条不相交的路。",
-  "description": "连续完成五天通勤运营。新街区会在日期与运营成绩达到条件后解锁，旧住宅也会逐步升级；每日结算后用收入调整路网，把不同车流分开，争取更高满意度与次日预算。",
-  "tip": "别让两条直达线硬碰在一起：观察新工地和解锁条件，每天把其中一路绕到外圈，留出不交汇的独立通道；高客流旧线再升级。",
+  "description": "连续完成五天通勤运营。新街区的最短走法会依次穿过旧路线；每日结算后用收入调整路网，把不同车流分开，争取更高满意度与次日预算。灰色工地会标出未来落成的住宅和目的地。",
+  "tip": "别让两条直达线硬碰在一起：观察新工地，每天把其中一路绕到外圈，留出不交汇的独立通道；高客流旧线再升级。",
   "lesson": "逐日避开路线交汇",
   "features": {
     "grade": true,
@@ -88,10 +88,7 @@
             "upgrades": [
               {
                 "condition": {
-                  "day": 2,
-                  "delivered": 40,
-                  "income": 10,
-                  "satisfaction": 60
+                  "day": 2
                 },
                 "generationRate": 4,
                 "passengers": 200
@@ -139,10 +136,7 @@
             "generationRate": 1,
             "passengers": 50,
             "unlock": {
-              "day": 2,
-              "delivered": 40,
-              "income": 10,
-              "satisfaction": 60
+              "day": 2
             },
             "upgrades": [
               {
@@ -173,10 +167,7 @@
             "cell": 84,
             "label": "市场",
             "unlock": {
-              "day": 2,
-              "delivered": 40,
-              "income": 10,
-              "satisfaction": 60
+              "day": 2
             },
             "upgrades": []
           }
@@ -192,10 +183,7 @@
             "generationRate": 1,
             "passengers": 51,
             "unlock": {
-              "day": 3,
-              "delivered": 250,
-              "income": 30,
-              "satisfaction": 60
+              "day": 3
             },
             "upgrades": [
               {
@@ -219,10 +207,7 @@
             "cell": 72,
             "label": "书店",
             "unlock": {
-              "day": 3,
-              "delivered": 250,
-              "income": 30,
-              "satisfaction": 60
+              "day": 3
             },
             "upgrades": []
           }
@@ -238,10 +223,7 @@
             "generationRate": 1,
             "passengers": 51,
             "unlock": {
-              "day": 4,
-              "delivered": 600,
-              "income": 45,
-              "satisfaction": 60
+              "day": 4
             },
             "upgrades": [
               {
@@ -259,10 +241,7 @@
             "cell": 167,
             "label": "学校",
             "unlock": {
-              "day": 4,
-              "delivered": 600,
-              "income": 45,
-              "satisfaction": 60
+              "day": 4
             },
             "upgrades": []
           }
@@ -278,10 +257,7 @@
             "generationRate": 1,
             "passengers": 49,
             "unlock": {
-              "day": 5,
-              "delivered": 1000,
-              "income": 60,
-              "satisfaction": 60
+              "day": 5
             },
             "upgrades": []
           }
@@ -291,10 +267,7 @@
             "cell": 142,
             "label": "医院",
             "unlock": {
-              "day": 5,
-              "delivered": 1000,
-              "income": 60,
-              "satisfaction": 60
+              "day": 5
             },
             "upgrades": []
           }

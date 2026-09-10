@@ -5,9 +5,9 @@
   "english": "CITY CONTROL",
   "levels": [
     "woodland.json",
+    "rush-hour.json",
     "signal-school.json",
     "multi-route-school.json",
-    "rush-hour.json",
     "bus-school.json"
   ]
 }
