@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { commuteReport } = require('../game-results.js');
+const { commuteReport } = require('../src/game/game-results.js');
 
 test('commute satisfaction groups residents by travel time and weights their score', () => {
   const report = commuteReport([5, 8, 10, 20, 30]);

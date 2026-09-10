@@ -4,7 +4,7 @@
 
 ## 本机游玩与网络访问
 
-关卡从独立 JSON 文件加载，因此不能直接通过 `file://` 双击 `index.html`。需要 Node.js 18+，在项目目录启动本地服务：
+关卡从独立 JSON 文件加载，因此不能直接通过 `file://` 双击 `src/game/index.html`。需要 Node.js 18+，在项目目录启动本地服务：
 
 ```sh
 node server.js
@@ -141,7 +141,7 @@ systemctl --user restart traffic-game.service
 
 ## 操作
 
-操作方法、车辆出行与交通模拟规则详见 **[游戏指南](manual.html)**。
+操作方法、车辆出行与交通模拟规则详见 **[游戏指南](src/game/manual.html)**。
 
 - **选择模式（1）**：点击选择单格，拖动选择矩形区域。选区只在本模式显示。下方显示宽 × 高、道路总价、内容类型以及运营车流。道路提供分开的升级、降级和拆除按钮；住宅显示人口守恒拆分、当前或预计目的地、汽车路径距离、自由流耗时和最低等级瓶颈，预计路径会在地图高亮；接收建筑显示剩余容量、在途预约和已抵达人数；空地可建设单格支路；多格可批量升级、降级或拆除。
 - **拖拽模式（2）**：只建设支路和建立连接；已有道路保持等级。回拖取消当前预览，松手才一次性应用。升降级和拆除使用选择区按钮。
@@ -169,14 +169,15 @@ systemctl --user restart traffic-game.service
 
 ```sh
 node --test tests/*.test.js
-node --check level-catalog.js
-node --check core-geometry.js
-node --check core-bus.js
-node --check core.js
-node --check core-campaign.js
-node --check game-canvas.js
-node --check game.js
-node --check server.js
+node --check src/shared/level-catalog.js
+node --check src/shared/core-geometry.js
+node --check src/shared/core-bus.js
+node --check src/shared/core.js
+node --check src/shared/core-campaign.js
+node --check src/game/game-canvas.js
+node --check src/game/game.js
+node --check src/server/game-server.js
+node --check src/server/admin-server.js
 ```
 
 测试覆盖原版逻辑、全部关卡的数据有效性与可通关性、公交闭环/接客/容量/预算、独立状态、暂停与停止运营、设计存档校验和往返读取、等级差价、各级速度、容量与转向车道、红灯等待、全红切换、路口冲突与占道保护，以及 HTTP 资源白名单、路径遍历防护、并发请求、HEAD 和缓存。
@@ -184,31 +185,19 @@ node --check server.js
 可选浏览器集成测试需要 Node.js 22+ 和 Chromium，无需 npm 依赖。先启动游戏服务，再将本机 Chromium 以 `--headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser` 启动，执行 `node tests/browser-smoke.cjs`。它验证十关切换、五日进度界面、剪刀工具、教学工具解锁、预铺道路预算、拆路退款、设计保存/读取、道路升级、路口信号设置、结算报告和响应式布局；可通过 `GAME_URL` / `CDP_URL` 指定地址。调试端口只应在本机开放，测试后关闭调试浏览器。另可运行 `node tests/ui-smoke.cjs`，以真实指针点击验证 320～1440px 六档宽度下的关卡折叠、信息切换、设计存档、触控尺寸和首屏重点布局；该测试不依赖关卡中的固定建筑坐标。
 
 ```text
-index.html                  中文界面、关卡选择、弹窗
-manual.html                 操作方法、车辆出行与交通模拟规则的游戏指南
-admin-manual.html           管理员关卡编辑、校验、仿真与发布操作手册
-style.css                   响应式样式
+src/game/                    玩家页面、指南、样式、Canvas 与界面脚本
+src/admin/                   管理员页面、手册、样式与编辑器脚本
+src/shared/                  浏览器/Node 共用的关卡加载器与模拟核心
+src/server/game-server.js    零依赖只读 HTTP 游戏服务
+src/server/admin-server.js   管理员面板 HTTP 与鉴权服务（需密码）
+src/server/level-validation.js  管理员关卡结构与玩法数据校验
+server.js / admin-server.js  保留原启动命令的轻量兼容入口
 built-in-levels.json         默认章节路径总清单
 levels/<章节>/chapter.json   单章元数据与关卡路径清单
 levels/<章节>/<关卡>.json    每关独立的地图、需求与功能配置
 levels.json + levels.local/  管理员生成的可选本地覆盖清单与分关数据
-level-catalog.js             浏览器/Node 共用的分层关卡加载与写入
-core-geometry.js             网格坐标、邻接与寻路工具
-core-bus.js                  公交线路配置、站点与车辆运行逻辑
-core.js + core-campaign.js   DOM 无关的道路/汽车引擎与多日运营模块
-game-results.js             结算页通勤满意度统计
-game-effects.js             到达正向反馈粒子效果
-game-canvas.js              Canvas 基础图元与公交线路绘制
-game-bootstrap.js           默认/覆盖关卡加载与运行时校验
-game.js                     Canvas 绘图、输入与界面编排
-server.js                   零依赖只读 HTTP 服务
-admin-server.js              管理员面板 HTTP 与鉴权服务（需密码）
-level-validation.js          管理员关卡结构与玩法数据校验
-admin.html / admin.css / admin.js  管理员面板界面
-tests/*.test.js             自动化测试
-tests/browser-smoke.cjs      可选浏览器集成测试
-deploy/install-service.sh   用户服务安装脚本
-deploy/traffic-game-network.nix  NixOS 防火墙与 linger 配置
+tests/                       自动化测试与可选浏览器冒烟测试
+deploy/                      systemd 用户服务和 NixOS 网络配置
 ```
 
 没有账户、排行榜或服务器端游戏状态；设计存档仅保存在当前浏览器的 `localStorage` 中，每个关卡一个，不包含运营成绩。刷新会回到第一关，可通过「读取设计」恢复该关方案。车辆使用按方向限容、通行位置预约和路口分区冲突预约规则，并非真实交通工程仿真。

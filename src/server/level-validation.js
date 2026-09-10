@@ -1,7 +1,7 @@
 'use strict';
 // Structural and gameplay validation shared by the administrator API and tests.
-const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES } = require('./core.js');
-const { normalizeCatalog } = require('./level-catalog.js');
+const { WIDTH, HEIGHT, MIN_MAP_SIZE, MAX_MAP_SIZE, neighbors, ROAD_TYPES } = require('../shared/core.js');
+const { normalizeCatalog } = require('../shared/level-catalog.js');
 
 function isCoord(n, width = WIDTH, height = HEIGHT) { return Number.isInteger(n) && n >= 0 && n < width * height; }
 function validateLevels(data) {

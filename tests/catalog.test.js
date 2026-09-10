@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
-const { isManifest, loadCatalogSync, writeCatalog } = require('../level-catalog.js');
+const { isManifest, loadCatalogSync, writeCatalog } = require('../src/shared/level-catalog.js');
 
 const builtInManifest = path.join(__dirname, '..', 'built-in-levels.json');
 
@@ -36,7 +36,7 @@ test('catalog writer creates a path-only manifest and round-trips data', async t
 test('browser core modules compose through globals in documented order', () => {
   const context = vm.createContext({ console, URL, location: { href: 'http://example.test/' } });
   for (const filename of ['level-catalog.js','core-geometry.js','core-bus.js','core.js','core-campaign.js']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', filename), 'utf8'), context, { filename });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', filename), 'utf8'), context, { filename });
   }
   assert.equal(typeof context.TrafficCore.City, 'function');
   assert.equal(typeof context.TrafficCore.CampaignSession, 'function');

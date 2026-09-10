@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {City,LEVELS,key}=require('../core.js');
+const {City,LEVELS,key}=require('../src/shared/core.js');
 const {buildReferencePlan,completeCrossing,line}=require('./reference-plan.cjs');
 function run(c){c.toggle();for(let i=0;i<=c.level.duration*20;i++)c.step(.05);}
 

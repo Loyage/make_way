@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { key, neighbors } = require('../core.js');
+const { key, neighbors } = require('../src/shared/core.js');
 function line(city,x1,y1,x2,y2,grade=0) {
   let x=x1,y=y1;
   while(x!==x2 || y!==y2) {

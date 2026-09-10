@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createGameServer } = require('../server.js');
-const { loadCatalogSync } = require('../level-catalog.js');
+const { loadCatalogSync } = require('../src/shared/level-catalog.js');
 const BUILT_IN_CATALOG = loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
 const BUILT_IN_LEVELS = BUILT_IN_CATALOG.chapters.flatMap(chapter => chapter.levels);
 

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createCanvasTools } = require('../game-canvas.js');
+const { createCanvasTools } = require('../src/game/game-canvas.js');
 
 test('canvas tools draw primitives and connected bus segments on the provided context', () => {
   const calls = [];

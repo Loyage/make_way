@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { validateLevels, normalizeCatalog, defaultLevels, createAdminServer } = require('../admin-server.js');
-const { setLevels, City, WIDTH, HEIGHT } = require('../core.js');
+const { setLevels, City, WIDTH, HEIGHT } = require('../src/shared/core.js');
 
 function request(port, url, method = 'GET', body = null, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -80,7 +80,7 @@ test('setLevels rebuilds active LEVELS and freezes definitions', () => {
   assert.ok(city instanceof City);
   assert.match(setLevels([]), /至少需要一个关卡/);
   assert.match(setLevels([{ id: 'x' }, { id: 'x' }]), /重复/);
-  assert.throws(() => { require('../core.js').LEVELS[0].budget = 999; }, TypeError);
+  assert.throws(() => { require('../src/shared/core.js').LEVELS[0].budget = 999; }, TypeError);
 });
 
 test('admin server refuses to start without an explicit password', async () => {

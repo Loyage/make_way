@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, ROAD_TYPES, WIDTH, key, movement, movementsConflict, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH } = require('../core.js');
+const { City, ROAD_TYPES, WIDTH, key, movement, movementsConflict, VEHICLE_WIDTH, VEHICLE_LENGTH, LANE_WIDTH } = require('../src/shared/core.js');
 
 function street() {
   const city = new City('neighborhood');

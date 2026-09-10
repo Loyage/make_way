@@ -2,7 +2,7 @@
  * and Chromium exposing a local DevTools endpoint on port 9333. */
 'use strict';
 const assert = require('node:assert/strict');
-const CATALOG = require('../level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
+const CATALOG = require('../src/shared/level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
 const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -62,7 +62,7 @@ async function main() {
       if(i>0)assert.equal(await text('toast'),LEVELS[i].description);
       assert.equal(await text('mission-tip'),LEVELS[i].tip);
       assert.equal(await evaluate('getComputedStyle(document.querySelector("#mission-tip")).whiteSpace'),'pre-line');
-      const initial=new (require('../core.js').City)(LEVELS[i].id);
+      const initial=new (require('../src/shared/core.js').City)(LEVELS[i].id);
       assert.equal(await text('budget'),String(initial.remaining));
       assert.equal(await evaluate('document.querySelectorAll("#demand-list li").length'),LEVELS[i].routes.length);
       assert.equal(await evaluate('document.querySelectorAll(".connection-row").length'),LEVELS[i].routes.length);

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createArrivalEffects } = require('../game-effects.js');
+const { createArrivalEffects } = require('../src/game/game-effects.js');
 
 test('arrival celebration is drawn at the destination recorded by the vehicle', () => {
   const effects=createArrivalEffects(),visited=[],arcs=[];

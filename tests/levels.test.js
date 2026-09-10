@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../core.js');
+const { City, CampaignSession, campaignIncome, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
 
 const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {

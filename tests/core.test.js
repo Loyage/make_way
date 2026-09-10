@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, WIDTH, HEIGHT, BUDGET, TARGET, ROUTES, key, point, neighbors, findPath } = require('../core.js');
+const { City, WIDTH, HEIGHT, BUDGET, TARGET, ROUTES, key, point, neighbors, findPath } = require('../src/shared/core.js');
 const { buildReferencePlan: connect } = require('./reference-plan.cjs');
 function run(city, seconds) { for (let i = 0; i < seconds * 20; i++) city.step(.05); }
 
@@ -165,12 +165,12 @@ test('designs round-trip with road grades and signals while invalid data is atom
 });
 
 test('levels can define independent map dimensions', () => {
-  const builtIn=require('../level-catalog.js').loadCatalogSync(require('node:path').join(__dirname,'..','built-in-levels.json'));
+  const builtIn=require('../src/shared/level-catalog.js').loadCatalogSync(require('node:path').join(__dirname,'..','built-in-levels.json'));
   const level={id:'wide-map',name:'宽图',english:'WIDE',difficulty:'测试',title:'动态地图',description:'测试',tip:'测试',lesson:'测试',width:20,height:10,budget:20,duration:10,features:{grade:true,load:true,cut:true,inspect:true,signals:true,bus:false},water:[],bridges:[],trees:[],routes:[{name:'路线',color:'#638d69',light:'#dae6cb',homes:[{cell:0,generationRate:1,passengers:1}],goals:[{cell:19,label:'终点'}]}],initialEdges:[]};
   try {
-    assert.equal(require('../core.js').setLevels({version:1,chapters:[{id:'dynamic',name:'动态',english:'DYNAMIC',levels:[level]}]}),'');
+    assert.equal(require('../src/shared/core.js').setLevels({version:1,chapters:[{id:'dynamic',name:'动态',english:'DYNAMIC',levels:[level]}]}),'');
     const city=new City('wide-map');assert.equal(city.width,20);assert.equal(city.height,10);assert.equal(city.target,1);
     assert.deepEqual(city.point(city.key(19,9)),{x:19,y:9});assert.ok(!city.neighbors(19).includes(20));
     assert.equal(city.connect(19,39),'');assert.ok(city.edges.get(19).has(39));
-  } finally { require('../core.js').setLevels(builtIn); }
+  } finally { require('../src/shared/core.js').setLevels(builtIn); }
 });

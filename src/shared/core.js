@@ -38,7 +38,7 @@
     return '';
   }
   const initialCatalog = typeof module !== 'undefined' && module.exports
-    ? require('./level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, 'built-in-levels.json')) : null;
+    ? require('./level-catalog.js').loadCatalogSync(require('node:path').resolve(__dirname, '../../built-in-levels.json')) : null;
   if (initialCatalog) setLevels(initialCatalog);
   // Default scenario and convenience exports are retained for Node consumers.
   const { budget: BUDGET, duration: DURATION, routes: ROUTES } = LEVELS[0] || { budget: 0, duration: 0, routes: [] };
