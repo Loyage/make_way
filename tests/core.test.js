@@ -30,6 +30,19 @@ test('operation preflight reports reachability, capacity, theoretical limit and 
   const limited=city.preflightCheck();assert.equal(limited.maxDeliverable,0);
   assert.ok(limited.issues.some(issue=>issue.code==='route-capacity'));
 });
+test('sandbox has no deadline and permits safe road edits during operation', () => {
+  const city=new City('neighborhood',{sandbox:true});connect(city);city.toggle();run(city,city.level.duration+5);
+  assert.equal(city.state,'running');assert.equal(city.duration,Infinity);
+  const empty=key(0,0);assert.equal(city.edit(empty,false,0),'');assert.ok(city.roads.has(empty));
+  assert.equal(city.edit(empty,true,0),'');assert.ok(!city.roads.has(empty));
+});
+test('operation records peak home queues and deterministic road hotspots', () => {
+  const city=new City();connect(city);city.toggle();run(city,3);
+  assert.ok(city.maxHomeQueues.some(count=>count>0));
+  const hotspots=city.roadHotspots();assert.ok(hotspots.length>0);assert.ok(hotspots.every(item=>item.occupancySeconds>0));
+  assert.deepEqual(city.roadHotspots(0),[]);
+  city.stop();assert.ok(city.maxHomeQueues.every(count=>count===0));assert.deepEqual(city.roadHotspots(),[]);
+});
 test('construction honors terrain, buildings, bridges, and refunds', () => {
   const city = new City();
   for (const n of [key(7,1),key(1,1),ROUTES[0].homes[0].cell]) assert.ok(city.edit(n));

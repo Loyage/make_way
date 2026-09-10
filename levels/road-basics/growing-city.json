@@ -274,5 +274,8 @@
         ]
       }
     ]
-  }
+  },
+  "version": 2,
+  "initialRoads": [],
+  "initialEdges": []
 }

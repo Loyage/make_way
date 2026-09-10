@@ -6,16 +6,29 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const isManifest = data => data && data.version === 2 && Array.isArray(data.chapters) && data.chapters.every(item => typeof item === 'string');
+  function migrateLevelRoads(level) {
+    if (!level || typeof level !== 'object' || Array.isArray(level.initialRoads)) return level;
+    if (level.initialEdges !== undefined && (!Array.isArray(level.initialEdges)
+      || level.initialEdges.some(edge => !Array.isArray(edge) || edge.length !== 3))) return level;
+    const buildings = new Set((level.routes || []).flatMap(route => [...(route.homes || []), ...(route.goals || [])].map(item => item.cell)));
+    const grades = new Map();
+    for (const [a,b,grade] of level.initialEdges || []) for (const cell of [a,b]) if (!buildings.has(cell)) grades.set(cell,grade);
+    return { ...level, version: 2, initialRoads: [...grades].sort(([a],[b]) => a-b).map(([cell,grade]) => ({ cell, grade })), initialEdges: (level.initialEdges || []).map(([a,b]) => [a,b]) };
+  }
+  function migrateCatalogRoads(catalog) {
+    if (!catalog || !Array.isArray(catalog.chapters)) return catalog;
+    return { ...catalog, chapters: catalog.chapters.map(chapter => ({ ...chapter, levels: Array.isArray(chapter.levels) ? chapter.levels.map(migrateLevelRoads) : chapter.levels })) };
+  }
   function normalizeCatalog(data) {
-    if (!Array.isArray(data)) return data;
+    if (!Array.isArray(data)) return migrateCatalogRoads(data);
     if (data.length === 8 || data.length === 9 || data.length === 10) {
       const split = data.length - 4;
-      return { version: 1, chapters: [
+      return migrateCatalogRoads({ version: 1, chapters: [
         { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: data.slice(0, split) },
         { id: 'city-control', name: '城市调度', english: 'CITY CONTROL', levels: data.slice(split) }
-      ] };
+      ] });
     }
-    return { version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: data }] };
+    return migrateCatalogRoads({ version: 1, chapters: [{ id: 'custom-levels', name: '自定义关卡', english: 'CUSTOM LEVELS', levels: data }] });
   }
   const resolveUrl = (base, reference) => new URL(reference, new URL(base, location.href)).href;
 
@@ -91,5 +104,5 @@
     }
   }
 
-  return { isManifest, normalizeCatalog, loadCatalog, loadCatalogSync, writeCatalog };
+  return { isManifest, migrateLevelRoads, migrateCatalogRoads, normalizeCatalog, loadCatalog, loadCatalogSync, writeCatalog };
 });

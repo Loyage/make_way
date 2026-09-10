@@ -139,6 +139,7 @@
       this.runtimeBudget = options.budget;
       this.runtimeDuration = options.duration;
       this.deadlineMode = Boolean(options.deadlineMode);
+      this.sandbox = Boolean(options.sandbox);
       this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site, condition: site.condition ? { ...site.condition } : undefined }]));
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
@@ -158,21 +159,33 @@
       this.commuteTimes = [];
       this.arrivals = [];
       this.junctionStats = new Map();
+      this.maxHomeQueues = this.routes.flatMap(route=>route.homes).map(()=>0);
+      this.roadStats = new Map();
       this.state = 'planning';
       this.nextId = 1;
       this.rebuildRoutes();
-      for (const [a,b,grade = 0] of this.level.initialEdges || []) {
+      if (Array.isArray(this.level.initialRoads)) {
+        for (const road of this.level.initialRoads) {
+          const error = this.edit(road.cell,false,road.grade);
+          if (error) throw new Error(`Invalid initial road: ${error}`);
+        }
+        for (const [a,b] of this.level.initialEdges || []) {
+          const error = this.connect(a,b,null);
+          if (error) throw new Error(`Invalid initial edge: ${error}`);
+        }
+      } else for (const [a,b,grade = 0] of this.level.initialEdges || []) {
         const error = this.connect(a,b,grade);
         if (error) throw new Error(`Invalid initial road: ${error}`);
       }
     }
     get budget() { return this.runtimeBudget ?? this.level.budget; }
-    get duration() { return this.runtimeDuration ?? this.level.duration; }
+    get duration() { return this.sandbox ? Infinity : this.runtimeDuration ?? this.level.duration; }
     get target() { return this.homes.reduce((sum, home) => sum + home.passengers, 0); }
     key(x, y) { return key(x, y, this.width); }
     point(n) { return point(n, this.width); }
     neighbors(n) { return neighbors(n, this.width, this.height); }
     movement(entry, exit = entry) { return movement(entry, exit, this.width); }
+    canEditDesign() { return this.state === 'planning' || this.sandbox && ['running','paused'].includes(this.state); }
     movementAction(move) { return movementAction(move, this.width); }
     vector(heading) { return vector(heading, this.width); }
     links(n) { return [...(this.edges.get(n) || [])]; }
@@ -191,7 +204,7 @@
         || [[c.cell,c.cellMovement],[c.next,c.nextMovement]].some(([n,m]) => (n===a && m?.exitCell===b) || (n===b && m?.exitCell===a))));
     }
     connect(a,b,grade=0) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
+      if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(a) || !Number.isInteger(b) || a<0 || b<0 || a>=this.width*this.height || b>=this.width*this.height || !this.neighbors(a).includes(b)) return '请沿相邻方格拖动';
       if (this.buildings.has(a) && this.buildings.has(b)) return '建筑之间需要道路';
       if (!this.edges.get(a)?.has(b) && [a,b].some(n=>this.roads.has(n) && this.links(n).length===2 && this.occupants(n).length)) return '请等车辆通过后再增设路口';
@@ -207,7 +220,7 @@
       return this.busLines.some(line => line.route.slice(1).some((n,i) => n === b && line.route[i] === a || n === a && line.route[i] === b));
     }
     cut(a,b) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
+      if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!this.edges.get(a)?.has(b)) return '';
       if (this.busUsesEdge(a,b)) return '这段道路正在公交线路上，请先清除或重画线路';
       if (this.edgeLocked(a,b)) return '车辆正在通过或已预约这段连接，请稍后剪断';
@@ -283,7 +296,7 @@
       return { goalIndex, path, cost };
     }
     setRoadPolicy(cells, policy = null) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
+      if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Array.isArray(cells) || !['prefer','avoid',null].includes(policy) || cells.some(cell => !Number.isInteger(cell) || !this.roads.has(cell))) return '道路偏好设置无效';
       for (const cell of cells) if (policy === null) this.roadPolicies.delete(cell); else this.roadPolicies.set(cell, policy);
       this.refreshPaths();return '';
@@ -373,8 +386,12 @@
     junctionReports() {
       return [...this.junctionStats].map(([cell,stats])=>({cell,entries:Object.fromEntries(Object.entries(stats.entries).map(([entry,data])=>[entry,{averageWait:data.passed?data.queueSeconds/data.passed:0,maxQueue:data.maxQueue,passed:data.passed}]))}));
     }
+    roadHotspots(limit=3) {
+      if(!Number.isInteger(limit)||limit<1)return [];
+      return [...this.roadStats].map(([cell,stats])=>({cell,...stats})).sort((a,b)=>b.blockedSeconds-a.blockedSeconds||b.occupancySeconds-a.occupancySeconds||a.cell-b.cell).slice(0,limit);
+    }
     setSignal(n, enabled, green = 2) {
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
+      if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!this.signals.has(n)) return '请选择三岔或十字路口';
       const current = this.signals.get(n), candidate = cloneSignal(current);
       if (enabled && typeof enabled === 'object') {
@@ -515,7 +532,7 @@
     }
     edit(n, erase = false, grade = 0) {
       if (!Number.isInteger(n) || n < 0 || n >= this.width * this.height) return '';
-      if (this.state !== 'planning') return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
+      if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
       if (this.pendingBuildings.has(n)) return '这里是建设用地，请为即将落成的建筑预留空间';
@@ -558,6 +575,8 @@
       this.commuteTimes = [];
       this.arrivals = [];
       this.junctionStats = new Map();
+      this.maxHomeQueues = this.homes.map(()=>0);
+      this.roadStats = new Map();
       this.resetBusStats();
       this.state = 'planning';
       this.nextId = 1;
@@ -788,6 +807,7 @@
           this.queueTimes[hi]?.push(this.elapsed);
           this.spawnTimers[hi] += 1 / home.generationRate;
         }
+        this.maxHomeQueues[hi]=Math.max(this.maxHomeQueues[hi]||0,this.queues[hi]);
         if (this.queues[hi]) {
           const { goalIndex, path } = this.bestGoalPath(hi);
           if (goalIndex !== null && path) {
@@ -895,8 +915,11 @@
         }
       }
       this.cars = this.cars.filter(c => !c.done);
-      if (!this.deadlineMode && this.delivered >= this.target) this.state = 'won';
-      else if (this.elapsed >= this.duration) this.state = this.delivered >= this.target ? 'won' : 'lost';
+      for(const vehicle of [...this.cars,...this.buses])if(vehicle.active!==false&&this.roads.has(vehicle.cell)){
+        const stats=this.roadStats.get(vehicle.cell)||{occupancySeconds:0,blockedSeconds:0};stats.occupancySeconds+=dt;if(vehicle.blocked>0)stats.blockedSeconds+=dt;this.roadStats.set(vehicle.cell,stats);
+      }
+      if (!this.sandbox && !this.deadlineMode && this.delivered >= this.target) this.state = 'won';
+      else if (!this.sandbox && this.elapsed >= this.duration) this.state = this.delivered >= this.target ? 'won' : 'lost';
     }
   }
   installBusMethods(City, { BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST, BUS_LINE_COLORS });

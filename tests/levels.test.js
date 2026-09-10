@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
+const { validateLevelCatalog } = require('../src/shared/level-validation.js');
 
 const { buildReferencePlan, line } = require('./reference-plan.cjs');
 for (const level of LEVELS) {
@@ -45,10 +46,13 @@ for (const level of LEVELS) {
     assert.equal(city.state,'lost');assert.equal(city.elapsed,level.duration);
   });
 }
+test('the shared validator accepts the active catalog', () => {
+  assert.deepEqual(validateLevelCatalog({ version: 1, chapters: CHAPTERS }), { ok: true, errors: [] });
+});
 test('two chapters contain ten progressively unlocked levels, including the five-day challenge', () => {
   assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',5],['city-control','城市调度',5]]);
   assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','signal-school','multi-route-school','rush-hour','bus-school']);
+  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','rush-hour','signal-school','multi-route-school','bus-school']);
   for(const id of ['bridge-school','riverside']) assert.throws(()=>new City(id),RangeError);
   const names=['grade','load','cut','inspect','signals','bus'];
   assert.equal(LEVELS.find(level=>level.id==='cut-school').features.cut,true,'scissors must be available from lesson four');

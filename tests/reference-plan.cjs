@@ -20,11 +20,11 @@ function buildReferencePlan(city) {
     line(city,2,5,13,5,1);line(city,2,8,13,8,2);return;
   }
   if(city.level.id==='cut-school') {
-    // Scissors split the crossing: green keeps the straight east-west road,
-    // while the north-south flow reroutes through the western bypass.
+    // Keep both east-west roads independent, disconnect the obsolete diagonal
+    // approach, then give the third route a separate western bypass.
     assert.equal(city.cut(key(7,4),key(7,5)),'');
-    assert.equal(city.cut(key(7,5),key(7,6)),'');
-    return;
+    assert.equal(city.cut(key(6,3),key(6,4)),'');
+    line(city,6,3,4,3);line(city,4,3,4,6);line(city,4,6,7,6);return;
   }
   if(city.level.id==='woodland') {
     for(const [x1,y1,x2,y2] of [[2,2,3,2],[3,2,3,3],[12,2,11,2],[11,2,11,3],[13,9,11,9],[11,9,11,8],[3,9,3,8],[2,7,3,7],[12,5,11,5],[13,7,11,7],[4,4,4,3]]) line(city,x1,y1,x2,y2,2);

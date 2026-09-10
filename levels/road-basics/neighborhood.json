@@ -87,5 +87,7 @@
       ]
     }
   ],
-  "initialEdges": []
+  "initialEdges": [],
+  "version": 2,
+  "initialRoads": []
 }
