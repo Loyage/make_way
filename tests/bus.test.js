@@ -169,6 +169,15 @@ test('bus itineraries include expected headway when choosing between equivalent 
   } finally { core.setLevels(original); }
 });
 
+test('valid transfer suppresses car exit warnings but invalid bus service does not', () => {
+  const city=new City('transfer-school');buildReferencePlan(city);
+  city.homes[0].generationRate=100;
+  assert.ok(city.busItineraryFor(0,0));
+  assert.ok(!city.planningHints().some(issue=>issue.code==='home-exit-pressure'&&issue.cells[0]===city.homes[0].cell));
+  city.activeBusLine.route=[];
+  assert.ok(city.planningHints().some(issue=>issue.code==='bus-invalid'));
+});
+
 test('the built-in transfer lesson is winnable with two shared-stop lines', () => {
   const city=new City('transfer-school');buildReferencePlan(city);const itinerary=city.busItineraryFor(0,0);
   assert.equal(city.busLines.length,2);assert.equal(itinerary.legs.length,2);assert.equal(itinerary.transferCell,101);assert.deepEqual(city.preflightCheck().issues,[]);

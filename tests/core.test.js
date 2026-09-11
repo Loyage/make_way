@@ -18,6 +18,27 @@ test('defaults to the first lesson in planning mode with no connections', () => 
   assert.ok(city.paths.every(p=>p===null));run(city,10);
   assert.equal(city.elapsed,0);assert.equal(city.cars.length,0);
 });
+test('planning hints track disconnected homes, estimated exit flow and refundable star cost', () => {
+  const city=new City();
+  assert.ok(city.planningHints().some(issue=>issue.code==='home-unreachable'));
+  assert.ok(!city.planningHints().some(issue=>issue.code==='home-exit-pressure'));
+  connect(city);
+  const home=city.homes[0],rate=home.generationRate;
+  home.generationRate=100;
+  assert.ok(city.planningHints().some(issue=>issue.code==='home-exit-pressure'&&issue.cells[0]===home.cell));
+  home.generationRate=.01;
+  assert.ok(!city.planningHints().some(issue=>issue.code==='home-exit-pressure'&&issue.cells[0]===home.cell));
+  home.generationRate=rate;
+  const cost=city.budget-city.remaining,snapshot=JSON.stringify(city.serializeDesign());
+  assert.ok(!city.planningHints({maxCost:cost}).some(issue=>issue.code==='star-cost'));
+  assert.ok(city.planningHints({maxCost:cost-1}).some(issue=>issue.code==='star-cost'));
+  assert.equal(JSON.stringify(city.serializeDesign()),snapshot);
+  assert.equal(city.edit([...city.roads][0],true,0),'');
+  assert.ok(!city.planningHints({maxCost:cost-1}).some(issue=>issue.code==='star-cost'));
+  city.sandbox=true;
+  assert.ok(!city.planningHints({maxCost:0}).some(issue=>issue.code==='star-cost'));
+});
+
 test('operation preflight reports reachability, capacity, theoretical limit and drag downgrades', () => {
   const city=new City(),empty=city.preflightCheck({suspiciousDowngrades:[key(0,0)]});
   assert.equal(empty.maxDeliverable,0);assert.ok(empty.issues.some(issue=>issue.code==='home-unreachable'));

@@ -60,6 +60,12 @@ async function main() {
     await send('Page.reload'); await delay(700);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'), false);
     assert.equal(await evaluate('document.querySelector(".design-menu").open'), false);
+    assert.match(await evaluate('document.querySelector("#planning-hints-summary").textContent'), /规划提示/);
+    assert.ok(await evaluate('document.querySelectorAll("#planning-hints-list li").length > 0'));
+    assert.equal(await evaluate('document.querySelector("#budget-hint").hidden'), true);
+    await evaluate('document.querySelector("#planning-hints").open=true;document.querySelector("#planning-hints-list button").click()');
+    assert.equal(await evaluate('document.querySelector("#select-tool").getAttribute("aria-pressed")'), 'true');
+    await evaluate('document.querySelector("#planning-hints").open=false');
     const profiles=[{width:320,dpr:2,mobile:true},{width:390,dpr:2,mobile:true},{width:760,dpr:2,mobile:true},{width:768,dpr:1,mobile:false},{width:1024,dpr:1,mobile:false},{width:1440,dpr:2,mobile:false}];
     for (const {width,dpr,mobile} of profiles) {
       await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor:dpr, mobile });

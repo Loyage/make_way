@@ -733,6 +733,32 @@
       this.resetOperation();
       return '';
     }
+    planningHints(options = {}) {
+      const issues = this.preflightCheck().issues.slice();
+      for (let hi = 0; hi < this.homes.length; hi++) {
+        const home = this.homes[hi];
+        if (!home.passengers || issues.some(issue => issue.code === 'home-unreachable' && issue.cells.includes(home.cell))) continue;
+        const goals = this.goals.map((goal, gi) => goal.route === home.route && goal.input !== 0 ? gi : -1).filter(gi => gi >= 0);
+        if (goals.some(gi => this.busItineraryFor(hi, gi))) continue;
+        const exits = this.links(home.cell).filter(cell => this.roads.has(cell) && goals.some(gi => {
+          const path = this.findCarPath(cell, this.goals[gi].cell);
+          return path && !path.includes(home.cell);
+        }));
+        // Optimistic free-flow estimate: one vehicle per lane per cell travel time.
+        // Storage capacity is not a flow rate; signals and shared traffic can reduce this estimate.
+        const throughput = exits.reduce((sum, cell) => sum + this.roadType(cell).speed * this.roadType(cell).lanes, 0);
+        if (throughput > 0 && home.generationRate > throughput) issues.push({
+          code: 'home-exit-pressure', title: '住宅出口有积压风险', cells: [home.cell],
+          detail: `居民产生约 ${home.generationRate.toFixed(1)} 人/秒，高于已连接且可通往目的地的相邻道路自由流估算 ${throughput.toFixed(1)} 辆/秒，且没有可用公交。建议升级出口道路、增加有效出口或接通公交；信号灯和共用车流还可能降低实际吞吐量，此估算不保证畅通。`
+        });
+      }
+      if (!this.sandbox && Number.isFinite(options.maxCost)) {
+        const cost = this.budget - this.remaining;
+        if (cost > options.maxCost) issues.push({ code: 'star-cost', title: '建设花费超出省钱星目标', cells: [],
+          detail: `当前道路与公交花费 ${cost} 点，星级上限 ${options.maxCost} 点，超出 ${cost - options.maxCost} 点。可拆除闲置道路、降级或减少公交车辆；不影响开始运营，得星还需满足其他条件。` });
+      }
+      return issues;
+    }
     preflightCheck(options = {}) {
       const issues = [], reachable = this.homes.map(() => this.goals.map(() => false));
       const coordinates = cell => { const p = this.point(cell); return `(${p.x + 1},${p.y + 1})`; };

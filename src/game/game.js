@@ -24,6 +24,7 @@
   let campaign = null, pendingCampaignScore = null;
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
   let celebratedDelivered = 0, connectedRoutes = new Set();
+  let hintCity = null, hintSignature = '', planningHints = [];
   const arrivalEffects = TrafficEffects.createArrivalEffects(),drawResidentMood=TrafficEffects.drawResidentMood;
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
@@ -215,7 +216,7 @@
     const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),site=city.pendingBuildings.get(cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
     let content=city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:site?`${site.kind==='home'?'住宅':'目的地'}建设用地，${campaignConditionText(site)}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
     if(city.roads.has(cell)){const policy=city.roadPolicies.get(cell);if(policy)content+=policy==='prefer'?'，汽车偏好':'，汽车禁行';content+=`，占用或驶入 ${city.load(cell).total} 辆`;}
-    return `第 ${p.y+1} 行第 ${p.x+1} 列，${content}${routeSelection?.includes(cell)||selection?.start===cell&&selection?.end===cell?'，已选择':''}`;
+    return `第 ${p.y+1} 行第 ${p.x+1} 列，${content}${planningHints.filter(issue=>issue.cells?.includes(cell)).map(issue=>`，提示：${issue.title}`).join('')}${routeSelection?.includes(cell)||selection?.start===cell&&selection?.end===cell?'，已选择':''}`;
   }
   function buildAccessibleMap(){
     const grid=$('accessible-map');if(!city||grid.dataset.level===`${city.level.id}:${city.width}:${city.height}`)return;
@@ -773,6 +774,16 @@
     }
     for(const [cell,passengers] of city.transferQueues||[])if(passengers.length){const ages=passengers.map(passenger=>Math.max(0,city.elapsed-passenger.commuteStarted)),age=Math.max(...ages),band=TrafficResults.satisfactionBand(age),affected=ages.filter(value=>TrafficResults.satisfactionBand(value)===band).length;if(age>8){const p=point(cell);drawResidentMood(ctx,(p.x+.5)*s,(p.y+.2)*s,s,band,affected,Math.sin(city.elapsed*3+cell)*s*.025);}}
     arrivalEffects.draw(ctx, point, s);
+    const marked = new Set();
+    for(const issue of planningHints)for(const cell of issue.cells || []) {
+      if(marked.has(cell))continue;marked.add(cell);
+      const p=point(cell),x=(p.x+.83)*s,y=(p.y+.17)*s;
+      circle(x,y,s*.13,'#a65b22');label('!',x,y,s*.19,'#fffef9','800');
+      if(cell===hover||cell===selection?.start){
+        const text=issue.title,width=text.length*s*.21+20;
+        rounded(x-width/2,y-s*.65,width,s*.36,s*.08,'#fff4df');label(text,x,y-s*.47,s*.21,'#81451b','700');
+      }
+    }
     if(tool==='select'&&selection) {
       if(routeSelection)for(const cell of routeSelection){const {x,y}=point(cell);rounded(x*s+2,y*s+2,s-4,s-4,s*.1,'#37678c18','#37678c');}
       else {const a=point(selection.start),b=point(selection.end),x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(a.x-b.x)+1,rh=Math.abs(a.y-b.y)+1;rounded(x*s+1,y*s+1,rw*s-2,rh*s-2,s*.1,'#37678c12','#37678c');}
@@ -807,8 +818,29 @@
     if(city.state==='lost')return TrafficResults.commuteReport(city.commuteTimes,Math.max(0,city.generated.reduce((sum,count)=>sum+count,0)-city.delivered));
     return TrafficResults.liveCommuteReport(city.commuteTimes,active);
   }
+  function updatePlanningHints() {
+    const targets=starTargetsFor(city.level,campaign?campaign.dayIndex:null);
+    const signature=`${designHistory[designHistoryIndex]}:${city.target}:${city.budget}:${campaign?.dayIndex}:${city.sandbox}`;
+    if(hintCity===city&&hintSignature===signature)return;
+    hintCity=city;hintSignature=signature;
+    planningHints=city.planningHints({maxCost:targets?.efficiency?.maxCost});
+    const budgetHint=$('budget-hint'),costIssue=planningHints.find(issue=>issue.code==='star-cost');
+    budgetHint.hidden=!costIssue;budgetHint.textContent=costIssue?`⚠ 超出省钱星 ${city.budget-city.remaining-targets.efficiency.maxCost} 点`:'';
+    budgetHint.title=costIssue?.detail||'';
+    $('planning-hints-summary').textContent=planningHints.length?`规划提示 · ${planningHints.length} 项（地图 !）`:'规划提示 · 暂未发现问题（不保证通关）';
+    $('planning-hints-list').replaceChildren(...planningHints.map(issue=>{
+      const row=document.createElement('li'),title=document.createElement('strong'),detail=document.createElement('p');
+      title.textContent=issue.title;detail.textContent=issue.detail;row.append(title,detail);
+      if(issue.cells?.length){const locate=document.createElement('button');locate.type='button';locate.className='tool';locate.textContent='定位问题';locate.onclick=()=>{
+        const cell=issue.cells[0],p=point(cell);setTool('select');selectSingleCell(cell);keyboardCell=cell;
+        viewTarget=null;viewX=viewportWidth/2-(p.x+.5)*cellSize;viewY=viewportHeight/2-(p.y+.5)*cellSize;snapView();
+        updateUI();draw();canvas.scrollIntoView({block:'center'});toast(issue.detail);
+      };row.append(locate);}
+      return row;
+    }));
+  }
   function updateUI() {
-    updateHistoryControls();
+    updateHistoryControls();updatePlanningHints();
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
     const deliveryTotal=city.target;
     $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';celebrateProgress();
