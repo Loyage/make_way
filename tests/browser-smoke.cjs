@@ -63,12 +63,17 @@ async function main() {
     await click(cancelSelector);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(dialogSelector)}).open`),false,`${label} closes`);
     await delay(350);assert.notEqual(await text('timer'),paused,`${label} cancellation resumes operation`);
   }
+  async function waitFor(expression,label,attempts=120){
+    for(let attempt=0;attempt<attempts;attempt++){if(await evaluate(expression))return;await delay(100);}
+    assert.fail(label);
+  }
   try {
     await send('Runtime.enable');await send('Log.enable');await send('Page.enable');
     await send('Page.navigate',{url});
     for(let attempt=0;attempt<40;attempt++){try{if(await evaluate(`location.origin===${JSON.stringify(new URL(url).origin)}`))break;}catch{/* navigation is still replacing the initial document */}await delay(50);}
     await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1200,deviceScaleFactor:1,mobile:false});
     await evaluate('localStorage.clear()');await send('Page.reload');await delay(400);
+    await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
     assert.equal(await evaluate('document.querySelector(".design-menu").open'),false);
     await click('#level-picker > summary');
@@ -98,6 +103,21 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#bus-line-select")'));
     assert.ok(await evaluate('document.querySelector("#new-bus-line")!==null && document.querySelector("#trim-bus")!==null && document.querySelector("#redraw-bus")!==null && document.querySelector("#delete-bus")!==null'));
     assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
+
+    await go(LEVELS.findIndex(level=>level.id==='transfer-school'));
+    await click('#bus-tool');await dragThrough([[1,3],[2,3],[3,3],[4,3],[5,3],[5,4],[5,5],[5,6]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
+    await click('#select-tool');await drag(5,6,5,6);await evaluate('document.querySelector(".bus-line-card .tool:last-child").click()');
+    await click('#new-bus-line');await click('#bus-tool');await dragThrough([[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[13,7],[13,8]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
+    await click('#select-tool');await drag(5,6,5,6);await evaluate('document.querySelectorAll(".bus-line-card")[1].querySelector(".tool:last-child").click()');
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().busLines.length'),2,'transfer lesson creates two lines through player controls');
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().busLines.every(line=>line.stops.includes(101))'),true,'both lines enable the shared road stop');
+    assert.ok((await text('bus-line-inspector')).includes('可换乘'),'shared stop inspector names the transfer connection');
+    await click('#start');if(await evaluate('document.querySelector("#preflight-dialog").open')){assert.equal(await evaluate('document.querySelector("#confirm-preflight").hidden'),false,`${await text('preflight-list')}\n${await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())')}`);await click('#confirm-preflight');}assert.ok((await text('board-status')).includes('运营中'));await click('#speed');await click('#speed');
+    await waitFor('document.querySelector("#waiting").textContent.includes("换乘站等待")','transfer passengers should appear in the station queue');
+    await waitFor('document.querySelector("#result-dialog").open','transfer lesson should finish through the browser UI');
+    assert.ok((await text('result-stats')).includes('公交换乘：完成 24 人次'),'result report includes completed transfers');
+    assert.ok((await text('result-stats')).includes('换入 24 / 换出 0'),'line report includes transfer direction totals');
+    await click('#play-again');
 
     await go(0);
     await evaluate('document.querySelector("#map").focus()');assert.equal(await evaluate('document.activeElement.id'),'map');
@@ -227,7 +247,7 @@ async function main() {
       if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 10 progressive levels, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 11 progressive levels, transfer planning and reporting, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../src/shared/core.js');
 const { City, BUS_CAPACITY, BUS_SPEED_MULTIPLIER, BUS_BOARDING_RATE, BUS_COST } = core;
+const { buildReferencePlan } = require('./reference-plan.cjs');
 
 function loop(city) {
   const route=city.level.initialEdges.slice(0,32).map(edge=>edge[0]);
@@ -166,6 +167,12 @@ test('bus itineraries include expected headway when choosing between equivalent 
     assert.equal(city.busItineraryFor(0,0).legs[0].lineId,frequent);
     assert.equal(city.updateBusLine(slow,{headway:2}),'');assert.equal(city.updateBusLine(frequent,{headway:8}),'');assert.equal(city.busItineraryFor(0,0).legs[0].lineId,slow);
   } finally { core.setLevels(original); }
+});
+
+test('the built-in transfer lesson is winnable with two shared-stop lines', () => {
+  const city=new City('transfer-school');buildReferencePlan(city);const itinerary=city.busItineraryFor(0,0);
+  assert.equal(city.busLines.length,2);assert.equal(itinerary.legs.length,2);assert.equal(itinerary.transferCell,101);assert.deepEqual(city.preflightCheck().issues,[]);
+  city.toggle();run(city,city.duration+1);assert.equal(city.state,'won');assert.equal(city.transferReport().transfers,city.target);assert.equal(city.delivered,city.target);
 });
 
 test('passengers reserve capacity and transfer once between lines sharing a stop', () => {

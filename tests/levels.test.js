@@ -20,7 +20,7 @@ for (const level of LEVELS) {
   });
   test(`${level.name}: a legal reference plan wins within budget and time`, () => {
     const city = new City(level.id);buildReferencePlan(city);
-    assert.ok(city.paths.every(Boolean));city.toggle();
+    assert.ok(city.paths.every(Boolean)||city.homes.every((home,index)=>city.busItineraryFor(index)),'reference plan must serve every home');city.toggle();
     for(let i=0;i<(level.duration+1)*20;i++) {
       city.step(.05);
       for(const car of city.cars) if(car.next!==null && car.next!==car.cell) assert.ok(city.links(car.cell).includes(car.next),'vehicle crossed an unconnected edge');
@@ -52,10 +52,10 @@ for (const level of LEVELS) {
 test('the shared validator accepts the active catalog', () => {
   assert.deepEqual(validateLevelCatalog({ version: 1, chapters: CHAPTERS }), { ok: true, errors: [] });
 });
-test('two chapters contain ten progressively unlocked levels, including the five-day challenge', () => {
-  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',5],['city-control','城市调度',5]]);
+test('two chapters contain eleven progressively unlocked levels, including the five-day challenge', () => {
+  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',5],['city-control','城市调度',6]]);
   assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','rush-hour','signal-school','multi-route-school','bus-school']);
+  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','rush-hour','signal-school','multi-route-school','bus-school','transfer-school']);
   for(const id of ['bridge-school','riverside']) assert.throws(()=>new City(id),RangeError);
   const names=['grade','load','cut','inspect','signals','bus'];
   assert.equal(LEVELS.find(level=>level.id==='cut-school').features.cut,true,'scissors must be available from lesson four');
@@ -69,7 +69,7 @@ test('two chapters contain ten progressively unlocked levels, including the five
   assert.equal(multi.homes.length, 2);
   assert.equal(multi.goals.length, 2);
   assert.ok(multi.goals.every(goal => goal.input === 60));
-  assert.equal(LEVELS.at(-1).features.bus,true,'bus routes unlock in the final lesson');
+  assert.equal(LEVELS.at(-1).busLineLimit,2,'the final lesson must allow a transfer between two lines');
   for (const id of ['signal-school','rush-hour']) {
     const routes = LEVELS.find(level => level.id === id).routes;
     assert.ok(routes.some(route => route.homes.length > 1 && route.goals.length > 1), `${id} should reuse multi-point demand`);

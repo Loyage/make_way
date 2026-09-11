@@ -14,7 +14,7 @@ test('split catalog loads chapter manifests and one file per level', () => {
   assert.equal(isManifest(manifest), true);
   assert.deepEqual(manifest.chapters, ['levels/road-basics/chapter.json', 'levels/city-control/chapter.json']);
   const catalog = loadCatalogSync(builtInManifest);
-  assert.deepEqual(catalog.chapters.map(chapter => chapter.levels.length), [5, 5]);
+  assert.deepEqual(catalog.chapters.map(chapter => chapter.levels.length), [5, 6]);
   for (const chapter of catalog.chapters) {
     const chapterManifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'levels', chapter.id, 'chapter.json'), 'utf8'));
     assert.ok(chapterManifest.levels.every(reference => /^[a-z0-9-]+\.json$/.test(reference)));

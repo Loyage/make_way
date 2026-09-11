@@ -8,6 +8,7 @@
     "rush-hour.json",
     "signal-school.json",
     "multi-route-school.json",
-    "bus-school.json"
+    "bus-school.json",
+    "transfer-school.json"
   ]
 }

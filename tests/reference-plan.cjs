@@ -48,6 +48,11 @@ function buildReferencePlan(city) {
     const loop=city.level.initialEdges.slice(0,32).map(edge=>edge[0]);loop.push(loop[0]);
     assert.equal(city.setBusCount(3),'');assert.equal(city.setBusRoute(loop),'');return;
   }
+  if(city.level.id==='transfer-school') {
+    const first=[49,50,51,52,53,69,85,101],second=[101,102,103,104,105,106,107,108,109,125,141];
+    assert.equal(city.setBusRoute(first),'');assert.equal(city.setBusCount(2),'');assert.equal(city.updateBusLine(city.activeBusLineId,{name:'河西接驳线',returnTrip:true,returnStops:true,headway:2}),'');assert.equal(city.setBusStop(101,true),'');
+    assert.equal(city.createBusLine('河东学校线','#d06b47'),'');assert.equal(city.setBusRoute(second),'');assert.equal(city.setBusCount(2),'');assert.equal(city.updateBusLine(city.activeBusLineId,{returnTrip:true,returnStops:true,headway:2}),'');assert.equal(city.setBusStop(101,true),'');return;
+  }
   // Minimize new road cost, then distance; connections always remain explicit.
   // A route may hold several homes and goals, so connect every home to its
   // nearest reachable goal (multi->multi still resolves to a concrete OD path).

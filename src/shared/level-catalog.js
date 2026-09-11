@@ -21,7 +21,7 @@
   }
   function normalizeCatalog(data) {
     if (!Array.isArray(data)) return migrateCatalogRoads(data);
-    if (data.length === 8 || data.length === 9 || data.length === 10) {
+    if (data.length === 8 || data.length === 9 || data.length === 10 || data.length === 11) {
       const split = data.length - 4;
       return migrateCatalogRoads({ version: 1, chapters: [
         { id: 'road-basics', name: '道路入门', english: 'ROAD BASICS', levels: data.slice(0, split) },

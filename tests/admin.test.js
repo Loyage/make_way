@@ -22,9 +22,9 @@ function request(port, url, method = 'GET', body = null, headers = {}) {
 test('validateLevels accepts the built-in chapter catalog', () => {
   const catalog=defaultLevels();
   assert.equal(validateLevels(catalog), '');
-  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',5],['城市调度',5]]);
+  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',5],['城市调度',6]]);
   const flat=catalog.chapters.flatMap(chapter=>chapter.levels),migrated=normalizeCatalog(flat);
-  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[6,4]);assert.equal(validateLevels(flat),'');
+  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[7,4]);assert.equal(validateLevels(flat),'');
 });
 
 test('validateLevels rejects chapter and level structural problems', () => {
