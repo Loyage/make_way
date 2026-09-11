@@ -15,6 +15,12 @@
     if(count>1){const text=count>99?'99+':String(count),badgeRadius=Math.max(5,size*.095);ctx.fillStyle=mood.color;ctx.beginPath();ctx.arc(x+radius*.78,cy-radius*.76,badgeRadius,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fffef9';ctx.font=`700 ${Math.max(7,size*.105)}px system-ui, sans-serif`;ctx.fillText(text,x+radius*.78,cy-radius*.76);}
     ctx.restore();
   }
+  const PROGRESS_MILESTONES = Object.freeze([25, 50, 75]);
+  function crossedProgressMilestones(previous, current, target) {
+    if (!Number.isFinite(target) || target <= 0) return [];
+    const before=Math.max(0,Number(previous)||0)/target*100,after=Math.max(0,Number(current)||0)/target*100;
+    return PROGRESS_MILESTONES.filter(percent=>before<percent&&after>=percent);
+  }
   function createArrivalEffects() {
     const effects = [];
     let seen = 0;
@@ -47,7 +53,7 @@
     }
     return { reset, sync, step, draw };
   }
-  const api = { MOODS, drawResidentMood, createArrivalEffects };
+  const api = { MOODS, PROGRESS_MILESTONES, crossedProgressMilestones, drawResidentMood, createArrivalEffects };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficEffects = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

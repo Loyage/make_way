@@ -23,6 +23,7 @@
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
+  let celebratedDelivered = 0, connectedRoutes = new Set();
   const arrivalEffects = TrafficEffects.createArrivalEffects(),drawResidentMood=TrafficEffects.drawResidentMood;
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
@@ -70,6 +71,16 @@
     designHistoryIndex=designHistory.length-1;updateHistoryControls();return true;
   }
   function mutateDesign(action) { const before=designSnapshot(),message=action();recordDesignChange(before);return message; }
+  function replayAnimation(element,className) {
+    element.classList.remove(className);void element.offsetWidth;element.classList.add(className);
+    setTimeout(()=>element.classList.remove(className),900);
+  }
+  function celebrateProgress() {
+    const milestones=TrafficEffects.crossedProgressMilestones(celebratedDelivered,city.delivered,city.target);celebratedDelivered=city.delivered;
+    if(!milestones.length||!['running','won'].includes(city.state))return;
+    const percent=milestones[milestones.length-1],messages={25:'首批居民顺利抵达！',50:'已送达过半，路网运转得不错！',75:'只差最后一段，坚持住！'};
+    replayAnimation($('delivered').closest('.stat'),'reward-pulse');replayAnimation($('progress'),'reward-pulse');toast(`${messages[percent]} · ${percent}%`);
+  }
   function restoreDesign(index) {
     if(city.state!=='planning'){toast('运营期间不能撤销规划，请先停止运营');return;}
     if(index<0||index>=designHistory.length)return;
@@ -197,6 +208,7 @@
       row.append(name, status); $('connection-list').append(row);
       return { row, status, routeIndex: ri };
     });
+    celebratedDelivered=city.delivered;connectedRoutes=new Set(city.routes.map((route,index)=>city.routeConnected(index)?index:null).filter(index=>index!==null));
     updateDesignControls();renderCampaignProgress();buildAccessibleMap();
   }
   function accessibleCellLabel(cell) {
@@ -799,7 +811,7 @@
     updateHistoryControls();
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
     const deliveryTotal=city.target;
-    $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';
+    $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';celebrateProgress();
     const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
     $('timer').textContent=city.sandbox?'∞':String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
     const homeWaiting=city.queues.reduce((a,b)=>a+b,0),transferWaiting=city.transferPassengers().length,waiting=homeWaiting+transferWaiting,blocked=[...city.cars,...city.buses].filter(c=>c.blocked>1.5).length;
@@ -865,7 +877,9 @@
     $('speed').title=`当前 ${speed}×；点击切换为 ${SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length]}×`;
     $('connection-count').textContent=city.routes.filter((r,i)=>city.routeConnected(i)).length+' / '+city.routes.length;
     connectionRows.forEach(({row,status},i)=>{
-      row.classList.toggle('connected',city.routeConnected(i));status.textContent=city.routeConnected(i)?'已连接 ✓':'待连接';
+      const connected=city.routeConnected(i),wasConnected=connectedRoutes.has(i);row.classList.toggle('connected',connected);status.textContent=connected?'已连接 ✓':'待连接';
+      if(connected&&!wasConnected&&city.state==='planning'){connectedRoutes.add(i);replayAnimation(row,'connection-reward');toast(`${city.routes[i].name}已贯通 ✓`);}
+      else if(!connected&&wasConnected)connectedRoutes.delete(i);
     });
     updateInspector();
     updateAccessibleMap();
@@ -897,8 +911,8 @@
     conservation.textContent=`总人口 ${population.total} = 未产生 ${population.ungenerated} + 住宅等待 ${population.waiting} + 汽车在途 ${population.carTransit} + 公交在途 ${population.busTransit} + 已抵达 ${population.arrived}`;
     const distribution=document.createElement('div');distribution.className='commute-distribution';
     for(const band of report.bands){const item=document.createElement('span');item.textContent=`${band.label} ${band.count} 人`;distribution.append(item);}
-    const starPanel=document.createElement('div');starPanel.className='star-report';starPanel.setAttribute('aria-label',`本次获得 ${stars.count} 星，累计 ${earnedStars.length} 星`);
-    for(const goal of stars.goals){const item=document.createElement('p');item.className=goal.earned?'earned':'';item.textContent=`${goal.earned?'★':'☆'} ${goal.label}`;starPanel.append(item);}
+    const newlyEarned=stars.earned.filter(id=>!previousStars.includes(id)),starPanel=document.createElement('div');starPanel.className='star-report';starPanel.setAttribute('aria-label',`本次达成 ${stars.count} 项星级目标，新获得 ${newlyEarned.length} 星，累计 ${earnedStars.length} 星`);
+    stars.goals.forEach((goal,index)=>{const obtained=earnedStars.includes(goal.id),item=document.createElement('p'),glyph=document.createElement('span'),text=document.createElement('span'),badge=document.createElement('small');item.classList.toggle('earned',obtained);item.classList.toggle('new-earned',newlyEarned.includes(goal.id));item.style.setProperty('--reward-delay',`${180+index*180}ms`);glyph.className='star-glyph';glyph.textContent=obtained?'★ ':'☆ ';text.textContent=goal.label;badge.textContent=newlyEarned.includes(goal.id)?'新获得':goal.earned?'本次达成':obtained?'已获得':'未达成';item.append(glyph,text,badge);starPanel.append(item);});
     const operations=document.createElement('div');operations.className='operation-report';
     city.routes.forEach((route,index)=>{const total=route.homes.reduce((sum,home)=>sum+home.passengers,0),delivered=city.byRoute[index]||0,row=document.createElement('p');row.textContent=`${route.name}：送达 ${delivered} / ${total} 人（${total?Math.round(delivered/total*100):0}%）`;operations.append(row);});
     const peak=resultPeak,peakIndex=city.maxHomeQueues.indexOf(peak);if(peakIndex>=0){const home=city.homes[peakIndex],p=point(home.cell),row=document.createElement('p');row.textContent=`住宅最大排队：${peak} 人 · ${city.routes[home.route]?.name||'路线'} (${p.x+1},${p.y+1})`;operations.append(row);}
@@ -906,7 +920,7 @@
     for(const bus of city.busReports().filter(item=>item.boarded||item.alighted||item.rejectedFull)){const row=document.createElement('p');row.textContent=`${bus.name}：上车 ${bus.boarded} · 下车 ${bus.alighted}${bus.transfersIn||bus.transfersOut?` · 换入 ${bus.transfersIn} / 换出 ${bus.transfersOut}`:''} · 平均载客率 ${Math.round(bus.averageLoadRate*100)}% · 满载拒载 ${bus.rejectedFull} · 周转 ${bus.cycles} 圈`;operations.append(row);}
     const transfer=city.transferReport();if(transfer.transfers||transfer.waiting){const row=document.createElement('p');row.textContent=`公交换乘：完成 ${transfer.transfers} 人次 · 仍候车 ${transfer.waiting} 人 · 平均等待 ${transfer.averageWait.toFixed(1)} 秒 · 最大同时候车 ${transfer.maxWaiting} 人`;operations.append(row);}
     for(const junction of city.junctionReports())for(const [entry,data] of Object.entries(junction.entries))if(data.maxQueue){const p=point(junction.cell),row=document.createElement('p');row.textContent=`路口 (${p.x+1},${p.y+1}) ${SIGNAL_ENTRY_NAMES[entry]}：平均等待 ${data.averageWait.toFixed(1)} 秒 · 最大队列 ${data.maxQueue} 辆`;operations.append(row);}
-    const comparison=document.createElement('div');comparison.className='personal-best';comparison.textContent=!personalBest?'尚无通关个人最佳':isBetter&&!previousBest?'首次通关，已记录为个人最佳':isBetter?'刷新个人最佳！':`个人最佳：满意度 ${personalBest.score}% · P95 ${personalBest.p95.toFixed(1)} 秒 · 建设 ${personalBest.cost} 点；本次相差 ${currentResult.score-personalBest.score>=0?'+':''}${currentResult.score-personalBest.score} 分、${(currentResult.p95-personalBest.p95).toFixed(1)} 秒、${currentResult.cost-personalBest.cost} 点`;
+    const comparison=document.createElement('div');comparison.className='personal-best';comparison.classList.toggle('new-best',isBetter);comparison.textContent=!personalBest?'尚无通关个人最佳':isBetter&&!previousBest?'✦ 首次通关，已记录为个人最佳':isBetter?'✦ 刷新个人最佳！':`个人最佳：满意度 ${personalBest.score}% · P95 ${personalBest.p95.toFixed(1)} 秒 · 建设 ${personalBest.cost} 点；本次相差 ${currentResult.score-personalBest.score>=0?'+':''}${currentResult.score-personalBest.score} 分、${(currentResult.p95-personalBest.p95).toFixed(1)} 秒、${currentResult.cost-personalBest.cost} 点`;
     $('result-stats').replaceChildren(summary,meta,starPanel,conservation,distribution,comparison,...(operations.childNodes.length?[operations]:[]));
     showChapter(visibleChapterIndex);
     $('next-level').hidden = campaign?finalDay:!won||levels().indexOf(city.level)===levels().length-1;
@@ -918,7 +932,9 @@
     if(finalDay&&!campaign.results[campaign.dayIndex])campaign.advance(report.score);
     window.dispatchEvent(new CustomEvent('traffic-game-result',{detail:{levelId:city.level.id,dayIndex:campaign?.dayIndex??null,won,complete:!campaign||Boolean(finalDay),stars:stars.count,totalStars:earnedStars.length}}));
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    $('result-dialog').showModal();
+    const resultDialog=$('result-dialog'),celebration=$('result-celebration');resultDialog.classList.toggle('result-won',won);resultDialog.classList.remove('rewards-visible');celebration.replaceChildren();
+    if(won)for(let index=0;index<18;index++){const piece=document.createElement('i');piece.style.setProperty('--piece-left',`${3+index*5.4}%`);piece.style.setProperty('--piece-drift',`${(index-9)*3}px`);piece.style.setProperty('--piece-rotation',`${index*29}deg`);piece.style.setProperty('--piece-delay',`${index*32}ms`);celebration.append(piece);}
+    resultDialog.showModal();requestAnimationFrame(()=>resultDialog.classList.add('rewards-visible'));
   }
   function reset(levelId = city.level.id) {
     const switching=Boolean(city&&levelId!==city.level.id);

@@ -7,6 +7,7 @@ const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
 const Core = require('../src/shared/core.js');
 const { buildReferencePlan } = require('./reference-plan.cjs');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const levelTimer = seconds => String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(Math.ceil(seconds)%60).padStart(2,'0');
 
 async function main() {
   const endpoint=process.env.CDP_URL||'http://127.0.0.1:9333';
@@ -19,7 +20,7 @@ async function main() {
     if(message.id){const job=pending.get(message.id);pending.delete(message.id);message.error?job.reject(message.error):job.resolve(message.result);}
     else if(message.method==='Runtime.exceptionThrown')errors.push(message.params.exceptionDetails);
     else if(message.method==='Log.entryAdded'&&message.params.entry.level==='error'){
-      const entry=message.params.entry,optionalOverride=entry.url?.endsWith('/levels.json')&&entry.text.includes('404');if(!optionalOverride)errors.push(entry);
+      const entry=message.params.entry,optionalOverride=entry.url?.endsWith('/levels.json')&&entry.text.includes('404'),missingFavicon=entry.url?.endsWith('/favicon.ico')&&entry.text.includes('404');if(!optionalOverride&&!missingFavicon)errors.push(entry);
     }
   });
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
@@ -150,9 +151,9 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#speed").getAttribute("aria-label")'),'切换运营倍速，当前 1 倍');
     await drag(3,3,3,3);assert.equal(await text('budget'),'36','selection must not build');
     await click('#road-tool');await drag(5,4,9,4);assert.equal(await text('budget'),'33');
-    const operatingDesign=await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())');
+    const operatingDesign=await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())'),idleTimer=await text('timer');
     await click('#start');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true);await click('#confirm-preflight');
-    await click('#speed');await click('#speed');await delay(350);assert.notEqual(await text('timer'),'01:30','operation must advance before dialog checks');
+    await click('#speed');await click('#speed');await delay(350);assert.notEqual(await text('timer'),idleTimer,'operation must advance before dialog checks');
     await cancelPausedDialog('#help','#help-dialog','#help-dialog .dialog-close','help dialog');
     await cancelPausedDialog('#reset','#reset-dialog','#cancel-reset','reset dialog');
     await cancelPausedDialog('#sandbox-mode','#mode-dialog','#cancel-mode','mode dialog');
@@ -161,7 +162,7 @@ async function main() {
     assert.equal(await text('map-name'),LEVELS[0].name,'cancelled level switch preserves the current level');
     await cancelPausedDialog('#stop','#stop-dialog','#cancel-stop','stop dialog');
     await click('#stop');await click('#confirm-stop');
-    assert.equal(await text('timer'),'01:30','confirmed stop clears elapsed operation time');
+    assert.equal(await text('timer'),levelTimer(LEVELS[0].duration),'confirmed stop clears elapsed operation time');
     assert.equal(await text('traffic'),'等待出发');
     assert.equal(await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())'),operatingDesign,'confirmed stop preserves the design');
     await click('#undo-design');assert.equal(await text('budget'),'36','undo restores the previous planning design');
@@ -185,7 +186,7 @@ async function main() {
 
     await go(2);
     assert.equal(await evaluate('document.querySelector("#load-setting").hidden'),false);
-    assert.ok((await text('demand-list')).includes('共 316 人 · 产生 6 人/s'));
+    const avenueHome=LEVELS[2].routes[0].homes[0];assert.ok((await text('demand-list')).includes(`共 ${avenueHome.passengers} 人 · 产生 ${avenueHome.generationRate} 人/s`),'demand list reports each home population and rate');
     const previousBudget=Number(await text('budget'));
     await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');assert.ok(Number(await text('budget'))<previousBudget);
     assert.ok((await text('road-detail')).includes('3 × 1'));
@@ -250,6 +251,10 @@ async function main() {
     assert.ok((await text('result-stats')).includes('动态改道 0 次'));
     assert.ok((await text('result-stats')).includes('轻松通勤 1 人'));
     assert.ok((await text('result-stats')).includes('★ 完成运输目标'));
+    assert.equal(await evaluate('document.querySelectorAll(".star-report .new-earned").length'),3,'new stars are highlighted separately');
+    assert.equal(await evaluate('document.querySelectorAll("#result-celebration i").length'),18,'victory creates a lightweight confetti celebration');
+    assert.equal(await evaluate('document.querySelector("#result-dialog").classList.contains("rewards-visible")'),true,'result rewards animate after the dialog opens');
+    assert.equal(await evaluate('document.querySelector(".personal-best").classList.contains("new-best")'),true,'first completion celebrates the personal best');
     assert.equal(await evaluate('document.querySelector(".level-card.selected .level-stars").textContent'),'★ 3/3');
 
     for(const width of [320,390,760,768,1024,1440]){

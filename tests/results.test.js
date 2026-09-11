@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { satisfactionBand, commuteReport, liveCommuteReport, starReport } = require('../src/game/game-results.js');
+const { crossedProgressMilestones } = require('../src/game/game-effects.js');
 
 test('commute satisfaction groups residents by travel time and weights their score', () => {
   const report = commuteReport([5, 8, 10, 20, 30]);
@@ -31,6 +32,13 @@ test('three star goals are independent and efficiency requires both limits', () 
   assert.deepEqual(starReport(targets,{won:false,score:85,cost:18,maxQueue:6}).earned,['satisfaction']);
   assert.deepEqual(starReport(targets,{won:true,score:70,cost:20,maxQueue:5}).earned,['completion','efficiency']);
   assert.equal(starReport(targets,{won:true,score:90,cost:19,maxQueue:4}).count,3);
+});
+
+test('delivery celebrations report each newly crossed quarter milestone once', () => {
+  assert.deepEqual(crossedProgressMilestones(0,24,100),[]);
+  assert.deepEqual(crossedProgressMilestones(24,76,100),[25,50,75]);
+  assert.deepEqual(crossedProgressMilestones(50,75,100),[75]);
+  assert.deepEqual(crossedProgressMilestones(0,10,0),[]);
 });
 
 test('levels without star targets keep star reporting disabled', () => {

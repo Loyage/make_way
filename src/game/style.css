@@ -249,6 +249,35 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
   .game-page .chapter-tab { min-height: 44px; }
   .game-page .sidebar > .reset { min-height: 44px; }
 }
+/* Positive feedback: route completion, delivery milestones and result rewards. */
+.game-page .reward-pulse { animation: reward-pulse .7s ease-out; }
+.game-page .connection-row.connection-reward { animation: connection-reward .75s ease-out; }
+@keyframes reward-pulse { 35% { transform: scale(1.06); filter: drop-shadow(0 0 9px #e7b64f99); } }
+@keyframes connection-reward { 35% { transform: translateX(4px) scale(1.02); color: var(--green); background: #e7f3df; } }
+#result-dialog { position: relative; }
+#result-dialog > :not(.result-celebration) { position: relative; z-index: 1; }
+.result-celebration { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.result-celebration i { position: absolute; left: var(--piece-left); top: -18px; width: 8px; height: 14px; border-radius: 3px; opacity: 0; background: #e2a43d; transform: rotate(var(--piece-rotation)); }
+.result-celebration i:nth-child(3n+2) { background: #65a87b; width: 7px; border-radius: 50%; }
+.result-celebration i:nth-child(3n) { background: #7f8fc5; height: 9px; }
+#result-dialog.rewards-visible.result-won .result-celebration i { animation: confetti-fall 1.45s cubic-bezier(.2,.7,.35,1) var(--piece-delay) both; }
+#result-dialog.rewards-visible.result-won .result-icon { animation: victory-icon .8s cubic-bezier(.2,.9,.25,1.3) both; }
+.game-page .star-report p { display: grid; grid-template-columns: 26px minmax(0,1fr) auto; align-items: center; gap: 7px; text-align: left; opacity: 0; transform: translateY(8px); }
+.game-page .star-report p small { padding: 2px 6px; border-radius: 999px; color: #81745d; background: #fffef9; font-size: 9px; white-space: nowrap; }
+.game-page .star-report .star-glyph { display: grid; place-items: center; width: 26px; height: 26px; color: #aa9f8b; font-size: 20px; }
+.game-page .star-report p.earned .star-glyph { color: #e0a028; text-shadow: 0 2px 8px #e5ad3b66; }
+.game-page .star-report p.new-earned small { color: #8b5813; background: #ffe5a7; font-weight: 800; }
+#result-dialog.rewards-visible .star-report p { animation: reward-row-in .42s ease-out var(--reward-delay) both; }
+#result-dialog.rewards-visible .star-report p.new-earned .star-glyph { animation: star-earned .72s cubic-bezier(.2,.9,.25,1.35) var(--reward-delay) both; }
+.game-page .personal-best.new-best { border: 1px solid #dfbc69; color: #815718; background: #fff4cf; }
+#result-dialog.rewards-visible .personal-best.new-best { animation: best-reveal .6s ease-out 760ms both; }
+@keyframes confetti-fall { 0% { opacity: 0; transform: translateY(-20px) rotate(0); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--piece-drift), 280px) rotate(540deg); } }
+@keyframes victory-icon { 0% { opacity: 0; transform: scale(.35) rotate(-25deg); } 65% { opacity: 1; transform: scale(1.22) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+@keyframes reward-row-in { to { opacity: 1; transform: translateY(0); } }
+@keyframes star-earned { 0% { opacity: 0; transform: scale(.2) rotate(-55deg); } 60% { opacity: 1; transform: scale(1.45) rotate(12deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes best-reveal { 0% { opacity: 0; transform: scale(.92); } 65% { transform: scale(1.035); } 100% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .game-page *, .game-page *::before, .game-page *::after { transition: none !important; }
+  .game-page *, .game-page *::before, .game-page *::after { transition: none !important; animation: none !important; }
+  .game-page .star-report p { opacity: 1; transform: none; }
+  .result-celebration { display: none; }
 }
