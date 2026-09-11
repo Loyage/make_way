@@ -50,6 +50,40 @@
       if (!homePositions.length || !goalPositions.length || segments < 1) return false;
       return homePositions.some(homePosition => goalPositions.some(goalPosition => (goalPosition - homePosition + segments) % segments > 0));
     }
+    busStopServicePositions(cell, lineId) {
+      const line=this.busLine(lineId);if(!this.busLineOperational(line)||!line.stops.has(cell))return [];
+      const route=this.busOperatingRoute(line),outboundLimit=line.route[0]===line.route[line.route.length-1]?route.length-1:line.route.length,positions=[];
+      for(let i=0;i<route.length-1;i++)if(route[i]===cell&&(i<outboundLimit||line.returnStops))positions.push(i);
+      return positions;
+    }
+    busForwardSegments(line,from,to) { const segments=this.busOperatingRoute(line).length-1;return segments>0?(to-from+segments)%segments:0; }
+    busRideTime(line,from,to) {
+      const route=this.busOperatingRoute(line),segments=route.length-1,distance=this.busForwardSegments(line,from,to);let total=0;
+      for(let offset=0;offset<distance;offset++){const a=route[(from+offset)%segments],b=route[(from+offset+1)%segments],speeds=[a,b].filter(cell=>this.roads.has(cell)).map(cell=>this.roadType(cell).speed);total+=1/(Math.min(...speeds)*BUS_SPEED_MULTIPLIER);}
+      return total;
+    }
+    busItineraryFor(homeIndex,goalIndex=null) {
+      const home=this.homes[homeIndex];if(!home)return null;
+      const goals=this.goals.map((goal,index)=>({goal,index})).filter(item=>(goalIndex===null||item.index===goalIndex)&&item.goal.route===home.route&&(item.goal.input==null||this.goalAssigned[item.index]<item.goal.input));
+      const lines=this.busLines.filter(line=>this.busLineOperational(line)),candidates=[];
+      const add=(goal,legs,expectedTime)=>candidates.push({goalIndex:goal.index,legs,expectedTime,transferCell:legs.length>1?legs[0].alightCell:null});
+      for(const first of lines)for(const boardPosition of this.busServicePositions(home.cell,first.id)){
+        for(const goal of goals)for(const alightPosition of this.busServicePositions(goal.goal.cell,first.id)){
+          const distance=this.busForwardSegments(first,boardPosition,alightPosition);if(distance)add(goal,[{lineId:first.id,boardPosition,boardCell:this.busOperatingRoute(first)[boardPosition],alightPosition,alightCell:this.busOperatingRoute(first)[alightPosition]}],first.headway/2+this.busRideTime(first,boardPosition,alightPosition));
+        }
+        for(const second of lines)if(second.id!==first.id)for(const transferCell of first.stops)if(second.stops.has(transferCell)){
+          for(const transferPosition of this.busStopServicePositions(transferCell,first.id)){
+            const firstDistance=this.busForwardSegments(first,boardPosition,transferPosition);if(!firstDistance)continue;
+            for(const secondBoard of this.busStopServicePositions(transferCell,second.id))for(const goal of goals)for(const alightPosition of this.busServicePositions(goal.goal.cell,second.id)){
+              const secondDistance=this.busForwardSegments(second,secondBoard,alightPosition);if(!secondDistance)continue;
+              add(goal,[{lineId:first.id,boardPosition,boardCell:this.busOperatingRoute(first)[boardPosition],alightPosition:transferPosition,alightCell:transferCell},{lineId:second.id,boardPosition:secondBoard,boardCell:transferCell,alightPosition,alightCell:this.busOperatingRoute(second)[alightPosition]}],first.headway/2+this.busRideTime(first,boardPosition,transferPosition)+second.headway/2+this.busRideTime(second,secondBoard,alightPosition));
+            }
+          }
+        }
+      }
+      return candidates.sort((a,b)=>a.expectedTime-b.expectedTime||a.legs.length-b.legs.length||a.goalIndex-b.goalIndex||a.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|').localeCompare(b.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|')))[0]||null;
+    }
+    busCanReach(homeCell,goalCell) { const homeIndex=this.homes.findIndex(home=>home.cell===homeCell),goalIndex=this.goals.findIndex(goal=>goal.cell===goalCell);return homeIndex>=0&&goalIndex>=0&&Boolean(this.busItineraryFor(homeIndex,goalIndex)); }
     // Compatibility aliases keep older integrations focused on the selected line.
     get busRoute() { return this.activeBusLine?.route || []; }
     get busCount() { return this.activeBusLine?.count || 1; }
@@ -180,17 +214,22 @@
     }
     linesAtCell(cell) { return this.busLines.filter(line => this.busRouteCells(line).includes(cell)); }
     linesServingBuilding(cell) { return this.busLines.filter(line => this.busServicePositions(cell, line.id).length); }
+    transferPassengers() { return [...(this.transferQueues?.values()||[])].flat(); }
+    transferReport() { const waiting=this.transferPassengers().length,times=this.transferWaitTimes||[];return { transfers:this.transferCount||0,waiting,maxWaiting:this.maxTransferWaiting||0,averageWait:times.length?times.reduce((sum,value)=>sum+value,0)/times.length:0 }; }
     resetBusStats() {
-      for (const line of this.busLines) line.stats = { boarded: 0, alighted: 0, rejectedFull: 0, passengerSeconds: 0, vehicleSeconds: 0, cycles: 0, stops: {} };
+      this.transferQueues=new Map();this.transferCount=0;this.transferWaitTimes=[];this.maxTransferWaiting=0;
+      for (const line of this.busLines) line.stats = { boarded: 0, alighted: 0, transfersIn:0, transfersOut:0, rejectedFull: 0, passengerSeconds: 0, vehicleSeconds: 0, cycles: 0, stops: {} };
     }
     busStopDemand(cell, lineId = this.activeBusLineId) {
       const line = this.busLine(lineId);if(!line?.stops.has(cell))return 0;
-      return this.homes.reduce((sum,home,index)=>sum+(this.neighbors(home.cell).includes(cell)&&this.goals.some(goal=>goal.route===home.route&&this.busCanServe(home.cell,goal.cell,line))?this.queues[index]:0),0);
+      const homes=this.homes.reduce((sum,home,index)=>{const itinerary=this.busItineraryFor(index),leg=itinerary?.legs[0];return sum+(leg?.lineId===lineId&&leg.boardCell===cell?this.queues[index]:0);},0);
+      return homes+(this.transferQueues?.get(cell)||[]).filter(passenger=>{const leg=passenger.legs?.[passenger.legIndex];return leg?.lineId===lineId&&leg.boardCell===cell;}).length;
     }
+    busStopForecast(cell,lineId=this.activeBusLineId) { return this.homes.reduce((sum,home,index)=>{const leg=this.busItineraryFor(index)?.legs[0];return sum+(leg?.lineId===lineId&&leg.boardCell===cell?home.passengers:0);},0); }
     busReports() {
       return this.busLines.map(line=>{
-        const stats=line.stats||{boarded:0,alighted:0,rejectedFull:0,passengerSeconds:0,vehicleSeconds:0,cycles:0,stops:{}};
-        return { id:line.id,name:line.name,boarded:stats.boarded,alighted:stats.alighted,rejectedFull:stats.rejectedFull,cycles:stats.cycles,
+        const stats=line.stats||{boarded:0,alighted:0,transfersIn:0,transfersOut:0,rejectedFull:0,passengerSeconds:0,vehicleSeconds:0,cycles:0,stops:{}};
+        return { id:line.id,name:line.name,boarded:stats.boarded,alighted:stats.alighted,transfersIn:stats.transfersIn||0,transfersOut:stats.transfersOut||0,rejectedFull:stats.rejectedFull,cycles:stats.cycles,
           averageLoad:stats.vehicleSeconds?stats.passengerSeconds/stats.vehicleSeconds:0,averageLoadRate:stats.vehicleSeconds?stats.passengerSeconds/(stats.vehicleSeconds*BUS_CAPACITY):0,stops:stats.stops };
       });
     }
@@ -228,27 +267,33 @@
     }
     serviceBusStop(bus) {
       const line = this.busLine(bus.lineId), route = this.busOperatingRoute(line), outboundLimit = line?.route[0] === line?.route[line.route.length - 1] ? route.length - 1 : line?.route.length;
-      let moved = 0;
+      let moved = 0;this.transferQueues||=new Map();this.transferWaitTimes||=[];
       if (!line?.stops.has(bus.cell) || bus.routePosition >= outboundLimit && !line.returnStops) { bus.needsStop = false; return; }
-      const stats=line.stats||(line.stats={boarded:0,alighted:0,rejectedFull:0,passengerSeconds:0,vehicleSeconds:0,cycles:0,stops:{}}),stopStats=stats.stops[bus.cell]||(stats.stops[bus.cell]={boarded:0,alighted:0,maxWaiting:0});
+      const stats=line.stats||(line.stats={boarded:0,alighted:0,transfersIn:0,transfersOut:0,rejectedFull:0,passengerSeconds:0,vehicleSeconds:0,cycles:0,stops:{}}),stopStats=stats.stops[bus.cell]||(stats.stops[bus.cell]={boarded:0,alighted:0,transfersIn:0,transfersOut:0,maxWaiting:0});
       stopStats.maxWaiting=Math.max(stopStats.maxWaiting,this.busStopDemand(bus.cell,line.id));
-      const leaving = bus.passengers.filter(passenger => this.neighbors(passenger.goal).includes(bus.cell));
+      const leaving = bus.passengers.filter(passenger=>passenger.legs?passenger.legs[passenger.legIndex]?.lineId===bus.lineId&&passenger.legs[passenger.legIndex].alightCell===bus.cell:this.neighbors(passenger.goal).includes(bus.cell));
       if (leaving.length) {
         bus.passengers = bus.passengers.filter(passenger => !leaving.includes(passenger));
-        for (const passenger of leaving) this.finishBusPassenger(passenger);
+        for (const passenger of leaving) {
+          if(passenger.legs&&passenger.legIndex<passenger.legs.length-1){passenger.legIndex++;passenger.transferQueuedAt=this.elapsed;const waiting=this.transferQueues.get(bus.cell)||[];waiting.push(passenger);this.transferQueues.set(bus.cell,waiting);this.maxTransferWaiting=Math.max(this.maxTransferWaiting||0,this.transferPassengers().length);stats.transfersOut++;stopStats.transfersOut++;}
+          else this.finishBusPassenger(passenger);
+        }
         moved += leaving.length;stats.alighted+=leaving.length;stopStats.alighted+=leaving.length;
       }
+      const transfers=this.transferQueues.get(bus.cell)||[];
+      for(let index=0;index<transfers.length&&bus.passengers.length<BUS_CAPACITY;){const passenger=transfers[index],leg=passenger.legs?.[passenger.legIndex];if(leg?.lineId!==bus.lineId||leg.boardPosition!==bus.routePosition){index++;continue;}transfers.splice(index,1);const wait=Math.max(0,this.elapsed-(passenger.transferQueuedAt??this.elapsed));delete passenger.transferQueuedAt;this.transferCount++;this.transferWaitTimes.push(wait);bus.passengers.push(passenger);moved++;stats.boarded++;stats.transfersIn++;stopStats.boarded++;stopStats.transfersIn++;}
+      if(!transfers.length)this.transferQueues.delete(bus.cell);
       for (let hi = 0; hi < this.homes.length && bus.passengers.length < BUS_CAPACITY; hi++) {
         const home = this.homes[hi];
         if (!this.neighbors(home.cell).includes(bus.cell)) continue;
         while (bus.passengers.length < BUS_CAPACITY && this.queues[hi] > 0) {
-          const goalIndex = this.busGoalFor(home, bus.routePosition, bus.lineId);
-          if (goalIndex === null) break;
+          const itinerary=this.busItineraryFor(hi),leg=itinerary?.legs[0];
+          if (!itinerary||leg.lineId!==bus.lineId||leg.boardPosition!==bus.routePosition) break;
           this.queues[hi]--;
-          const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed;
+          const commuteStarted = this.queueTimes[hi]?.shift() ?? this.elapsed,goalIndex=itinerary.goalIndex;
           this.goalAssigned[goalIndex]++;
           this.departedByHome[hi]++;
-          bus.passengers.push({ route: home.route, homeIndex: hi, goal: this.goals[goalIndex].cell, goalIndex, commuteStarted });
+          bus.passengers.push({ route: home.route, homeIndex: hi, goal: this.goals[goalIndex].cell, goalIndex, commuteStarted, legs:itinerary.legs, legIndex:0 });
           moved++;stats.boarded++;stopStats.boarded++;
         }
       }

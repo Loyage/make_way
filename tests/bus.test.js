@@ -157,3 +157,31 @@ test('multiple lines keep independent metadata, vehicles and road stops', () => 
     assert.equal(copy.busLine(first).name,'湖蓝环线');assert.equal(copy.busLine(second).color,'#d06b47');
   } finally { core.setLevels(original); }
 });
+
+test('bus itineraries include expected headway when choosing between equivalent lines', () => {
+  const original=JSON.parse(JSON.stringify(core.LEVELS)),levels=JSON.parse(JSON.stringify(core.LEVELS));levels.find(level=>level.id==='bus-school').busLineLimit=2;assert.equal(core.setLevels(levels),'');
+  try {
+    const city=new City('bus-school'),ring=loop(city),route=[ring[31],...ring.slice(0,5)];assert.equal(city.setBusRoute(route),'');const slow=city.activeBusLineId;assert.equal(city.updateBusLine(slow,{returnTrip:true,returnStops:true,headway:8}),'');
+    assert.equal(city.createBusLine('高频线','#d06b47'),'');const frequent=city.activeBusLineId;assert.equal(city.setBusRoute(route,frequent),'');assert.equal(city.updateBusLine(frequent,{returnTrip:true,returnStops:true,headway:2}),'');
+    assert.equal(city.busItineraryFor(0,0).legs[0].lineId,frequent);
+    assert.equal(city.updateBusLine(slow,{headway:2}),'');assert.equal(city.updateBusLine(frequent,{headway:8}),'');assert.equal(city.busItineraryFor(0,0).legs[0].lineId,slow);
+  } finally { core.setLevels(original); }
+});
+
+test('passengers reserve capacity and transfer once between lines sharing a stop', () => {
+  const original=JSON.parse(JSON.stringify(core.LEVELS)),levels=JSON.parse(JSON.stringify(core.LEVELS));levels.find(level=>level.id==='bus-school').busLineLimit=2;assert.equal(core.setLevels(levels),'');
+  try {
+    const city=new City('bus-school'),ring=loop(city),firstRoute=ring.slice(16,32).reverse(),secondRoute=ring.slice(4,17).reverse(),transferCell=156;
+    assert.equal(city.setBusRoute(firstRoute),'');const first=city.activeBusLineId;assert.equal(city.updateBusLine(first,{name:'接驳线',returnTrip:true,returnStops:true,headway:2}),'');assert.equal(city.setBusStop(transferCell,true,first),'');
+    assert.equal(city.createBusLine('目的地线','#d06b47'),'');const second=city.activeBusLineId;assert.equal(city.setBusRoute(secondRoute,second),'');assert.equal(city.updateBusLine(second,{returnTrip:true,returnStops:true,headway:4}),'');assert.equal(city.setBusStop(transferCell,true,second),'');
+    const itinerary=city.busItineraryFor(0,0);assert.deepEqual(itinerary.legs.map(leg=>leg.lineId),[first,second]);assert.equal(itinerary.transferCell,transferCell);assert.equal(city.busCanReach(city.homes[0].cell,city.goals[0].cell),true);
+    assert.equal(city.setBusStop(transferCell,false,second),'');assert.equal(city.busItineraryFor(0,0),null,'both lines must enable the same road stop');assert.equal(city.setBusStop(transferCell,true,second),'');
+    city.toggle();city.generated[0]=1;city.queues[0]=1;city.queueTimes[0]=[0];
+    const plan=city.busItineraryFor(0,0),firstLeg=plan.legs[0],secondLeg=plan.legs[1],firstBus={lineId:first,cell:firstLeg.boardCell,routePosition:firstLeg.boardPosition,passengers:[],dwell:0,needsStop:true};
+    city.elapsed=1;city.serviceBusStop(firstBus);assert.equal(firstBus.passengers.length,1);assert.equal(city.goalAssigned[0],1,'final capacity is reserved on the first boarding');assert.equal(city.departedByHome[0],1);
+    firstBus.cell=transferCell;firstBus.routePosition=firstLeg.alightPosition;firstBus.needsStop=true;city.elapsed=3;city.serviceBusStop(firstBus);assert.equal(firstBus.passengers.length,0);assert.equal(city.transferPassengers().length,1);assert.deepEqual(city.passengerBreakdown(0),{total:44,ungenerated:43,waiting:0,carTransit:0,busTransit:1,arrived:0});
+    const secondBus={lineId:second,cell:transferCell,routePosition:secondLeg.boardPosition,passengers:[],dwell:0,needsStop:true};city.elapsed=7;city.serviceBusStop(secondBus);assert.equal(secondBus.passengers.length,1);assert.equal(city.transferPassengers().length,0);assert.equal(city.transferReport().transfers,1);assert.equal(city.transferReport().averageWait,4);assert.equal(city.transferReport().maxWaiting,1);
+    secondBus.cell=secondLeg.alightCell;secondBus.routePosition=secondLeg.alightPosition;secondBus.needsStop=true;city.elapsed=9;city.serviceBusStop(secondBus);assert.equal(city.delivered,1);assert.equal(city.byGoal[0],1);assert.equal(city.commuteTimes[0],9);
+    const reports=city.busReports();assert.equal(reports.find(item=>item.id===first).transfersOut,1);assert.equal(reports.find(item=>item.id===second).transfersIn,1);
+  } finally { core.setLevels(original); }
+});

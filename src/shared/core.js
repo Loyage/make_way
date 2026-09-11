@@ -354,7 +354,7 @@
       const generated = indices.reduce((sum, index) => sum + this.generated[index], 0);
       const waiting = indices.reduce((sum, index) => sum + this.queues[index], 0);
       const carTransit = this.cars.filter(car => !car.done && selected.has(car.homeIndex)).length;
-      const busTransit = this.buses.reduce((sum, bus) => sum + bus.passengers.filter(passenger => selected.has(passenger.homeIndex)).length, 0);
+      const busTransit = this.buses.reduce((sum, bus) => sum + bus.passengers.filter(passenger => selected.has(passenger.homeIndex)).length, 0)+this.transferPassengers().filter(passenger=>selected.has(passenger.homeIndex)).length;
       const arrived = indices.reduce((sum, index) => sum + this.departedByHome[index], 0) - carTransit - busTransit;
       return { total, ungenerated: total - generated, waiting, carTransit, busTransit, arrived };
     }
@@ -370,10 +370,7 @@
       const matchingGoals = this.goals.map((goal, index) => goal.route === home.route ? index : -1).filter(index => index >= 0);
       const availableGoals = matchingGoals.filter(index => this.goals[index].input == null || this.goalAssigned[index] < this.goals[index].input);
       const dynamic=['running','paused'].includes(this.state),{ goalIndex: carGoalIndex, path } = this.bestGoalPath(homeIndex,dynamic?{dynamic:true}:{});
-      let busGoalIndex = null, busLine = null;
-      for (const line of this.busLines) for (const goalIndex of availableGoals) if (this.busCanServe(home.cell, this.goals[goalIndex].cell, line)) {
-        busGoalIndex = goalIndex; busLine = line; break;
-      }
+      const busItinerary=this.busItineraryFor(homeIndex),busGoalIndex=busItinerary?.goalIndex??null,busLine=this.busLine(busItinerary?.legs[0]?.lineId);
       const assignedGoalIndices = [...new Set([
         ...this.cars.filter(car => !car.done && car.homeIndex === homeIndex).map(car => car.goalIndex),
         ...this.buses.flatMap(bus => bus.passengers.filter(passenger => passenger.homeIndex === homeIndex).map(passenger => passenger.goalIndex))
@@ -394,7 +391,7 @@
         const speeds = [path[i - 1], path[i]].filter(cell => this.roads.has(cell)).map(cell => this.roadType(cell).speed);
         freeFlowTime += 1 / (speeds.length ? Math.min(...speeds) : ROAD_TYPES[0].speed);
       }
-      return { homeIndex, carGoalIndex, busGoalIndex, busLineId: busLine?.id || null, assignedGoalIndices, path, distance: path ? path.length - 1 : null, freeFlowTime, bottlenecks, dynamic, reason };
+      return { homeIndex, carGoalIndex, busGoalIndex, busLineId: busLine?.id || null, busItinerary, assignedGoalIndices, path, distance: path ? path.length - 1 : null, freeFlowTime, bottlenecks, dynamic, reason };
     }
     signalConflicts(actions) {
       if(!Array.isArray(actions))return [];
@@ -751,7 +748,7 @@
         const home = this.homes[hi], goal = this.goals[gi];
         if (home.route !== goal.route) continue;
         const carPath = this.findCarPath(home.cell, goal.cell);
-        reachable[hi][gi] = Boolean(carPath || this.busLines.some(line => this.busCanServe(home.cell, goal.cell, line)));
+        reachable[hi][gi] = Boolean(carPath || this.busItineraryFor(hi,gi));
       }
       for (let hi = 0; hi < this.homes.length; hi++) {
         const home = this.homes[hi], route = this.routes[home.route];
@@ -779,10 +776,10 @@
         }
         const homes = this.homes.filter(home => this.busServicePositions(home.cell, line.id).length);
         const goals = this.goals.filter(goal => this.busServicePositions(goal.cell, line.id).length);
-        const servicePairs = homes.reduce((sum, home) => sum + goals.filter(goal => goal.route === home.route && this.busCanServe(home.cell, goal.cell, line)).length, 0);
-        if (!homes.length || !goals.length || !servicePairs) issues.push({
+        const networkService=this.homes.some((home,hi)=>this.goals.some((goal,gi)=>goal.route===home.route&&this.busItineraryFor(hi,gi)?.legs.some(leg=>leg.lineId===line.id)));
+        if (!networkService) issues.push({
           code: 'bus-no-service', title: '公交线路没有有效上下客组合', lineId: line.id, cells: this.busRouteCells(line),
-          detail: !homes.length ? `「${line.name}」没有服务任何住宅站点。` : !goals.length ? `「${line.name}」没有服务任何目的地站点。` : `「${line.name}」的站序无法把住宅乘客送到同色目的地。`
+          detail: !homes.length&&!this.busLines.some(other=>other.id!==line.id&&[...line.stops].some(cell=>other.stops.has(cell))) ? `「${line.name}」没有服务住宅或换乘站。` : !goals.length ? `「${line.name}」没有直达目的地，也不能组成有效换乘。` : `「${line.name}」的站序无法把住宅乘客送到同色目的地。`
         });
       }
       const suspicious = [...new Set(Array.isArray(options.suspiciousDowngrades) ? options.suspiciousDowngrades : [])].filter(cell => Number.isInteger(cell) && this.roads.has(cell));
@@ -859,6 +856,7 @@
         }
       }
       for (const bus of this.buses) this.stepBus(bus, dt);
+      this.maxTransferWaiting=Math.max(this.maxTransferWaiting||0,this.transferPassengers().length);
       const plans = new Map();
       for (const car of this.cars) if (!car.done && car.next === null) {
         const goal = car.goal ?? this.defaultGoalCell(car.route), exit = car.cellMovement?.exitCell;
