@@ -42,7 +42,8 @@ test('index contains no embedded level metadata', async t => {
   assert.match(html,/id="undo-design"/);assert.match(html,/id="redo-design"/);
   const manual=(await request(port,'/manual.html')).body;
   assert.match(manual,/慢行小城游戏指南/);
-  assert.match(manual,/拖拽模式：只建设与连接/);
+  assert.match(manual,/拖拽模式：智能建设、连接与改造/);
+  assert.match(manual,/选中整段道路/);
   assert.match(manual,/一辆车怎样完成出行/);
   assert.match(manual,/汽车驶出速度只由门口道路等级决定/);
 });

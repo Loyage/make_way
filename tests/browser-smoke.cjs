@@ -27,13 +27,14 @@ async function main() {
   const click=selector=>evaluate(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});const details=element.closest('details');if(details&&!element.matches('summary'))details.open=true;element.click();})()`);
   const text=id=>evaluate(`document.getElementById(${JSON.stringify(id)}).textContent`);
   const select=(id,value)=>evaluate(`(()=>{const e=document.getElementById(${JSON.stringify(id)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  async function dragThrough(points){
+  async function dragThrough(points,duringPreview=null){
     await evaluate('document.querySelector("canvas").scrollIntoView({block:"center"})');
     await delay(100);
     const r=await evaluate('(()=>{const r=document.querySelector("canvas").getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}})()');
     const mouse=(type,x,y)=>send('Input.dispatchMouseEvent',{type,x:r.x+(x+.5)*r.w/16,y:r.y+(y+.5)*r.h/12,button:'left',buttons:type==='mouseReleased'?0:1,clickCount:1});
     await mouse('mousePressed',...points[0]);
     for(const point of points.slice(1))await mouse('mouseMoved',...point);
+    if(duringPreview)await duringPreview();
     await mouse('mouseReleased',...points[points.length-1]);
   }
   const drag=(x1,y1,x2,y2)=>dragThrough([[x1,y1],[x2,y2]]);
@@ -189,6 +190,12 @@ async function main() {
     await click('#select-tool');await drag(3,2,5,2);await click('#upgrade-road');assert.ok(Number(await text('budget'))<previousBudget);
     assert.ok((await text('road-detail')).includes('3 × 1'));
     await drag(3,2,3,2);assert.ok((await text('road-detail')).includes('每方向'));
+    await click('#select-road-route');assert.equal((await evaluate('TrafficGameAdmin.selectedCells().length')),10,'single road expands to its junction-bounded segment');
+    assert.equal(await evaluate('document.querySelector("#quick-upgrade-road").textContent'),'⬆','quick road actions use icons only');
+    const routeBudget=await text('budget');await click('#quick-upgrade-road');assert.equal(await evaluate('document.querySelector("#road-operation-dialog").open'),true,'route edit requires confirmation');assert.equal(await text('budget'),routeBudget,'route edit is only previewed before confirmation');
+    await click('#confirm-road-operation');assert.ok(Number(await text('budget'))<Number(routeBudget));
+    await click('#road-tool');await dragThrough([[3,2],[7,2]],async()=>{assert.equal(await evaluate('document.querySelector("#drag-intent").hidden'),false);assert.ok((await text('drag-intent')).includes('松手后升级'));});
+    assert.deepEqual(await evaluate('TrafficGameAdmin.captureDesign().roads.filter(road=>[35,36,37,38,39].includes(road.cell)).map(road=>road.grade)'),[2,2,2,2,2],'road-origin drag applies the starting grade to crossed roads');
 
     await go(3);
     assert.equal(await evaluate('document.querySelector("#cut-tool").hidden'),false);
@@ -226,6 +233,8 @@ async function main() {
     await evaluate('TrafficGameAdmin.selectCell(TrafficGameAdmin.captureDesign().roads[0].cell)');
     assert.ok((await text('road-detail')).includes('每方向'));
     assert.equal(await evaluate('document.querySelector("#road-inspector").closest(".board-panel")!==null'),true);
+    await click('#road-tool');await dragThrough([[5,3],[5,4]],async()=>{assert.ok((await text('drag-intent')).includes('新建 1 格'));assert.ok((await text('drag-intent')).includes('快速路'));});
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.find(road=>road.cell===69)?.grade'),2,'dragging from the woodland expressway builds an expressway feeder');
 
     // Force one deterministic arrival and verify both celebration state and report.
     await evaluate(`(()=>{const step=TrafficCore.City.prototype.step;TrafficCore.City.prototype.step=function(dt){

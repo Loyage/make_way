@@ -16,7 +16,7 @@
     "bus": false
   },
   "budget": 36,
-  "duration": 90,
+  "duration": 30,
   "starTargets": {
     "satisfaction": 90,
     "efficiency": {
@@ -65,7 +65,7 @@
         {
           "cell": 69,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 25
         }
       ],
       "goals": [
@@ -83,7 +83,7 @@
         {
           "cell": 121,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 25
         }
       ],
       "goals": [
@@ -96,5 +96,99 @@
   ],
   "initialEdges": [],
   "version": 2,
-  "initialRoads": []
+  "initialRoads": [],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "edges": [
+      [
+        69,
+        70
+      ],
+      [
+        70,
+        71
+      ],
+      [
+        71,
+        72
+      ],
+      [
+        72,
+        73
+      ],
+      [
+        121,
+        137
+      ],
+      [
+        133,
+        149
+      ],
+      [
+        137,
+        153
+      ],
+      [
+        149,
+        150
+      ],
+      [
+        150,
+        151
+      ],
+      [
+        151,
+        152
+      ],
+      [
+        152,
+        153
+      ]
+    ],
+    "levelId": "neighborhood",
+    "roads": [
+      {
+        "cell": 70,
+        "grade": 0
+      },
+      {
+        "cell": 71,
+        "grade": 0
+      },
+      {
+        "cell": 72,
+        "grade": 0
+      },
+      {
+        "cell": 137,
+        "grade": 0
+      },
+      {
+        "cell": 149,
+        "grade": 0
+      },
+      {
+        "cell": 150,
+        "grade": 0
+      },
+      {
+        "cell": 151,
+        "grade": 0
+      },
+      {
+        "cell": 152,
+        "grade": 0
+      },
+      {
+        "cell": 153,
+        "grade": 0
+      }
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [],
+    "activeBusLineId": null
+  }
 }

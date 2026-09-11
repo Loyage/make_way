@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { validateLevels, normalizeCatalog, defaultLevels, createAdminServer } = require('../admin-server.js');
+const { validateLevels, validateReferenceChains, normalizeCatalog, defaultLevels, createAdminServer } = require('../admin-server.js');
 const { validateLevelCatalog } = require('../src/shared/level-validation.js');
 const { setLevels, City, WIDTH, HEIGHT } = require('../src/shared/core.js');
 
@@ -105,6 +105,13 @@ test('validateLevels accepts complete tutorial and per-day campaign references',
   assert.match(validateLevels(campaign),/第 3 天的参考答案.*referenceDesign 格式无效/);
 });
 
+test('campaign reference-chain validation rejects a structurally valid losing day', () => {
+  const catalog=JSON.parse(JSON.stringify(defaultLevels())),campaign=catalog.chapters.flatMap(chapter=>chapter.levels).find(item=>item.id==='growing-city'),design=campaign.campaign.days[0].referenceDesign;
+  Object.assign(design,{roads:[],edges:[],roadPolicies:[],signals:[],busLines:[],activeBusLineId:null});
+  assert.equal(validateLevels(catalog),'');
+  assert.match(validateReferenceChains(catalog),/第 1 天失败.*仅送达/);
+});
+
 test('validateLevels accepts per-level map sizes and rejects invalid dimensions', () => {
   const custom=JSON.parse(JSON.stringify(defaultLevels())),level=custom.chapters[0].levels[0];
   level.width=20;level.height=12;
@@ -135,7 +142,8 @@ test('admin server refuses to start without an explicit password', async () => {
 test('admin server gates /api/levels behind login and writes levels.json', async t => {
   const { createAdminServer } = require('../admin-server.js');
   process.env.ADMIN_PASSWORD = 'test-secret';
-  const server = await createAdminServer({ port: 0, host: '127.0.0.1', secureCookie: true });
+  let restartCalls = 0;
+  const server = await createAdminServer({ port: 0, host: '127.0.0.1', secureCookie: true, restartService: async () => { restartCalls++; return { service: 'traffic-game.service', state: 'active' }; } });
   await new Promise(resolve => server.once('listening', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
   const port = server.address().port;
@@ -143,6 +151,8 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   // Unauthenticated access is rejected.
   const unauth = await request(port, '/api/levels');
   assert.equal(unauth.status, 401);
+  assert.equal((await request(port, '/api/game-service/restart', 'POST')).status, 401);
+  assert.equal(restartCalls, 0);
 
   // Wrong password is rejected.
   const badLogin = await request(port, '/api/login', 'POST', JSON.stringify({ password: 'nope' }));
@@ -161,6 +171,8 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const catalog=JSON.parse(list.body).catalog;
   assert.equal(catalog.chapters.length,2);
   assert.ok(catalog.chapters.flatMap(chapter=>chapter.levels).length>=6);
+  const restarted=await request(port,'/api/game-service/restart','POST',null,{Cookie:cookie.split(';')[0]});
+  assert.equal(restarted.status,200);assert.equal(JSON.parse(restarted.body).state,'active');assert.equal(restartCalls,1);
   const valid=await request(port,'/api/validate','POST',JSON.stringify(catalog),{Cookie:cookie.split(';')[0]});
   assert.equal(valid.status,200);
   const invalid=JSON.parse(JSON.stringify(catalog));invalid.chapters[0].levels[0].routes[0].goals.forEach(goal=>goal.input=1);
@@ -176,7 +188,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);assert.match(page.body,/id="admin-star-satisfaction"/);assert.match(page.body,/id="admin-day-star-queue"/);
   assert.match(page.body,/id="admin-selection"/);assert.match(page.body,/id="admin-capture-roads"/);assert.match(page.body,/data-terrain="water"/);
   assert.match(page.body,/id="admin-capture-reference"/);assert.match(page.body,/id="admin-delete-reference"/);assert.match(page.body,/id="reference-design"/);
-  assert.match(page.body,/id="admin-verify-play"/);assert.match(page.body,/id="admin-trial-status"/);assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);
+  assert.match(page.body,/id="admin-verify-play"/);assert.match(page.body,/id="admin-trial-status"/);assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-restart-game"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);
   assert.match(page.body,/src="admin.js"><\/script><script src="game.js"/);assert.match(page.body,/href="admin-manual.html"/);
   assert.match(page.body,/id="start"/);assert.match(page.body,/id="road-tool"/);assert.match(page.body,/id="road-inspector"/);
   const manual=await request(port,'/admin-manual.html','GET',null,{Cookie:cookie.split(';')[0]});

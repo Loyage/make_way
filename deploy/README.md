@@ -36,7 +36,7 @@ ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh
 
 它会创建 `traffic-game-admin.service`，读取环境变量 `ADMIN_PASSWORD` 或项目根目录 `.env` 中的密码。密码未设置或仍为弱默认值 `admin` 时脚本会拒绝安装。脚本默认写入 `ADMIN_HOST=127.0.0.1`；如确需同时接受 IPv4 与 IPv6，可在安装时显式执行 `ADMIN_HOST=:: ADMIN_PASSWORD=你的密码 bash deploy/install-admin-service.sh`。服务会额外获得项目目录的写权限（`ReadWritePaths`）以便写入关卡清单和分关目录；除此之外的安全隔离与游戏服务一致。
 
-面板保存关卡后更新项目根目录 `levels.json` 路径清单，并把各关写入 `levels.local/<章节>/`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**：
+面板保存关卡后更新项目根目录 `levels.json` 路径清单，并把各关写入 `levels.local/<章节>/`。**游戏服务启动时把静态资源读入内存，因此改完关卡需重启 `traffic-game.service`**。登录管理员面板后可点击底部“重启游戏服务”，服务端会执行固定的当前用户服务重启命令并确认状态为 `active`；也可手动执行：
 
 ```sh
 systemctl --user restart traffic-game.service

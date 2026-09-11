@@ -14,7 +14,7 @@ async function main() {
   const url=process.env.ADMIN_URL||'http://127.0.0.1:8080';
   const tab=await (await fetch(`${endpoint}/json/new?${encodeURIComponent('about:blank')}`,{method:'PUT'})).json();
   const ws=new WebSocket(tab.webSocketDebuggerUrl),pending=new Map(),errors=[],dialogs=[];
-  let seq=0,authenticated=false,loginRequests=0,publishRequests=0,publishedCatalog=null,validatedCatalog=null;
+  let seq=0,authenticated=false,loginRequests=0,publishRequests=0,restartRequests=0,publishedCatalog=null,validatedCatalog=null;
   await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
   async function fulfill(requestId,status,payload){
@@ -31,6 +31,7 @@ async function main() {
     }
     if(requestUrl.pathname==='/api/levels'&&method==='GET')return fulfill(requestId,authenticated?200:401,authenticated?{catalog:CATALOG,hasOverride:false}:{error:'未登录'});
     if(requestUrl.pathname==='/api/validate'&&method==='POST'){validatedCatalog=JSON.parse(request.postData||'null');return fulfill(requestId,200,{ok:true,errors:[]});}
+    if(requestUrl.pathname==='/api/game-service/restart'&&method==='POST'){restartRequests++;return fulfill(requestId,200,{ok:true,service:'traffic-game.service',state:'active'});}
     if(requestUrl.pathname==='/api/levels'&&method==='PUT'){
       publishRequests++;publishedCatalog=JSON.parse(request.postData||'null');
       return fulfill(requestId,200,{ok:true,chapters:publishedCatalog.chapters.length,count:publishedCatalog.chapters.flatMap(chapter=>chapter.levels).length});
@@ -77,6 +78,10 @@ async function main() {
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',...points.end,button:'left',buttons:0,clickCount:1});
     await waitFor('[70,71,72].every(cell=>TrafficGameAdmin.captureDesign().roads.some(road=>road.cell===cell))','gap-free fast road drag');
     assert.equal(await evaluate(`[[69,70],[70,71],[71,72],[72,73]].every(([a,b])=>TrafficGameAdmin.captureDesign().edges.some(edge=>edge[0]===a&&edge[1]===b))`),true);
+    assert.equal(await evaluate('document.querySelector("#admin-load-reference").disabled'),false);
+    await click('#admin-load-reference');
+    await waitFor('document.querySelector("#admin-validation").textContent.includes("已加载本关参考答案")','administrator reference loading');
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length'),CATALOG.chapters[0].levels[0].referenceDesign.roads.length);
 
     await change('admin-level',1);
     await waitFor('TrafficGameAdmin.currentLevelId()==="demolition-school"','demolition lesson editor');
@@ -98,9 +103,14 @@ async function main() {
     await change('admin-level',0);await waitFor('TrafficGameAdmin.currentLevelId()==="neighborhood"','first lesson editor');
     assert.equal(await evaluate('document.querySelector("#admin-dirty").classList.contains("dirty")'),false);
 
-    await change('admin-level',4);await waitFor('TrafficGameAdmin.currentLevelId()==="growing-city"','campaign editor');await click('#admin-verify-play');await waitFor('document.body.classList.contains("admin-collapsed")','campaign trial mode');
+    await change('admin-level',4);await waitFor('TrafficGameAdmin.currentLevelId()==="growing-city"','campaign editor');
+    await click('#admin-verify-reference-chain');await waitFor('document.querySelector("#admin-validation").textContent.includes("参考答案已按顺序自动运行并全部通关")','campaign reference-chain verification');
+    await change('admin-campaign-day',1);await click('#admin-prepare-reference-day');await waitFor('TrafficGameAdmin.campaignDayIndex()===1','automatic reference progression to day two');
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length'),CATALOG.chapters[0].levels[4].campaign.days[1].referenceDesign.roads.length);
+    await change('admin-campaign-day',0);await click('#admin-verify-play');await waitFor('document.body.classList.contains("admin-collapsed")','campaign trial mode');
     assert.equal(await evaluate('document.querySelector("#admin-capture-reference").disabled'),false,'trial enables daily reference capture');
-    assert.equal(await evaluate('TrafficGameAdmin.applyDesign(TrafficCore.LEVELS.find(level=>level.id==="growing-city").campaign.days[0].referenceDesign)'),'');
+    await click('#admin-load-reference');
+    await waitFor('document.querySelector("#admin-validation").textContent.includes("加载第 1 天参考答案")','campaign reference loading');
     await evaluate(`(()=>{const step=TrafficCore.City.prototype.step;TrafficCore.City.prototype.step=function(){this.delivered=this.target;this.generated=this.generated.map((_,index)=>this.homes[index].passengers);this.byRoute=this.routes.map(route=>route.homes.reduce((sum,home)=>sum+home.passengers,0));this.commuteTimes=Array(this.target).fill(1);this.state='won';TrafficCore.City.prototype.step=step;};})()`);
     await click('#start');await waitFor('document.querySelector("#result-dialog").open','campaign day one result');await click('#next-level');await waitFor('TrafficGameAdmin.campaignDayIndex()===1','campaign day two planning');await click('#admin-expand');
     await click('#admin-capture-reference');await waitFor('document.querySelector("#admin-reference-status").textContent.includes("第 2 天")','day two reference capture');
@@ -109,8 +119,13 @@ async function main() {
     await change('admin-level',0);await waitFor('TrafficGameAdmin.currentLevelId()==="neighborhood"','first lesson editor');assert.equal(await evaluate('document.querySelector("#admin-dirty").classList.contains("dirty")'),false);
 
     const first=CATALOG.chapters[0].levels[0],originalSatisfaction=first.starTargets.satisfaction,originalQueue=first.starTargets.efficiency.maxQueue;
-    await change('admin-star-satisfaction',originalSatisfaction-1);
-    await waitFor(`TrafficCore.LEVELS[0].starTargets.satisfaction===${originalSatisfaction-1}`,'star target preview');
+    await evaluate(`(()=>{const input=document.querySelector('#admin-star-satisfaction');input.closest('details').open=true;input.focus();input.value=${originalSatisfaction-1};input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    assert.equal(await evaluate('document.activeElement.id'),'admin-star-satisfaction','batch parameter edits keep input focus');
+    assert.equal(await evaluate('TrafficCore.LEVELS[0].starTargets.satisfaction'),originalSatisfaction,'parameter edits wait for explicit preview application');
+    assert.equal(await evaluate('document.querySelector("#admin-apply-preview").disabled'),false);
+    await click('#admin-apply-preview');
+    await waitFor(`TrafficCore.LEVELS[0].starTargets.satisfaction===${originalSatisfaction-1}`,'batched star target preview');
+    assert.equal(await evaluate('document.querySelector("#admin-apply-preview").disabled'),true);
     await send('Page.reload',{ignoreCache:true});
     const dialogStarted=Date.now();while(!dialogs.length&&Date.now()-dialogStarted<3000)await delay(50);
     assert.equal(dialogs.at(-1)?.type,'beforeunload','reloading an unpublished draft must open the browser safeguard');
@@ -135,7 +150,6 @@ async function main() {
     if(await evaluate('document.querySelector("#preflight-dialog").open')){assert.equal(await evaluate('document.querySelector("#confirm-preflight").hidden'),false);await click('#confirm-preflight');}
     await waitFor('document.querySelector("#result-dialog").open','trial result');
     await waitFor('document.querySelector("#admin-trial-status").textContent.includes("已通过试玩门禁")','verified draft');
-    assert.ok((await text('admin-validation')).includes('已实际通关'));
     assert.equal(await evaluate('document.body.classList.contains("admin-collapsed")'),false);
 
     await click('#view-city');
@@ -154,8 +168,11 @@ async function main() {
     assert.equal(publishedCatalog.chapters[0].levels[0].starTargets.satisfaction,originalSatisfaction-1);
     assert.equal(publishedCatalog.chapters[0].levels[0].starTargets.efficiency.maxQueue,originalQueue);
     assert.equal(await evaluate('document.querySelector("#admin-dirty").classList.contains("dirty")'),false);
+    await click('#admin-restart-game');
+    await waitFor('document.querySelector("#admin-validation").textContent.includes("已重启并处于运行状态")','game service restart');
+    assert.equal(restartRequests,1);
     assert.deepEqual(errors,[]);
-    console.log('Admin browser smoke passed: login, fast drag, safe building edits, daily campaign references, reload protection, publication gate, trial completion, fingerprint invalidation, undo and publication.');
+    console.log('Admin browser smoke passed: login, fast drag, safe building edits, daily campaign references, reload protection, publication gate, trial completion, fingerprint invalidation, undo, publication and game service restart.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

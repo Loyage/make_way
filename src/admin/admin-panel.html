@@ -17,6 +17,7 @@
   <div class="admin-publish-bar">
     <span id="admin-dirty"><i></i>草稿已同步预览</span>
     <div><button id="admin-undo" class="tool" type="button" disabled>↶</button><button id="admin-redo" class="tool" type="button" disabled>↷</button></div>
+    <button id="admin-apply-preview" class="tool" type="button" disabled>应用草稿到预览</button>
     <button id="admin-verify-play" class="tool admin-verify-play" type="button">验证并试玩</button>
     <button id="admin-publish" class="primary" type="button">保存并发布</button>
   </div>
@@ -70,8 +71,8 @@
 
   <details><summary>教程参考答案</summary><div class="admin-section-body">
     <p id="admin-reference-status">本关尚未设置参考答案。</p>
-    <div class="admin-row"><button id="admin-capture-reference" class="tool" type="button">保存当前完整设计为参考答案</button><button id="admin-delete-reference" class="tool admin-danger" type="button">删除参考答案</button></div>
-    <small>普通关卡可直接捕获当前设计；多日任务须先“验证并试玩”，实际推进到对应日期后捕获。答案包含道路、连接、等级、引导、信号灯与公交线路；玩家在该关或该日首次失败后才可载入。</small>
+    <div class="admin-row"><button id="admin-prepare-reference-day" class="tool" type="button">按答案推进到所选日期</button><button id="admin-load-reference" class="tool" type="button">加载参考答案到地图</button><button id="admin-verify-reference-chain" class="tool" type="button">自动验证完整答案链</button><button id="admin-capture-reference" class="tool" type="button">保存当前完整设计为参考答案</button><button id="admin-delete-reference" class="tool admin-danger" type="button">删除参考答案</button></div>
+    <small>多日任务可按前序答案自动运行到所选日期，再加载、调整或创建当天答案；完整答案链可一键自动验证。答案包含道路、连接、等级、引导、信号灯与公交线路。玩家若从某天偏离答案，后续答案会要求回到首次分歧日重新推进。</small>
   </div></details>
 
   <details open><summary>地图选区 · 世界编辑</summary><div class="admin-section-body">
@@ -83,6 +84,6 @@
     <small>道路、等级和连接直接使用上方玩家工具规划；完成后点击“设为初始道路”。地形和建筑修改会立即重建草稿预览。</small>
   </div></details>
 
-  <footer class="admin-inspector-footer"><button id="admin-reload" class="tool" type="button">放弃草稿并重新载入</button><a class="tool" href="admin-manual.html" target="_blank" rel="noopener">管理员手册</a><button id="admin-logout" class="tool" type="button">退出</button></footer>
+  <footer class="admin-inspector-footer"><button id="admin-restart-game" class="tool" type="button">重启游戏服务</button><button id="admin-reload" class="tool" type="button">放弃草稿并重新载入</button><a class="tool" href="admin-manual.html" target="_blank" rel="noopener">管理员手册</a><button id="admin-logout" class="tool" type="button">退出</button></footer>
 </aside>
 <button id="admin-expand" class="admin-expand" type="button" hidden>打开城市控制台</button>

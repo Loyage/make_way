@@ -7,7 +7,10 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { setLevels } = require('../shared/core.js');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const TrafficCore = require('../shared/core.js');
+const { setLevels, verifyCampaignReferenceChain } = TrafficCore;
 const { normalizeCatalog, loadCatalogSync, writeCatalog } = require('../shared/level-catalog.js');
 const { validateLevels, validateLevelCatalog } = require('../shared/level-validation.js');
 
@@ -28,6 +31,7 @@ const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 const LOGIN_WINDOW_MS = 60 * 1000;
 const LOGIN_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_LIMIT = 5;
+const execFileAsync = promisify(execFile);
 
 const asset = (root, filename, type) => ({ filename: path.join(root, filename), type });
 const GAME_ROOT = path.join(PROJECT_ROOT, 'src/game');
@@ -149,6 +153,25 @@ async function writePreset(name, catalog) {
 async function writeDefault(catalog) {
   await writeCatalog(catalog, BUILT_IN_LEVELS_PATH, BUILT_IN_LEVELS_DIR);
 }
+function validateReferenceChains(catalog) {
+  const setup=setLevels(catalog);if(setup)return setup;
+  for(const level of catalog.chapters.flatMap(chapter=>chapter.levels)){
+    if(!level.campaign?.days?.some(day=>day.referenceDesign))continue;
+    const result=verifyCampaignReferenceChain(level.id);
+    if(!result.ok)return `关卡「${level.id}」的参考答案链在第 ${result.day} 天失败：${result.error}`;
+  }
+  return '';
+}
+
+async function restartGameService() {
+  const systemctl = process.env.SYSTEMCTL_PATH || 'systemctl';
+  const options = { timeout: 15000, maxBuffer: 64 * 1024, windowsHide: true };
+  await execFileAsync(systemctl, ['--user', 'restart', 'traffic-game.service'], options);
+  const { stdout } = await execFileAsync(systemctl, ['--user', 'is-active', 'traffic-game.service'], options);
+  const state = stdout.trim();
+  if (state !== 'active') throw new Error(`traffic-game.service 当前状态为 ${state || '未知'}`);
+  return { service: 'traffic-game.service', state };
+}
 
 // ── Validation ──────────────────────────────────────────────────────────────
 // ── HTTP server ─────────────────────────────────────────────────────────────
@@ -183,7 +206,7 @@ function send(res, status, body, headers = {}) {
   res.end(data);
 }
 
-async function handleApi(req, res, pathname, adminPassword, secureCookie) {
+async function handleApi(req, res, pathname, adminPassword, secureCookie, restartService) {
   pruneSessions();
   pruneLoginAttempts();
   if (pathname === '/api/login' && req.method === 'POST') {
@@ -218,6 +241,11 @@ async function handleApi(req, res, pathname, adminPassword, secureCookie) {
     send(res, 200, { catalog: readLevels(), hasOverride: fs.existsSync(LEVELS_PATH) });
     return true;
   }
+  if (pathname === '/api/game-service/restart' && req.method === 'POST') {
+    try { send(res, 200, { ok: true, ...(await restartService()) }); }
+    catch (error) { send(res, 500, { error: '游戏服务重启失败：' + error.message }); }
+    return true;
+  }
   if (pathname === '/api/validate' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; if (body.length > 1024 * 1024) req.destroy(); });
@@ -236,7 +264,7 @@ async function handleApi(req, res, pathname, adminPassword, secureCookie) {
     req.on('end', async () => {
       let catalog;
       try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
-      const error = validateLevels(catalog) || setLevels(catalog);
+      const error = validateLevels(catalog) || validateReferenceChains(catalog);
       if (error) return send(res, 400, { error });
       try {
         await writeLevels(catalog);
@@ -265,7 +293,7 @@ async function handleApi(req, res, pathname, adminPassword, secureCookie) {
     req.on('end', async () => {
       let catalog;
       try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
-      const error = validateLevels(catalog);
+      const error = validateLevels(catalog) || validateReferenceChains(catalog);
       if (error) return send(res, 400, { error });
       try { await writePreset(name, catalog); send(res, 200, { ok: true, name }); }
       catch (writeError) { send(res, 409, { error: writeError.message }); }
@@ -278,7 +306,7 @@ async function handleApi(req, res, pathname, adminPassword, secureCookie) {
     req.on('end', async () => {
       let catalog;
       try { catalog = normalizeCatalog(JSON.parse(body || '{}')); } catch { return send(res, 400, { error: '请求体不是合法 JSON' }); }
-      const error = validateLevels(catalog);
+      const error = validateLevels(catalog) || validateReferenceChains(catalog);
       if (error) return send(res, 400, { error });
       try { await writeDefault(catalog); send(res, 200, { ok: true }); }
       catch (writeError) { send(res, 500, { error: '写入失败：' + writeError.message }); }
@@ -288,7 +316,7 @@ async function handleApi(req, res, pathname, adminPassword, secureCookie) {
   return false;
 }
 
-async function createAdminServer({ port = PORT, host = HOST, secureCookie = process.env.ADMIN_SECURE_COOKIE === '1' } = {}) {
+async function createAdminServer({ port = PORT, host = HOST, secureCookie = process.env.ADMIN_SECURE_COOKIE === '1', restartService = restartGameService } = {}) {
   if (!/^\d+$/.test(String(port)) || port < 0 || port > 65535) throw new Error('ADMIN_PORT/PORT must be an integer between 0 and 65535');
   const adminPassword = getPassword();
   if (!adminPassword) throw new Error('ADMIN_PASSWORD or PI_ADMIN_PASSWORD must be set');
@@ -299,7 +327,7 @@ async function createAdminServer({ port = PORT, host = HOST, secureCookie = proc
     try { pathname = decodeURIComponent(req.url.split('?')[0]); }
     catch { return send(res, 400, { error: 'Bad request' }); }
     if (pathname.startsWith('/api/')) {
-      try { if (await handleApi(req, res, pathname, adminPassword, secureCookie)) return; }
+      try { if (await handleApi(req, res, pathname, adminPassword, secureCookie, restartService)) return; }
       catch (error) { return send(res, 500, { error: error.message }); }
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Method not allowed' });
@@ -331,4 +359,4 @@ function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { validateLevels, normalizeCatalog, readLevels, writeLevels, defaultLevels, createAdminServer, main };
+module.exports = { validateLevels, validateReferenceChains, normalizeCatalog, readLevels, writeLevels, defaultLevels, restartGameService, createAdminServer, main };

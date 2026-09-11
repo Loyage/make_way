@@ -45,7 +45,7 @@
         {
           "cell": 33,
           "generationRate": 1,
-          "passengers": 42
+          "passengers": 20
         }
       ],
       "goals": [
@@ -74,138 +74,106 @@
           "height": 12,
           "edges": [
             [
-              1,
-              2
+              33,
+              34
             ],
             [
-              1,
-              17
+              34,
+              35
             ],
             [
-              2,
-              3
+              35,
+              36
             ],
             [
-              3,
-              4
+              36,
+              37
             ],
             [
-              4,
-              5
+              37,
+              38
             ],
             [
-              5,
-              6
+              38,
+              39
             ],
             [
-              6,
-              7
+              39,
+              40
             ],
             [
-              7,
-              8
+              40,
+              41
             ],
             [
-              8,
-              9
+              41,
+              42
             ],
             [
-              9,
-              10
+              42,
+              43
             ],
             [
-              10,
-              11
+              43,
+              44
             ],
             [
-              11,
-              12
+              44,
+              45
             ],
             [
-              12,
-              13
-            ],
-            [
-              13,
-              14
-            ],
-            [
-              14,
-              30
-            ],
-            [
-              17,
-              33
-            ],
-            [
-              30,
+              45,
               46
             ]
           ],
           "levelId": "growing-city",
           "roads": [
             {
-              "cell": 1,
+              "cell": 34,
               "grade": 0
             },
             {
-              "cell": 2,
+              "cell": 35,
               "grade": 0
             },
             {
-              "cell": 3,
+              "cell": 36,
               "grade": 0
             },
             {
-              "cell": 4,
+              "cell": 37,
               "grade": 0
             },
             {
-              "cell": 5,
+              "cell": 38,
               "grade": 0
             },
             {
-              "cell": 6,
+              "cell": 39,
               "grade": 0
             },
             {
-              "cell": 7,
+              "cell": 40,
               "grade": 0
             },
             {
-              "cell": 8,
+              "cell": 41,
               "grade": 0
             },
             {
-              "cell": 9,
+              "cell": 42,
               "grade": 0
             },
             {
-              "cell": 10,
+              "cell": 43,
               "grade": 0
             },
             {
-              "cell": 11,
+              "cell": 44,
               "grade": 0
             },
             {
-              "cell": 12,
-              "grade": 0
-            },
-            {
-              "cell": 13,
-              "grade": 0
-            },
-            {
-              "cell": 14,
-              "grade": 0
-            },
-            {
-              "cell": 17,
-              "grade": 0
-            },
-            {
-              "cell": 30,
+              "cell": 45,
               "grade": 0
             }
           ],
@@ -231,20 +199,12 @@
           "height": 12,
           "edges": [
             [
-              1,
-              2
-            ],
-            [
-              1,
-              17
-            ],
-            [
-              2,
-              3
+              3,
+              4
             ],
             [
               3,
-              4
+              19
             ],
             [
               4,
@@ -252,59 +212,67 @@
             ],
             [
               5,
-              6
+              21
             ],
             [
-              6,
-              7
-            ],
-            [
-              7,
-              8
-            ],
-            [
-              8,
-              9
-            ],
-            [
-              9,
-              10
-            ],
-            [
-              10,
-              11
-            ],
-            [
-              11,
-              12
-            ],
-            [
-              12,
-              13
-            ],
-            [
-              13,
-              14
-            ],
-            [
-              14,
-              30
-            ],
-            [
-              17,
-              33
+              19,
+              35
             ],
             [
               20,
               36
             ],
             [
-              30,
-              46
+              21,
+              37
+            ],
+            [
+              33,
+              34
+            ],
+            [
+              34,
+              35
             ],
             [
               36,
               52
+            ],
+            [
+              37,
+              38
+            ],
+            [
+              38,
+              39
+            ],
+            [
+              39,
+              40
+            ],
+            [
+              40,
+              41
+            ],
+            [
+              41,
+              42
+            ],
+            [
+              42,
+              43
+            ],
+            [
+              43,
+              44
+            ],
+            [
+              44,
+              45
+            ],
+            [
+              45,
+              46
             ],
             [
               52,
@@ -318,71 +286,71 @@
           "levelId": "growing-city",
           "roads": [
             {
-              "cell": 1,
-              "grade": 1
-            },
-            {
-              "cell": 2,
-              "grade": 1
-            },
-            {
               "cell": 3,
-              "grade": 1
+              "grade": 0
             },
             {
               "cell": 4,
-              "grade": 1
+              "grade": 0
             },
             {
               "cell": 5,
-              "grade": 1
+              "grade": 0
             },
             {
-              "cell": 6,
-              "grade": 1
+              "cell": 19,
+              "grade": 0
             },
             {
-              "cell": 7,
-              "grade": 1
+              "cell": 21,
+              "grade": 0
             },
             {
-              "cell": 8,
-              "grade": 1
+              "cell": 34,
+              "grade": 0
             },
             {
-              "cell": 9,
-              "grade": 1
-            },
-            {
-              "cell": 10,
-              "grade": 1
-            },
-            {
-              "cell": 11,
-              "grade": 1
-            },
-            {
-              "cell": 12,
-              "grade": 1
-            },
-            {
-              "cell": 13,
-              "grade": 1
-            },
-            {
-              "cell": 14,
-              "grade": 1
-            },
-            {
-              "cell": 17,
-              "grade": 1
-            },
-            {
-              "cell": 30,
-              "grade": 1
+              "cell": 35,
+              "grade": 0
             },
             {
               "cell": 36,
+              "grade": 0
+            },
+            {
+              "cell": 37,
+              "grade": 0
+            },
+            {
+              "cell": 38,
+              "grade": 0
+            },
+            {
+              "cell": 39,
+              "grade": 0
+            },
+            {
+              "cell": 40,
+              "grade": 0
+            },
+            {
+              "cell": 41,
+              "grade": 0
+            },
+            {
+              "cell": 42,
+              "grade": 0
+            },
+            {
+              "cell": 43,
+              "grade": 0
+            },
+            {
+              "cell": 44,
+              "grade": 0
+            },
+            {
+              "cell": 45,
               "grade": 0
             },
             {
@@ -416,20 +384,12 @@
           "height": 12,
           "edges": [
             [
-              1,
-              2
-            ],
-            [
-              1,
-              17
-            ],
-            [
-              2,
-              3
+              3,
+              4
             ],
             [
               3,
-              4
+              19
             ],
             [
               4,
@@ -437,59 +397,67 @@
             ],
             [
               5,
-              6
+              21
             ],
             [
-              6,
-              7
-            ],
-            [
-              7,
-              8
-            ],
-            [
-              8,
-              9
-            ],
-            [
-              9,
-              10
-            ],
-            [
-              10,
-              11
-            ],
-            [
-              11,
-              12
-            ],
-            [
-              12,
-              13
-            ],
-            [
-              13,
-              14
-            ],
-            [
-              14,
-              30
-            ],
-            [
-              17,
-              33
+              19,
+              35
             ],
             [
               20,
               36
             ],
             [
-              30,
-              46
+              21,
+              37
+            ],
+            [
+              33,
+              34
+            ],
+            [
+              34,
+              35
             ],
             [
               36,
               52
+            ],
+            [
+              37,
+              38
+            ],
+            [
+              38,
+              39
+            ],
+            [
+              39,
+              40
+            ],
+            [
+              40,
+              41
+            ],
+            [
+              41,
+              42
+            ],
+            [
+              42,
+              43
+            ],
+            [
+              43,
+              44
+            ],
+            [
+              44,
+              45
+            ],
+            [
+              45,
+              46
             ],
             [
               52,
@@ -547,14 +515,6 @@
           "levelId": "growing-city",
           "roads": [
             {
-              "cell": 1,
-              "grade": 1
-            },
-            {
-              "cell": 2,
-              "grade": 1
-            },
-            {
               "cell": 3,
               "grade": 1
             },
@@ -567,60 +527,68 @@
               "grade": 1
             },
             {
-              "cell": 6,
+              "cell": 19,
               "grade": 1
             },
             {
-              "cell": 7,
+              "cell": 21,
               "grade": 1
             },
             {
-              "cell": 8,
+              "cell": 34,
               "grade": 1
             },
             {
-              "cell": 9,
-              "grade": 1
-            },
-            {
-              "cell": 10,
-              "grade": 1
-            },
-            {
-              "cell": 11,
-              "grade": 1
-            },
-            {
-              "cell": 12,
-              "grade": 1
-            },
-            {
-              "cell": 13,
-              "grade": 1
-            },
-            {
-              "cell": 14,
-              "grade": 1
-            },
-            {
-              "cell": 17,
-              "grade": 1
-            },
-            {
-              "cell": 30,
+              "cell": 35,
               "grade": 1
             },
             {
               "cell": 36,
+              "grade": 0
+            },
+            {
+              "cell": 37,
+              "grade": 1
+            },
+            {
+              "cell": 38,
+              "grade": 1
+            },
+            {
+              "cell": 39,
+              "grade": 1
+            },
+            {
+              "cell": 40,
+              "grade": 1
+            },
+            {
+              "cell": 41,
+              "grade": 1
+            },
+            {
+              "cell": 42,
+              "grade": 1
+            },
+            {
+              "cell": 43,
+              "grade": 1
+            },
+            {
+              "cell": 44,
+              "grade": 1
+            },
+            {
+              "cell": 45,
               "grade": 1
             },
             {
               "cell": 52,
-              "grade": 1
+              "grade": 0
             },
             {
               "cell": 68,
-              "grade": 1
+              "grade": 0
             },
             {
               "cell": 81,
@@ -1501,7 +1469,7 @@
           {
             "cell": 33,
             "generationRate": 1,
-            "passengers": 42,
+            "passengers": 20,
             "unlock": {
               "day": 1
             },
@@ -1510,27 +1478,15 @@
                 "condition": {
                   "day": 2
                 },
-                "generationRate": 4,
-                "passengers": 200
-              },
-              {
-                "condition": {
-                  "day": 3
-                },
-                "passengers": 202
+                "generationRate": 2,
+                "passengers": 50
               },
               {
                 "condition": {
                   "day": 4
                 },
                 "generationRate": 4,
-                "passengers": 203
-              },
-              {
-                "condition": {
-                  "day": 5
-                },
-                "passengers": 204
+                "passengers": 100
               }
             ]
           }
@@ -1554,7 +1510,7 @@
           {
             "cell": 20,
             "generationRate": 1,
-            "passengers": 50,
+            "passengers": 20,
             "unlock": {
               "day": 2
             },
@@ -1563,21 +1519,14 @@
                 "condition": {
                   "day": 3
                 },
-                "generationRate": 4,
-                "passengers": 202
-              },
-              {
-                "condition": {
-                  "day": 4
-                },
-                "passengers": 203
+                "generationRate": 2,
+                "passengers": 50
               },
               {
                 "condition": {
                   "day": 5
                 },
-                "generationRate": 4,
-                "passengers": 204
+                "passengers": 100
               }
             ]
           }
@@ -1601,7 +1550,7 @@
           {
             "cell": 65,
             "generationRate": 1,
-            "passengers": 51,
+            "passengers": 30,
             "unlock": {
               "day": 3
             },
@@ -1610,14 +1559,8 @@
                 "condition": {
                   "day": 4
                 },
-                "generationRate": 4,
-                "passengers": 203
-              },
-              {
-                "condition": {
-                  "day": 5
-                },
-                "passengers": 204
+                "generationRate": 2,
+                "passengers": 100
               }
             ]
           }
@@ -1641,19 +1584,11 @@
           {
             "cell": 55,
             "generationRate": 1,
-            "passengers": 51,
+            "passengers": 30,
             "unlock": {
               "day": 4
             },
-            "upgrades": [
-              {
-                "condition": {
-                  "day": 5
-                },
-                "generationRate": 4,
-                "passengers": 204
-              }
-            ]
+            "upgrades": []
           }
         ],
         "goals": [
@@ -1675,7 +1610,7 @@
           {
             "cell": 133,
             "generationRate": 1,
-            "passengers": 49,
+            "passengers": 30,
             "unlock": {
               "day": 5
             },

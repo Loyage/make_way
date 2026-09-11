@@ -16,7 +16,7 @@
     "bus": false
   },
   "budget": 27,
-  "duration": 60,
+  "duration": 30,
   "starTargets": {
     "satisfaction": 90,
     "efficiency": {
@@ -57,7 +57,7 @@
         {
           "cell": 36,
           "generationRate": 1,
-          "passengers": 54
+          "passengers": 20
         }
       ],
       "goals": [
@@ -244,5 +244,95 @@
       "cell": 135,
       "grade": 0
     }
-  ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "edges": [
+      [
+        36,
+        52
+      ],
+      [
+        52,
+        68
+      ],
+      [
+        68,
+        69
+      ],
+      [
+        69,
+        70
+      ],
+      [
+        70,
+        86
+      ],
+      [
+        86,
+        102
+      ],
+      [
+        102,
+        118
+      ],
+      [
+        118,
+        134
+      ],
+      [
+        132,
+        133
+      ],
+      [
+        133,
+        134
+      ]
+    ],
+    "levelId": "demolition-school",
+    "roads": [
+      {
+        "cell": 52,
+        "grade": 0
+      },
+      {
+        "cell": 68,
+        "grade": 0
+      },
+      {
+        "cell": 69,
+        "grade": 0
+      },
+      {
+        "cell": 70,
+        "grade": 0
+      },
+      {
+        "cell": 86,
+        "grade": 0
+      },
+      {
+        "cell": 102,
+        "grade": 0
+      },
+      {
+        "cell": 118,
+        "grade": 0
+      },
+      {
+        "cell": 133,
+        "grade": 0
+      },
+      {
+        "cell": 134,
+        "grade": 0
+      }
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [],
+    "activeBusLineId": null
+  }
 }

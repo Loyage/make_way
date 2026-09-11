@@ -26,6 +26,13 @@
       && satisfaction >= (condition.satisfaction || 0);
   }
 
+  function commuteSatisfaction(times, unarrived = 0) {
+    const scores=(Array.isArray(times)?times:[]).filter(time=>Number.isFinite(time)&&time>=0).map(time=>time<=8?100:time<=15?80:time<=25?60:30);
+    for(let i=0;i<Math.max(0,unarrived);i++)scores.push(30);
+    return scores.length?Math.round(scores.reduce((sum,score)=>sum+score,0)/scores.length):0;
+  }
+  function designFingerprint(design) { return JSON.stringify(design); }
+
   function migrateCampaignLevel(level) {
     if (!level?.campaign?.days?.some(day => Array.isArray(day.routes))) return level;
     const potential = [], routeByIndex = new Map();
@@ -93,6 +100,7 @@
       this.dayIndex = 0;
       this.results = [];
       this.checkpoints = [];
+      this.referenceDivergenceDay = null;
       this.city = this.createCity(0, this.level.budget);
     }
     routes(dayIndex = this.dayIndex) { return materializeCampaignRoutes(this.level, dayIndex, this.results.slice(0, dayIndex)); }
@@ -109,15 +117,34 @@
     createCity(dayIndex, budget, design = null) {
       const day = this.days[dayIndex], routes = this.routes(dayIndex);
       if (!routes.length) throw new RangeError(`Campaign day has no active route: ${this.level.id}`);
-      const city = new City(this.level.id, { routes, budget, duration: day.duration, deadlineMode: true, pendingBuildings: this.pendingBuildings(dayIndex) });
+      const city = new City(this.level.id, { routes, budget, duration: day.duration, pendingBuildings: this.pendingBuildings(dayIndex) });
       if (design) { const message = city.loadDesign(design); if (message) throw new Error(message); }
       return city;
     }
+    reference(dayIndex = this.dayIndex) { return this.days[dayIndex]?.referenceDesign || null; }
+    loadReference(dayIndex = this.dayIndex, ignoreDivergence = false) {
+      if(dayIndex!==this.dayIndex)return '只能加载当前日期的参考答案';
+      const reference=this.reference(dayIndex);if(!reference)return `第 ${dayIndex+1} 天尚未设置参考答案`;
+      if(!ignoreDivergence&&this.referenceDivergenceDay!==null&&this.referenceDivergenceDay<dayIndex)return `当前进度从第 ${this.referenceDivergenceDay+1} 天起已偏离参考方案`;
+      const message=this.city.loadDesign(reference);if(!message&&this.referenceDivergenceDay===dayIndex)this.referenceDivergenceDay=null;
+      return message;
+    }
     beginDay() {
       if (this.city.state !== 'planning') return this.city.toggle();
-      const design = this.city.serializeDesign(), message = this.city.toggle();
-      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: clone(design), results: clone(this.results) };
+      const design = this.city.serializeDesign(), reference=this.reference();
+      if(this.referenceDivergenceDay===null&&reference&&designFingerprint(design)!==designFingerprint(reference))this.referenceDivergenceDay=this.dayIndex;
+      const message = this.city.toggle();
+      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: clone(design), results: clone(this.results), referenceDivergenceDay: this.referenceDivergenceDay };
       return message;
+    }
+    runReferenceDay(step = 0.05) {
+      const day=this.dayIndex,message=this.loadReference(day,true);if(message)return {ok:false,day:day+1,error:message};
+      const begin=this.beginDay();if(begin)return {ok:false,day:day+1,error:begin};
+      const limit=Math.ceil(this.city.duration/step)+4;let count=0;
+      while(this.city.state==='running'&&count++<limit)this.city.step(step);
+      if(this.city.state!=='won')return {ok:false,day:day+1,error:`仅送达 ${this.city.delivered} / ${this.city.target} 人`};
+      const generated=this.city.generated.reduce((sum,value)=>sum+value,0),satisfaction=commuteSatisfaction(this.city.commuteTimes,Math.max(0,generated-this.city.delivered));
+      const result=this.advance(satisfaction);return {ok:true,day:day+1,result,complete:day===this.days.length-1};
     }
     settlement(satisfaction) {
       const day = this.days[this.dayIndex], population = this.city.homes.reduce((sum, home) => sum + home.passengers, 0);
@@ -139,10 +166,20 @@
       this.dayIndex = dayIndex;
       this.results = clone(checkpoint.results || this.results.slice(0, dayIndex));
       this.checkpoints = this.checkpoints.slice(0, dayIndex + 1);
+      this.referenceDivergenceDay = checkpoint.referenceDivergenceDay ?? null;
       this.city = this.createCity(dayIndex, checkpoint.budget, checkpoint.design);
       return '';
     }
   }
 
-  return { CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes };
+  function verifyCampaignReferenceChain(levelId, step = 0.05) {
+    let session;try{session=new CampaignSession(levelId);}catch(error){return {ok:false,day:1,error:error.message,results:[]};}
+    const results=[];
+    for(let day=0;day<session.days.length;day++){
+      const outcome=session.runReferenceDay(step);if(!outcome.ok)return {...outcome,results};results.push(outcome.result);
+    }
+    return {ok:true,days:session.days.length,results};
+  }
+
+  return { CampaignSession, campaignIncome, commuteSatisfaction, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, verifyCampaignReferenceChain };
 });

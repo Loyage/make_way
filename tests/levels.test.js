@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
+const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, verifyCampaignReferenceChain, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
 const { validateLevelCatalog } = require('../src/shared/level-validation.js');
 const { commuteReport, starReport } = require('../src/game/game-results.js');
 
@@ -105,8 +105,7 @@ test('multi-day campaign pays for quality, reveals construction, and replays che
   assert.equal(campaign.city.edit(0),'');
   assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);
   campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
-  assert.equal(campaign.city.state,'running','campaign days always run to the deadline');
-  campaign.city.state='won';
+  assert.equal(campaign.city.state,'won','campaign days end as soon as every resident arrives');
   const result=campaign.advance(100);assert.equal(result.population,42);assert.equal(result.delivered,42);assert.equal(result.income,18);assert.equal(campaign.dayIndex,1);
   assert.equal(campaign.city.budget,52);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
   assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);
@@ -117,6 +116,22 @@ test('campaign references respect the player actual accumulated budget', () => {
   const campaign=new CampaignSession('growing-city'),last=campaign.days.at(-1).referenceDesign;
   assert.throws(()=>campaign.createCity(campaign.days.length-1,campaign.level.budget,last),/建设预算不足/);
   assert.equal(campaign.dayIndex,0);assert.equal(campaign.city.state,'planning');
+});
+
+test('the complete campaign reference chain self-runs with actual results', () => {
+  const verified=verifyCampaignReferenceChain('growing-city');
+  assert.equal(verified.ok,true,verified.error);assert.equal(verified.days,5);assert.equal(verified.results.length,5);
+  assert.deepEqual(verified.results.map(result=>result.day),[1,2,3,4,5]);
+  assert.ok(verified.results.every(result=>result.delivered===result.population&&result.income>=0));
+});
+
+test('campaign reference help returns to the first divergent day', () => {
+  const campaign=new CampaignSession('growing-city');assert.equal(campaign.loadReference(0),'');
+  assert.equal(campaign.city.edit(0),'');assert.equal(campaign.beginDay(),'');assert.equal(campaign.referenceDivergenceDay,0);
+  while(campaign.city.state==='running')campaign.city.step(.05);
+  assert.equal(campaign.city.state,'won');campaign.advance(100);
+  assert.match(campaign.loadReference(1),/第 1 天起已偏离/);
+  assert.equal(campaign.replay(0),'');assert.equal(campaign.loadReference(0),'');assert.equal(campaign.referenceDivergenceDay,null);
 });
 
 test('multi-day campaign rewards rebuilding into affordable routes without intersections', () => {

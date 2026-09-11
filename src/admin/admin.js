@@ -33,7 +33,7 @@
   trySession();
 
   let catalog = null, chapterIndex = 0, levelIndex = 0, routeIndex = 0, dayIndex = 0;
-  let savedSnapshot = '', history = [], historyIndex = -1, validationTimer = 0, trial = null;
+  let savedSnapshot = '', previewSnapshot = '', history = [], historyIndex = -1, validationTimer = 0, trial = null;
   const verifiedLevels = new Map();
   const chapters = () => catalog?.chapters || [];
   const chapter = () => chapters()[chapterIndex] || null;
@@ -58,6 +58,11 @@
   function updateReferenceLevelIds(target,newId){if(target.referenceDesign)target.referenceDesign.levelId=newId;for(const day of target.campaign?.days||[])if(day.referenceDesign)day.referenceDesign.levelId=newId;}
   function dirtyLabel(text) {
     const dirty=snapshot()!==savedSnapshot,el=$('admin-dirty');el.classList.toggle('dirty',dirty);el.innerHTML=`<i></i>${text||(dirty?'草稿未发布':'已发布')}`;
+    updatePreviewState();
+  }
+  function updatePreviewState() {
+    const button=$('admin-apply-preview');if(!button)return;
+    const pending=snapshot()!==previewSnapshot;button.disabled=!pending;button.textContent=pending?'应用草稿到预览':'预览已同步';
   }
   function updateHistory() { $('admin-undo').disabled=historyIndex<=0;$('admin-redo').disabled=historyIndex>=history.length-1; }
   function pushHistory() {
@@ -81,12 +86,13 @@
   }
   function scheduleValidation(){clearTimeout(validationTimer);validationTimer=setTimeout(validate,350);}
   function preview(levelId = level()?.id) {
-    if (!levelId || !window.TrafficGameAdmin) return;
-    try { window.TrafficGameAdmin.applyCatalog(clone(catalog),levelId);dirtyLabel('草稿已同步预览'); }
-    catch(error){setStatus('预览失败：'+error.message,'invalid');}
+    if (!levelId || !window.TrafficGameAdmin) return false;
+    try { window.TrafficGameAdmin.applyCatalog(clone(catalog),levelId);previewSnapshot=snapshot();dirtyLabel('草稿已同步预览');return true; }
+    catch(error){setStatus('预览失败：'+error.message,'invalid');return false;}
   }
   function commit(action, options = {}) {
-    action();trial=null;syncCampaign();pushHistory();dirtyLabel();render();
+    action();trial=null;syncCampaign();pushHistory();dirtyLabel();
+    if(options.render!==false)render();else updateTrialStatus();
     if(options.preview!==false)preview(options.levelId || level()?.id);
     scheduleValidation();
   }
@@ -117,7 +123,7 @@
       const card=document.createElement('div');card.className='admin-building-card';
       const head=document.createElement('div');head.className='admin-card-title';head.innerHTML=`<strong>${kind==='home'?'住宅':'目的地'} ${index+1}</strong><span>格 ${building.cell}</span>`;
       const remove=document.createElement('button');remove.type='button';remove.className='tool admin-danger';remove.textContent='删除';remove.disabled=items.length<=1;remove.onclick=()=>commit(()=>{const target=level(),cell=building.cell;items.splice(index,1);cleanupVacatedBuilding(target,cell);});head.append(remove);card.append(head);
-      const make=(labelText,type,value,onchange)=>{const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.type=type;input.value=value??'';input.onchange=()=>commit(()=>onchange(input.value));label.append(input);return label;};
+      const make=(labelText,type,value,onchange)=>{const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.type=type;input.value=value??'';input.onchange=()=>commit(()=>onchange(input.value),{preview:false,render:false});label.append(input);return label;};
       card.append(make('格子索引','number',building.cell,value=>moveBuilding(building,Number(value))));
       if(kind==='home')card.append(make('产生率（人/秒）','number',building.generationRate??building.rate,value=>{building.generationRate=Number(value);delete building.rate;}),make('总人口','number',building.passengers,value=>building.passengers=Number(value)));
       else card.append(make('标签','text',building.label,value=>building.label=value),make('输入上限（空为不限）','number',building.input,value=>{if(value==='')delete building.input;else building.input=Number(value);}));
@@ -149,6 +155,9 @@
     if(target.campaign)dayIndex=Math.min(dayIndex,target.campaign.days.length-1);
     const reference=target.campaign?target.campaign.days[dayIndex]?.referenceDesign:target.referenceDesign,actualDay=window.TrafficGameAdmin?.campaignDayIndex(),trialActive=trial?.levelId===target.id&&trial.fingerprint===levelFingerprint(target);
     $('admin-reference-status').textContent=reference?`✓ 已设置${target.campaign?`第 ${dayIndex+1} 天`:'完整'}参考答案；玩家当日首次失败后可载入。`:target.campaign?`第 ${dayIndex+1} 天尚未设置参考答案。`:'本关尚未设置参考答案。';
+    $('admin-prepare-reference-day').hidden=!target.campaign;
+    $('admin-verify-reference-chain').hidden=!target.campaign;
+    $('admin-load-reference').disabled=!reference;
     $('admin-delete-reference').disabled=!reference;
     $('admin-capture-reference').disabled=Boolean(target.campaign)&&(!trialActive||actualDay===null);
     if(target.campaign){const day=target.campaign.days[dayIndex],dayStars=day.starTargets||stars;fillSelect($('admin-campaign-day'),target.campaign.days.map((_,index)=>option(index,`第 ${index+1} 天`)),dayIndex);$('admin-day-duration').value=day.duration;$('admin-day-income').value=day.maxIncome;$('admin-day-star-satisfaction').value=dayStars.satisfaction;$('admin-day-star-cost').value=dayStars.efficiency.maxCost;$('admin-day-star-queue').value=dayStars.efficiency.maxQueue;}
@@ -156,18 +165,18 @@
     const buildingOptions=[];routes().forEach((item,ri)=>{item.homes.forEach((_,bi)=>buildingOptions.push(option(`h:${ri}:${bi}`,`${item.name} · 住宅 ${bi+1}`)));item.goals.forEach((_,bi)=>buildingOptions.push(option(`g:${ri}:${bi}`,`${item.name} · 目的地 ${bi+1}`)));});fillSelect($('admin-building-target'),buildingOptions,$('admin-building-target').value||buildingOptions[0]?.value||'');
     $('admin-move-up').disabled=levelIndex===0;$('admin-move-down').disabled=levelIndex===(chapter()?.levels.length||1)-1;$('admin-delete-level').disabled=allLevels().length<=1;updateTrialStatus();
   }
-  function bindField(id,property,numeric=false){$(id).onchange=()=>commit(()=>{const target=level(),value=numeric?Number($(id).value):$(id).value;target[property]=value;if(property==='id')updateReferenceLevelIds(target,value);});}
+  function bindField(id,property,numeric=false){$(id).onchange=()=>commit(()=>{const target=level(),value=numeric?Number($(id).value):$(id).value;target[property]=value;if(property==='id')updateReferenceLevelIds(target,value);},{preview:false,render:false});}
 
   function startEditor() {
-    catalog=window.TrafficAdminCatalog;savedSnapshot=snapshot();history=[savedSnapshot];historyIndex=0;trustCurrentCatalog();updateHistory();dirtyLabel();render();scheduleValidation();
+    catalog=window.TrafficAdminCatalog;savedSnapshot=snapshot();previewSnapshot=savedSnapshot;history=[savedSnapshot];historyIndex=0;trustCurrentCatalog();updateHistory();dirtyLabel();render();scheduleValidation();
     $('admin-chapter').onchange=()=>{chapterIndex=Number($('admin-chapter').value);levelIndex=0;routeIndex=0;dayIndex=0;render();window.TrafficGameAdmin.selectLevel(level().id);};
     $('admin-level').onchange=()=>{levelIndex=Number($('admin-level').value);routeIndex=0;dayIndex=0;render();window.TrafficGameAdmin.selectLevel(level().id);};
     for(const [id,property,numeric] of [['admin-id','id'],['admin-name','name'],['admin-english','english'],['admin-difficulty','difficulty'],['admin-lesson','lesson'],['admin-budget','budget',true],['admin-duration','duration',true],['admin-bus-limit','busLineLimit',true],['admin-title','title'],['admin-description','description'],['admin-tip','tip']])bindField(id,property,numeric);
     const updateStars=(target,id,property)=>{target.starTargets||={satisfaction:80,efficiency:{maxCost:level().budget,maxQueue:20}};if(property==='satisfaction')target.starTargets.satisfaction=Number($(id).value);else target.starTargets.efficiency[property]=Number($(id).value);};
-    for(const [id,property] of [['admin-star-satisfaction','satisfaction'],['admin-star-cost','maxCost'],['admin-star-queue','maxQueue']])$(id).onchange=()=>commit(()=>updateStars(level(),id,property));
-    for(const input of $('admin-features').querySelectorAll('[data-feature]'))input.onchange=()=>commit(()=>{level().features||={};level().features[input.dataset.feature]=input.checked;});
+    for(const [id,property] of [['admin-star-satisfaction','satisfaction'],['admin-star-cost','maxCost'],['admin-star-queue','maxQueue']])$(id).onchange=()=>commit(()=>updateStars(level(),id,property),{preview:false,render:false});
+    for(const input of $('admin-features').querySelectorAll('[data-feature]'))input.onchange=()=>commit(()=>{level().features||={};level().features[input.dataset.feature]=input.checked;},{preview:false,render:false});
     $('admin-route').onchange=()=>{routeIndex=Number($('admin-route').value);render();};
-    for(const [id,property] of [['admin-route-name','name'],['admin-route-color','color'],['admin-route-light','light']])$(id).onchange=()=>commit(()=>route()[property]=$(id).value);
+    for(const [id,property] of [['admin-route-name','name'],['admin-route-color','color'],['admin-route-light','light']])$(id).onchange=()=>commit(()=>route()[property]=$(id).value,{preview:false,render:false});
     $('admin-add-route').onclick=()=>commit(()=>{const width=level().width||16;routes().push({name:'新路线 → 目的地',color:'#638d69',light:'#dae6cb',homes:[{cell:currentCellFallback(),generationRate:1,passengers:60}],goals:[{cell:currentCellFallback(width+5),label:'目的地'}]});routeIndex=routes().length-1;});
     $('admin-delete-route').onclick=()=>{if(routes().length<=1)return setStatus('每关至少保留一条路线','invalid');if(confirm(`删除路线「${route().name}」？`))commit(()=>{const target=level(),cells=[...route().homes,...route().goals].map(building=>building.cell);routes().splice(routeIndex,1);routeIndex=Math.max(0,routeIndex-1);for(const cell of cells)cleanupVacatedBuilding(target,cell);});};
     $('admin-add-home').onclick=()=>commit(()=>route().homes.push({cell:currentCellFallback(route().homes.length),generationRate:1,passengers:60}));
@@ -183,9 +192,9 @@
     $('admin-apply-size').onclick=()=>{const target=level(),oldWidth=target.width||16,oldHeight=target.height||12,width=Number($('admin-width').value),height=Number($('admin-height').value);if(!Number.isInteger(width)||!Number.isInteger(height)||width<8||width>64||height<8||height>64)return setStatus('地图宽高必须是 8 至 64 的整数','invalid');if(width===oldWidth&&height===oldHeight)return;const dx=Math.floor(width/2)-Math.floor(oldWidth/2),dy=Math.floor((height-1)/2)-Math.floor((oldHeight-1)/2),translate=cell=>{const x=cell%oldWidth+dx,y=Math.floor(cell/oldWidth)+dy;return x>=0&&x<width&&y>=0&&y<height?y*width+x:null;};const routeSets=[target.routes,...(target.campaign?.routes?[target.campaign.routes]:[])],buildings=routeSets.flatMap(items=>items.flatMap(item=>[...item.homes,...item.goals]));if(buildings.some(item=>translate(item.cell)===null))return setStatus('新边界会裁掉建筑，请先移动建筑','invalid');if(!confirm(`将地图从 ${oldWidth} × ${oldHeight} 调整为 ${width} × ${height}？边界外地形和道路会被裁掉。`))return;commit(()=>{const mapCells=values=>values.map(translate).filter(cell=>cell!==null);target.water=mapCells(target.water);target.bridges=mapCells(target.bridges);target.trees=mapCells(target.trees);target.initialRoads=(target.initialRoads||[]).map(road=>({...road,cell:translate(road.cell)})).filter(road=>road.cell!==null);target.initialEdges=(target.initialEdges||[]).map(([a,b])=>[translate(a),translate(b)]).filter(([a,b])=>a!==null&&b!==null);for(const building of buildings)building.cell=translate(building.cell);target.width=width;target.height=height;});};
     $('admin-campaign-enabled').onchange=()=>commit(()=>{const target=level();if($('admin-campaign-enabled').checked){delete target.referenceDesign;target.campaign={days:Array.from({length:5},(_,i)=>({duration:target.duration,maxIncome:18+i*2,starTargets:clone(target.starTargets||{satisfaction:80,efficiency:{maxCost:target.budget,maxQueue:20}})})),routes:clone(target.routes)};for(const item of target.campaign.routes)for(const building of [...item.homes,...item.goals]){building.unlock={day:1};building.upgrades=[];}}else{target.routes=clone(target.campaign.routes);delete target.campaign;}dayIndex=0;routeIndex=0;});
     $('admin-campaign-day').onchange=()=>{dayIndex=Number($('admin-campaign-day').value);render();};
-    $('admin-day-duration').onchange=()=>commit(()=>{level().campaign.days[dayIndex].duration=Number($('admin-day-duration').value);if(dayIndex===0)level().duration=Number($('admin-day-duration').value);});
-    $('admin-day-income').onchange=()=>commit(()=>level().campaign.days[dayIndex].maxIncome=Number($('admin-day-income').value));
-    for(const [id,property] of [['admin-day-star-satisfaction','satisfaction'],['admin-day-star-cost','maxCost'],['admin-day-star-queue','maxQueue']])$(id).onchange=()=>commit(()=>updateStars(level().campaign.days[dayIndex],id,property));
+    $('admin-day-duration').onchange=()=>commit(()=>{level().campaign.days[dayIndex].duration=Number($('admin-day-duration').value);if(dayIndex===0)level().duration=Number($('admin-day-duration').value);},{preview:false,render:false});
+    $('admin-day-income').onchange=()=>commit(()=>level().campaign.days[dayIndex].maxIncome=Number($('admin-day-income').value),{preview:false,render:false});
+    for(const [id,property] of [['admin-day-star-satisfaction','satisfaction'],['admin-day-star-cost','maxCost'],['admin-day-star-queue','maxQueue']])$(id).onchange=()=>commit(()=>updateStars(level().campaign.days[dayIndex],id,property),{preview:false,render:false});
     $('admin-add-day').onclick=()=>commit(()=>{const days=level().campaign.days;if(days.length>=30)return;const added=clone(days.at(-1));delete added.referenceDesign;days.push(added);dayIndex=days.length-1;});
     $('admin-delete-day').onclick=()=>{if(level().campaign.days.length<=2)return setStatus('多日任务至少保留两天','invalid');commit(()=>{level().campaign.days.pop();dayIndex=Math.min(dayIndex,level().campaign.days.length-1);});};
     for(const button of document.querySelectorAll('[data-terrain]'))button.onclick=()=>{const cells=selectedCells();if(!cells.length)return setStatus('请先选择地图格子','invalid');const occupied=new Set(routes().flatMap(item=>[...item.homes,...item.goals].map(building=>building.cell)));if(cells.some(cell=>occupied.has(cell)))return setStatus('建筑所在格不能修改地形','invalid');commit(()=>{const target=level(),chosen=new Set(cells),remove=name=>target[name]=target[name].filter(cell=>!chosen.has(cell));remove('water');remove('bridges');remove('trees');if(button.dataset.terrain==='water')target.water.push(...cells);if(button.dataset.terrain==='bridge'){target.water.push(...cells);target.bridges.push(...cells);}if(button.dataset.terrain==='tree')target.trees.push(...cells);target.water=[...new Set(target.water)];target.bridges=[...new Set(target.bridges)];target.trees=[...new Set(target.trees)];if(button.dataset.terrain!=='bridge'){target.initialRoads=(target.initialRoads||[]).filter(road=>!chosen.has(road.cell));target.initialEdges=(target.initialEdges||[]).filter(([a,b])=>!chosen.has(a)&&!chosen.has(b));}});};
@@ -198,15 +207,31 @@
       if(!active||actualDay===null)return setStatus('请先验证并试玩，再推进到要保存答案的日期','invalid');
       target.campaign.days[actualDay].referenceDesign=clone(design);dayIndex=actualDay;syncCampaign();pushHistory();dirtyLabel();trial.fingerprint=levelFingerprint(target);render();scheduleValidation();setStatus(`已将试玩中的第 ${actualDay+1} 天完整设计保存为参考答案草稿`,'valid');
     };
+    const prepareReferenceDay=()=>{
+      const target=level();if(!target.campaign)return '当前关卡不是多日任务';if(snapshot()!==previewSnapshot||window.TrafficGameAdmin.currentLevelId()!==target.id){if(!preview(target.id))return '草稿无法应用到预览';}
+      const message=window.TrafficGameAdmin.prepareCampaignReferenceDay(dayIndex);if(message)return message;
+      trial={levelId:target.id,fingerprint:levelFingerprint(target)};render();return '';
+    };
+    $('admin-prepare-reference-day').onclick=()=>{const message=prepareReferenceDay();if(message)return setStatus(message,'invalid');setStatus(`✓ 已按前序参考答案自动运行并进入第 ${dayIndex+1} 天，可以规划或保存该日答案`,'valid');};
+    $('admin-load-reference').onclick=()=>{
+      const target=level(),reference=target.campaign?target.campaign.days[dayIndex]?.referenceDesign:target.referenceDesign;if(!reference)return setStatus('当前选择尚未设置参考答案','invalid');
+      if(target.campaign){const message=prepareReferenceDay();if(message)return setStatus('参考答案加载失败：'+message,'invalid');setStatus(`✓ 已自动运行前序答案并加载第 ${dayIndex+1} 天参考答案，可以直接运营或继续调整`,'valid');return;}
+      const game=window.TrafficGameAdmin;if((game.currentLevelId()!==target.id||snapshot()!==previewSnapshot)&&!preview(target.id))return;
+      const message=game.applyDesign(clone(reference));if(message)return setStatus('参考答案加载失败：'+message,'invalid');
+      setStatus('✓ 已加载本关参考答案，可以直接运营或继续调整','valid');
+    };
+    $('admin-verify-reference-chain').onclick=()=>{const target=level();if(!target.campaign)return;if(snapshot()!==previewSnapshot&&!preview(target.id))return;setStatus('正在自动运行完整参考答案链…');setTimeout(()=>{const result=TrafficCore.verifyCampaignReferenceChain(target.id);if(!result.ok)return setStatus(`✕ 第 ${result.day} 天参考答案运行失败：${result.error}`,'invalid');setStatus(`✓ ${result.days} 天参考答案已按顺序自动运行并全部通关`,'valid');},0);};
     $('admin-delete-reference').onclick=()=>{const target=level(),reference=target.campaign?target.campaign.days[dayIndex]?.referenceDesign:target.referenceDesign;if(!reference)return;if(confirm(`删除${target.campaign?`第 ${dayIndex+1} 天`:'本关'}参考答案？`))commit(()=>{if(target.campaign)delete target.campaign.days[dayIndex].referenceDesign;else delete target.referenceDesign;});};
+    $('admin-apply-preview').onclick=()=>{if(preview())setStatus('✓ 已将当前草稿一次性应用到游戏预览','valid');};
     $('admin-undo').onclick=()=>restore(historyIndex-1);$('admin-redo').onclick=()=>restore(historyIndex+1);
     $('admin-verify-play').onclick=async()=>{if(!await validate())return;preview();trial={levelId:level().id,fingerprint:levelFingerprint(level())};render();document.body.classList.add('admin-collapsed');$('admin-expand').hidden=false;$('map').scrollIntoView({block:'center'});};
-    $('admin-publish').onclick=async()=>{if(!await validate())return;const pending=unverifiedLevels();if(pending.length){setStatus(`✕ ${pending.length} 个修改后的关卡尚未通关`,'invalid',pending.map(item=>({message:`关卡「${item.id}」须先验证并试玩通关`,chapterId:chapters().find(chapter=>chapter.levels.includes(item))?.id||null,levelId:item.id,path:null,cell:null})));return;}try{await api('/api/levels',{method:'PUT',body:JSON.stringify(catalog)});savedSnapshot=snapshot();history=[savedSnapshot];historyIndex=0;trial=null;trustCurrentCatalog();updateHistory();dirtyLabel('已发布到关卡文件');render();setStatus('✓ 发布成功；管理员预览已是最新草稿，公开游戏服务重启后生效','valid');}catch(error){setStatus('发布失败：'+error.message,'invalid');}};
+    $('admin-publish').onclick=async()=>{if(!await validate())return;const pending=unverifiedLevels();if(pending.length){setStatus(`✕ ${pending.length} 个修改后的关卡尚未通关`,'invalid',pending.map(item=>({message:`关卡「${item.id}」须先验证并试玩通关`,chapterId:chapters().find(chapter=>chapter.levels.includes(item))?.id||null,levelId:item.id,path:null,cell:null})));return;}try{await api('/api/levels',{method:'PUT',body:JSON.stringify(catalog)});savedSnapshot=snapshot();history=[savedSnapshot];historyIndex=0;trial=null;trustCurrentCatalog();updateHistory();dirtyLabel('已发布到关卡文件');render();setStatus('✓ 发布成功；点击面板底部“重启游戏服务”后对公开玩家生效','valid');}catch(error){setStatus('发布失败：'+error.message,'invalid');}};
+    $('admin-restart-game').onclick=async()=>{const button=$('admin-restart-game'),label=button.textContent;button.disabled=true;button.textContent='正在重启…';setStatus('正在重启公开游戏服务…');try{await api('/api/game-service/restart',{method:'POST'});setStatus('✓ 游戏服务已重启并处于运行状态','valid');}catch(error){setStatus(error.message,'invalid');}finally{button.disabled=false;button.textContent=label;}};
     $('admin-reload').onclick=async()=>{if(snapshot()!==savedSnapshot&&!confirm('放弃所有未发布草稿并重新载入？'))return;try{catalog=clone((await api('/api/levels')).catalog);savedSnapshot=snapshot();history=[savedSnapshot];historyIndex=0;trial=null;trustCurrentCatalog();chapterIndex=levelIndex=routeIndex=dayIndex=0;render();preview();dirtyLabel();updateHistory();scheduleValidation();}catch(error){setStatus(error.message,'invalid');}};
     $('admin-logout').onclick=async()=>{if(snapshot()!==savedSnapshot&&!confirm('仍有未发布草稿，确定退出？'))return;await api('/api/logout',{method:'POST'});location.reload();};
     $('admin-collapse').onclick=()=>{document.body.classList.add('admin-collapsed');$('admin-expand').hidden=false;};$('admin-expand').onclick=()=>{document.body.classList.remove('admin-collapsed');$('admin-expand').hidden=true;};
     $('map').addEventListener('pointerup',()=>setTimeout(render,0));document.addEventListener('keyup',event=>{if(event.key===' '||event.key.startsWith('Arrow'))setTimeout(render,0);});
-    window.addEventListener('traffic-game-levelchange',event=>{const id=event.detail?.levelId;for(let ci=0;ci<chapters().length;ci++){const li=chapters()[ci].levels.findIndex(item=>item.id===id);if(li>=0){chapterIndex=ci;levelIndex=li;routeIndex=0;dayIndex=0;render();break;}}});
+    window.addEventListener('traffic-game-levelchange',event=>{const id=event.detail?.levelId;for(let ci=0;ci<chapters().length;ci++){const li=chapters()[ci].levels.findIndex(item=>item.id===id);if(li>=0){if(ci!==chapterIndex||li!==levelIndex){chapterIndex=ci;levelIndex=li;routeIndex=0;dayIndex=0;render();}break;}}});
     window.addEventListener('traffic-game-result',event=>{const detail=event.detail||{},target=allLevels().find(item=>item.id===detail.levelId);if(!detail.won||!detail.complete||!target||trial?.levelId!==target.id||trial.fingerprint!==levelFingerprint(target))return;verifiedLevels.set(target.id,trial.fingerprint);trial=null;render();setStatus(`✓ 「${target.name}」已实际通关，可以发布当前版本`,'valid');document.body.classList.remove('admin-collapsed');$('admin-expand').hidden=true;});
     window.addEventListener('beforeunload',event=>{if(snapshot()!==savedSnapshot){event.preventDefault();event.returnValue='';}});
   }

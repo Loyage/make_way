@@ -15,8 +15,8 @@
     "signals": false,
     "bus": false
   },
-  "budget": 52,
-  "duration": 65,
+  "budget": 25,
+  "duration": 30,
   "starTargets": {
     "satisfaction": 90,
     "efficiency": {
@@ -71,7 +71,7 @@
       "homes": [
         {
           "cell": 54,
-          "generationRate": 1,
+          "generationRate": 4,
           "passengers": 60
         }
       ],
@@ -85,6 +85,10 @@
   ],
   "initialEdges": [
     [
+      54,
+      70
+    ],
+    [
       69,
       70
     ],
@@ -95,6 +99,10 @@
     [
       71,
       72
+    ],
+    [
+      71,
+      87
     ],
     [
       72,
@@ -117,24 +125,16 @@
       88
     ],
     [
+      87,
+      103
+    ],
+    [
       88,
       89
     ],
     [
       89,
       90
-    ],
-    [
-      71,
-      87
-    ],
-    [
-      103,
-      87
-    ],
-    [
-      54,
-      70
     ]
   ],
   "version": 2,
@@ -171,5 +171,151 @@
       "cell": 89,
       "grade": 0
     }
-  ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "edges": [
+      [
+        52,
+        53
+      ],
+      [
+        52,
+        68
+      ],
+      [
+        53,
+        54
+      ],
+      [
+        68,
+        84
+      ],
+      [
+        69,
+        70
+      ],
+      [
+        70,
+        71
+      ],
+      [
+        71,
+        72
+      ],
+      [
+        72,
+        73
+      ],
+      [
+        73,
+        74
+      ],
+      [
+        84,
+        100
+      ],
+      [
+        85,
+        86
+      ],
+      [
+        86,
+        87
+      ],
+      [
+        87,
+        88
+      ],
+      [
+        88,
+        89
+      ],
+      [
+        89,
+        90
+      ],
+      [
+        100,
+        101
+      ],
+      [
+        101,
+        102
+      ],
+      [
+        102,
+        103
+      ]
+    ],
+    "levelId": "cut-school",
+    "roads": [
+      {
+        "cell": 52,
+        "grade": 1
+      },
+      {
+        "cell": 53,
+        "grade": 1
+      },
+      {
+        "cell": 68,
+        "grade": 1
+      },
+      {
+        "cell": 70,
+        "grade": 0
+      },
+      {
+        "cell": 71,
+        "grade": 0
+      },
+      {
+        "cell": 72,
+        "grade": 0
+      },
+      {
+        "cell": 73,
+        "grade": 0
+      },
+      {
+        "cell": 84,
+        "grade": 1
+      },
+      {
+        "cell": 86,
+        "grade": 0
+      },
+      {
+        "cell": 87,
+        "grade": 0
+      },
+      {
+        "cell": 88,
+        "grade": 0
+      },
+      {
+        "cell": 89,
+        "grade": 0
+      },
+      {
+        "cell": 100,
+        "grade": 1
+      },
+      {
+        "cell": 101,
+        "grade": 1
+      },
+      {
+        "cell": 102,
+        "grade": 1
+      }
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [],
+    "activeBusLineId": null
+  }
 }
