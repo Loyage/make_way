@@ -7,16 +7,24 @@
     Object.freeze({ max: 25, label: '尚可接受', satisfaction: 60 }),
     Object.freeze({ max: Infinity, label: '漫长等待', satisfaction: 30 })
   ]);
+  function satisfactionBand(time) {
+    if (!Number.isFinite(time) || time < 0) return null;
+    return BANDS.findIndex(band => time <= band.max);
+  }
   function commuteReport(times, unarrived = 0) {
     const valid = Array.isArray(times) ? times.filter(n => Number.isFinite(n) && n >= 0) : [];
     const pending = Number.isInteger(unarrived) && unarrived > 0 ? unarrived : 0;
-    const bands = BANDS.map(band => ({ ...band, count: valid.filter(time => time <= band.max && (BANDS.indexOf(band) === 0 || time > BANDS[BANDS.indexOf(band) - 1].max)).length }));
+    const bands = BANDS.map((band,index) => ({ ...band, count: valid.filter(time => satisfactionBand(time) === index).length }));
     bands[bands.length - 1].count += pending;
     const count = valid.length + pending;
     const score = count ? Math.round(bands.reduce((sum, band) => sum + band.count * band.satisfaction, 0) / count) : 0;
     const average = valid.length ? valid.reduce((sum, time) => sum + time, 0) / valid.length : 0;
     const sorted=[...valid].sort((a,b)=>a-b),p95=sorted.length?sorted[Math.max(0,Math.ceil(sorted.length*.95)-1)]:0;
     return { count, score, average, p95, bands };
+  }
+  function liveCommuteReport(completedTimes, activeTimes) {
+    const completed=Array.isArray(completedTimes)?completedTimes:[],active=Array.isArray(activeTimes)?activeTimes:[];
+    return commuteReport([...completed,...active]);
   }
   function starReport(targets, metrics) {
     if (!targets || typeof targets !== 'object') return { count: 0, earned: [], goals: [] };
@@ -28,7 +36,7 @@
     ];
     return { count:goals.filter(goal=>goal.earned).length,earned:goals.filter(goal=>goal.earned).map(goal=>goal.id),goals };
   }
-  const api = { BANDS, commuteReport, starReport };
+  const api = { BANDS, satisfactionBand, commuteReport, liveCommuteReport, starReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficResults = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

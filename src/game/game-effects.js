@@ -1,6 +1,20 @@
 /* Lightweight arrival celebrations, isolated from simulation and input. */
 (function (root) {
   'use strict';
+  const MOODS = Object.freeze([
+    Object.freeze({ symbol: '☺', color: '#317a57' }),
+    Object.freeze({ symbol: '☺', color: '#79924f' }),
+    Object.freeze({ symbol: '—', color: '#c38a51' }),
+    Object.freeze({ symbol: '☹', color: '#b9574d' })
+  ]);
+  function drawResidentMood(ctx, x, y, size, bandIndex, count = 1, bob = 0) {
+    const mood=MOODS[Math.max(0,Math.min(MOODS.length-1,bandIndex))]||MOODS[0],radius=Math.max(7,size*.16),cy=y+bob;
+    ctx.save();ctx.globalAlpha=.96;ctx.fillStyle='#fffef9';ctx.strokeStyle=mood.color;ctx.lineWidth=Math.max(1.5,size*.028);
+    ctx.beginPath();ctx.arc(x,cy,radius,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle=mood.color;ctx.font=`700 ${Math.max(10,size*.21)}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(mood.symbol,x,cy-size*.006);
+    if(count>1){const text=count>99?'99+':String(count),badgeRadius=Math.max(5,size*.095);ctx.fillStyle=mood.color;ctx.beginPath();ctx.arc(x+radius*.78,cy-radius*.76,badgeRadius,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fffef9';ctx.font=`700 ${Math.max(7,size*.105)}px system-ui, sans-serif`;ctx.fillText(text,x+radius*.78,cy-radius*.76);}
+    ctx.restore();
+  }
   function createArrivalEffects() {
     const effects = [];
     let seen = 0;
@@ -33,7 +47,7 @@
     }
     return { reset, sync, step, draw };
   }
-  const api = { createArrivalEffects };
+  const api = { MOODS, drawResidentMood, createArrivalEffects };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficEffects = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

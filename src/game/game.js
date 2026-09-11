@@ -22,7 +22,7 @@
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null;
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
-  const arrivalEffects = TrafficEffects.createArrivalEffects();
+  const arrivalEffects = TrafficEffects.createArrivalEffects(),drawResidentMood=TrafficEffects.drawResidentMood;
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
   const PERSONAL_BEST_PREFIX = 'traffic-game-personal-best-v1:';
@@ -546,6 +546,8 @@
         const text=`待${queued}`,width=(queued>99?.43:queued>9?.37:.31)*s;
         rounded((x+.95)*s-width,(y+.705)*s,width,s*.225,s*.1,'#bd7750');
         label(text,(x+.95)*s-width/2,(y+.815)*s,s*.145,'#fffef9','700');
+        const ages=(city.queueTimes[b.index]||[]).map(started=>Math.max(0,city.elapsed-started)),age=ages.length?Math.max(...ages):0,band=TrafficResults.satisfactionBand(age),affected=ages.filter(value=>TrafficResults.satisfactionBand(value)===band).length;
+        if(age>8)drawResidentMood(ctx,(x+.18)*s,(y+.55)*s,s,band,affected,Math.sin(city.elapsed*3+b.index)*s*.025);
       }
     } else {
       buildingBubble(r.input==null?'∞':String(Math.max(0,r.input-city.goalAssigned[b.index])), (x+.53)*s,(y+.025)*s,s*.43,s*.27,'#fffef9ee',r.color,r.color);
@@ -667,6 +669,7 @@
     city.goals.forEach((g,i)=>drawBuilding({...g,isHome:false,index:i}));
     // Road paint sits below vehicles, so it reads as part of the grid.
     for(const n of city.signals.keys()) drawSignalMarkings(n);
+    let carMoodCount=0;
     for(const car of city.cars) {
       const pose=city.pose(car),length=VEHICLE_LENGTH*s,width=VEHICLE_WIDTH*s;
       ctx.save();ctx.translate(pose.x*s,pose.y*s);ctx.rotate(pose.angle);
@@ -675,6 +678,8 @@
       rounded(length*.1,-width*.36,length*.2,width*.72,s*.01,'#f5f6e9bb');
       if(car.blocked>1) circle(-length*.55,0,s*.018,'#e2a15e');
       ctx.restore();
+      const age=Math.max(0,city.elapsed-(car.commuteStarted??city.elapsed));
+      if(age>8&&carMoodCount<18){drawResidentMood(ctx,pose.x*s,pose.y*s-s*.24,s,TrafficResults.satisfactionBand(age),1,Math.sin(city.elapsed*3+car.id)*s*.025);carMoodCount++;}
     }
     for(const bus of city.buses) {
       if(bus.active===false)continue;
@@ -690,7 +695,10 @@
       ctx.restore();
       rounded(pose.x*s-s*.2,pose.y*s-s*.285,s*.4,s*.2,s*.1,'#f2bd4f','#173f49');
       label(`${bus.passengers.length}/${BUS_CAPACITY}`,pose.x*s,pose.y*s-s*.185,s*.115,'#173f49','800');
+      const ages=bus.passengers.map(passenger=>Math.max(0,city.elapsed-passenger.commuteStarted)),age=ages.length?Math.max(...ages):0,band=TrafficResults.satisfactionBand(age),affected=ages.filter(value=>TrafficResults.satisfactionBand(value)===band).length;
+      if(age>8)drawResidentMood(ctx,pose.x*s,pose.y*s-s*.48,s,band,affected,Math.sin(city.elapsed*3+(bus.id||0))*s*.025);
     }
+    for(const [cell,passengers] of city.transferQueues||[])if(passengers.length){const ages=passengers.map(passenger=>Math.max(0,city.elapsed-passenger.commuteStarted)),age=Math.max(...ages),band=TrafficResults.satisfactionBand(age),affected=ages.filter(value=>TrafficResults.satisfactionBand(value)===band).length;if(age>8){const p=point(cell);drawResidentMood(ctx,(p.x+.5)*s,(p.y+.2)*s,s,band,affected,Math.sin(city.elapsed*3+cell)*s*.025);}}
     arrivalEffects.draw(ctx, point, s);
     if(tool==='select'&&selection) {
       const a=point(selection.start),b=point(selection.end),x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(a.x-b.x)+1,rh=Math.abs(a.y-b.y)+1;
@@ -716,6 +724,15 @@
     }
     ctx.restore();
   }
+  function liveSatisfactionReport() {
+    const active=[];
+    for(const times of city.queueTimes)for(const started of times)active.push(Math.max(0,city.elapsed-started));
+    for(const car of city.cars)active.push(Math.max(0,city.elapsed-(car.commuteStarted??city.elapsed)));
+    for(const bus of city.buses)for(const passenger of bus.passengers)active.push(Math.max(0,city.elapsed-passenger.commuteStarted));
+    for(const passenger of city.transferPassengers())active.push(Math.max(0,city.elapsed-passenger.commuteStarted));
+    if(city.state==='lost')return TrafficResults.commuteReport(city.commuteTimes,Math.max(0,city.generated.reduce((sum,count)=>sum+count,0)-city.delivered));
+    return TrafficResults.liveCommuteReport(city.commuteTimes,active);
+  }
   function updateUI() {
     updateHistoryControls();
     $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
@@ -724,6 +741,10 @@
     const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
     $('timer').textContent=city.sandbox?'∞':String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
     const homeWaiting=city.queues.reduce((a,b)=>a+b,0),transferWaiting=city.transferPassengers().length,waiting=homeWaiting+transferWaiting,blocked=[...city.cars,...city.buses].filter(c=>c.blocked>1.5).length;
+    const satisfaction=liveSatisfactionReport(),dominant=satisfaction.count?satisfaction.bands.reduce((worst,band,index)=>band.count?index:worst,0):null,mood=dominant===null?null:TrafficEffects.MOODS[dominant];
+    $('satisfaction').textContent=satisfaction.count?satisfaction.score:'--';$('satisfaction').style.color=mood?.color||'#7c877e';
+    $('satisfaction-label').textContent=satisfaction.count?`${mood.symbol} ${dominant?'有人'+satisfaction.bands[dominant].label:satisfaction.bands[dominant].label}`:'尚未出发';
+    $('satisfaction-note').textContent=satisfaction.count?`正在统计 ${satisfaction.count} 位已产生居民`:'通勤越久，满意度越低';
     const heavy=blocked>3||waiting>18, neutral=['planning','paused','lost'].includes(city.state);
     $('traffic').textContent=city.state==='planning'?'等待出发':city.state==='paused'?'运营已暂停':city.state==='won'?'目标已达成':city.state==='lost'?'本轮已结束':heavy?'有些拥堵':waiting>6?'等待接通':'畅通无阻';
     $('traffic').style.color=neutral?'#7c877e':heavy?'#c38a51':'#317a57';$('traffic-dot').style.background=neutral?'#aab3a5':heavy?'#c38a51':'#73a780';

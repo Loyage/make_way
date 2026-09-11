@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createArrivalEffects } = require('../src/game/game-effects.js');
+const { drawResidentMood, createArrivalEffects } = require('../src/game/game-effects.js');
 
 test('arrival celebration is drawn at the destination recorded by the vehicle', () => {
   const effects=createArrivalEffects(),visited=[],arcs=[];
@@ -17,6 +17,15 @@ test('arrival celebration is drawn at the destination recorded by the vehicle', 
   assert.deepEqual(visited,[42,42,42,42,42,42,42]);
   assert.equal(arcs.length,7);
   assert.ok(arcs.every(args=>args.every(Number.isFinite)));
+});
+
+test('resident mood draws a colored face and passenger-count badge', () => {
+  const text=[],arcs=[];
+  const ctx={save(){},restore(){},beginPath(){},arc(...args){arcs.push(args);},fill(){},stroke(){},fillText(value){text.push(value);}};
+  drawResidentMood(ctx,20,30,40,3,12,2);
+  assert.deepEqual(text,['☹','12']);
+  assert.equal(arcs.length,2);
+  assert.ok(arcs.flat().every(Number.isFinite));
 });
 
 test('arrival celebration supports normalized route goals as a fallback', () => {

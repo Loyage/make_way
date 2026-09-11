@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { commuteReport, starReport } = require('../src/game/game-results.js');
+const { satisfactionBand, commuteReport, liveCommuteReport, starReport } = require('../src/game/game-results.js');
 
 test('commute satisfaction groups residents by travel time and weights their score', () => {
   const report = commuteReport([5, 8, 10, 20, 30]);
@@ -9,6 +9,13 @@ test('commute satisfaction groups residents by travel time and weights their sco
   assert.equal(report.score, 74);
   assert.equal(report.average, 14.6);
   assert.equal(report.p95, 30);
+});
+
+test('live satisfaction falls as waiting and in-transit commute time grows', () => {
+  const report=liveCommuteReport([5],[7,10,20,30]);
+  assert.deepEqual(report.bands.map(band=>band.count),[2,1,1,1]);
+  assert.equal(report.score,74);
+  assert.deepEqual([8,8.01,15.01,25.01].map(satisfactionBand),[0,1,2,3]);
 });
 
 test('generated residents who have not arrived count in the lowest satisfaction band', () => {
