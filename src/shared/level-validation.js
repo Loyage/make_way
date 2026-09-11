@@ -162,7 +162,7 @@ function validateLevelsFirst(data) {
       if(initialCost>level.budget)return `关卡「${level.id}」的初始道路需要 ${initialCost} 点，超过预算 ${level.budget}`;
     }
     if (level.referenceDesign !== undefined) {
-      if (level.campaign) return `关卡「${level.id}」的多日任务暂不支持 referenceDesign`;
+      if (level.campaign) return `关卡「${level.id}」的多日任务必须在 campaign.days[] 中逐日配置 referenceDesign`;
       const design=level.referenceDesign;
       if (!design || design.version!==8 || design.levelId!==level.id || design.width!==width || design.height!==height
         || !Array.isArray(design.roads) || !Array.isArray(design.edges) || !Array.isArray(design.roadPolicies)
@@ -204,6 +204,13 @@ function validateLevelsFirst(data) {
     if (level.campaign !== undefined) {
       if (!level.campaign || !Array.isArray(level.campaign.days) || level.campaign.days.length < 2 || level.campaign.days.length > 30) return `关卡「${level.id}」的多日任务天数必须为 2 至 30 天`;
       const legacy = level.campaign.days.some(day => Array.isArray(day?.routes));
+      if(!legacy){
+        if(!Array.isArray(level.campaign.routes)||!level.campaign.routes.length)return `关卡「${level.id}」的多日任务必须包含潜在路线`;
+        const potentialLevel={...level,routes:level.campaign.routes};delete potentialLevel.campaign;
+        const potentialError=validateLevelsFirst({version:1,chapters:[{id:'campaign-potential',name:'多日任务校验',english:'CAMPAIGN CHECK',levels:[potentialLevel]}]});
+        if(potentialError)return `关卡「${level.id}」的潜在建筑：${potentialError}`;
+      }
+      let maximumBudget=level.budget;const referenceResults=[];
       for (let dayIndex = 0; dayIndex < level.campaign.days.length; dayIndex++) {
         const day = level.campaign.days[dayIndex];
         if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
@@ -216,6 +223,15 @@ function validateLevelsFirst(data) {
           const dayError = validateLevelsFirst({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
           if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
         } else if (day.routes !== undefined) return `关卡「${level.id}」不能混用新旧多日任务格式`;
+        if(day.referenceDesign!==undefined){
+          const referenceRoutes=legacy?day.routes:materializeCampaignRoutes(level,dayIndex,referenceResults),activeCells=new Set(referenceRoutes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+          const pendingCells=new Set((level.campaign.routes||[]).flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)).filter(cell=>!activeCells.has(cell)));
+          if(day.referenceDesign.roads?.some(road=>pendingCells.has(road.cell)))return `关卡「${level.id}」第 ${dayIndex+1} 天的参考答案占用了尚未解锁的建筑工地`;
+          const referenceLevel={...level,duration:day.duration,budget:maximumBudget,routes:referenceRoutes,referenceDesign:day.referenceDesign};delete referenceLevel.campaign;
+          const referenceError=validateLevelsFirst({version:1,chapters:[{id:'campaign-reference',name:'多日参考答案校验',english:'CAMPAIGN REFERENCE',levels:[referenceLevel]}]});
+          if(referenceError)return `关卡「${level.id}」第 ${dayIndex+1} 天的参考答案：${referenceError}`;
+        }
+        maximumBudget+=day.maxIncome;referenceResults.push({delivered:1000000000,income:day.maxIncome,satisfaction:100});
       }
       const firstDay = level.campaign.days[0];
       if (level.duration !== firstDay.duration) return `关卡「${level.id}」的基础时长必须与第 1 天一致`;

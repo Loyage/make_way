@@ -90,7 +90,7 @@ test('shared validation checks level and campaign-day star targets', () => {
   result=validateLevelCatalog(catalog);assert.equal(result.ok,false);assert.ok(result.errors.some(issue=>issue.path.includes('campaign.days[1].starTargets')));
 });
 
-test('validateLevels accepts complete tutorial reference designs and rejects mismatches', () => {
+test('validateLevels accepts complete tutorial and per-day campaign references', () => {
   const source=defaultLevels(),levelId=source.chapters[0].levels[0].id;
   setLevels(source);
   const design=new City(levelId).serializeDesign(),good=JSON.parse(JSON.stringify(defaultLevels()));
@@ -99,6 +99,10 @@ test('validateLevels accepts complete tutorial reference designs and rejects mis
   assert.equal(validateLevels(good),'');
   level.referenceDesign.levelId='another-level';
   assert.match(validateLevels(good),/referenceDesign 格式无效/);
+  const campaign=JSON.parse(JSON.stringify(defaultLevels())),campaignLevel=campaign.chapters[0].levels.find(item=>item.id==='growing-city');
+  assert.ok(campaignLevel.campaign.days.every(day=>day.referenceDesign));assert.equal(validateLevels(campaign),'');
+  campaignLevel.campaign.days[2].referenceDesign.levelId='another-level';
+  assert.match(validateLevels(campaign),/第 3 天的参考答案.*referenceDesign 格式无效/);
 });
 
 test('validateLevels accepts per-level map sizes and rejects invalid dimensions', () => {

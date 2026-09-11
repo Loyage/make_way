@@ -32,20 +32,23 @@
     try { return localStorage.getItem(STORAGE_PREFIX + levelId); }
     catch { return null; }
   }
-  function referenceUnlocked(levelId=city.level.id) {
-    if(failedLevels.has(levelId))return true;
-    try { return localStorage.getItem(REFERENCE_UNLOCK_PREFIX+levelId)==='1'; }
+  function referenceKey(levelId=city.level.id,dayIndex=campaign?.dayIndex??null){return levelId+(dayIndex===null?'':`:day-${dayIndex+1}`);}
+  function currentReference(){return campaign?campaign.days[campaign.dayIndex]?.referenceDesign:city.level.referenceDesign;}
+  function referenceUnlocked(levelId=city.level.id,dayIndex=campaign?.dayIndex??null) {
+    const keyName=referenceKey(levelId,dayIndex);
+    if(failedLevels.has(keyName))return true;
+    try { return localStorage.getItem(REFERENCE_UNLOCK_PREFIX+keyName)==='1'; }
     catch { return false; }
   }
-  function unlockReference(levelId=city.level.id) {
-    failedLevels.add(levelId);
-    try { localStorage.setItem(REFERENCE_UNLOCK_PREFIX+levelId,'1'); } catch { /* session unlock still works */ }
+  function unlockReference(levelId=city.level.id,dayIndex=campaign?.dayIndex??null) {
+    const keyName=referenceKey(levelId,dayIndex);failedLevels.add(keyName);
+    try { localStorage.setItem(REFERENCE_UNLOCK_PREFIX+keyName,'1'); } catch { /* session unlock still works */ }
   }
   let designAvailable = false;
   function updateDesignControls() {
     designAvailable=storedDesign()!==null;
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
-    const available=Boolean(city.level.referenceDesign)&&referenceUnlocked();
+    const available=Boolean(currentReference())&&referenceUnlocked();
     $('reference-design').hidden=!available;
     $('reference-design').disabled=city.state!=='planning';
   }
@@ -789,7 +792,7 @@
   function showResult() {
     resultShown=true;
     const won=city.state==='won', generated=city.generated.reduce((sum,count)=>sum+count,0);
-    if(!won&&city.level.referenceDesign)unlockReference();
+    if(!won&&currentReference())unlockReference();
     const report=TrafficResults.commuteReport(city.commuteTimes,Math.max(0,generated-city.delivered));
     pendingCampaignScore=report.score;
     const settlement=campaign?campaign.settlement(report.score):null,finalDay=campaign&&campaign.dayIndex===campaign.days.length-1;
@@ -827,10 +830,10 @@
     $('next-level').textContent=campaign?'进入下一天规划 ↗':'下一座小城 ↗';
     $('view-city').hidden=Boolean(campaign&&!finalDay);
     $('play-again').textContent=campaign?'重新开始五天':'再规划一次';
-    $('result-reference').hidden=won||!city.level.referenceDesign||Boolean(campaign);
+    $('result-reference').hidden=won||!currentReference();
     updateDesignControls();
     if(finalDay&&!campaign.results[campaign.dayIndex])campaign.advance(report.score);
-    window.dispatchEvent(new CustomEvent('traffic-game-result',{detail:{levelId:city.level.id,won,complete:!campaign||Boolean(finalDay),stars:stars.count,totalStars:earnedStars.length}}));
+    window.dispatchEvent(new CustomEvent('traffic-game-result',{detail:{levelId:city.level.id,dayIndex:campaign?.dayIndex??null,won,complete:!campaign||Boolean(finalDay),stars:stars.count,totalStars:earnedStars.length}}));
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('result-dialog').showModal();
   }
@@ -1051,7 +1054,7 @@
   };
   let resetBeforeReference=false;
   function openReference() {
-    if(!city.level.referenceDesign||!referenceUnlocked())return;
+    if(!currentReference()||!referenceUnlocked())return;
     resetBeforeReference=city.state!=='planning';
     if($('result-dialog').open)$('result-dialog').close();
     $('reference-dialog').showModal();
@@ -1060,11 +1063,15 @@
   $('result-reference').onclick=openReference;
   $('cancel-reference').onclick=()=>{resetBeforeReference=false;$('reference-dialog').close();};
   $('confirm-reference').onclick=()=>{
-    const levelId=city.level.id,shouldReset=resetBeforeReference;resetBeforeReference=false;$('reference-dialog').close();
-    if(shouldReset)reset(levelId);
-    const message=city.loadDesign(city.level.referenceDesign);
+    const levelId=city.level.id,reference=currentReference(),shouldReset=resetBeforeReference,referenceDay=campaign?.dayIndex??null;resetBeforeReference=false;$('reference-dialog').close();
+    if(shouldReset&&campaign){
+      try{campaign.createCity(referenceDay,city.budget,reference);}catch(error){toast('参考答案无法载入：当前累计预算或当日条件不匹配（'+error.message+'）');$('result-dialog').showModal();return;}
+      const replayMessage=campaign.replay(referenceDay);if(replayMessage){toast('参考答案无法载入：'+replayMessage);$('result-dialog').showModal();return;}
+      city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');
+    }else if(shouldReset)reset(levelId);
+    const message=city.loadDesign(reference);
     if(message){toast('参考答案无法载入：'+message);return;}
-    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast('已载入参考答案，可以继续修改或开始运营');
+    speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast(`已载入${referenceDay===null?'':`第 ${referenceDay+1} 天`}参考答案，可以继续修改或开始运营`);
   };
   function beginOperation() {
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
@@ -1202,6 +1209,7 @@
     },
     selectLevel(levelId) { if(TrafficCore.LEVELS.some(item=>item.id===levelId))reset(levelId); },
     currentLevelId() { return city?.level.id||null; },
+    campaignDayIndex() { return campaign?.dayIndex??null; },
     selectedCells() { return city?selectedCells():[]; },
     selectCell(cell) { if(city&&Number.isInteger(cell)&&cell>=0&&cell<city.width*city.height){setTool('select');selection={start:cell,end:cell};keyboardCell=cell;updateUI();draw();} },
     applyDesign(design) { if(!city||city.state!=='planning')return '请先停止运营';const message=city.loadDesign(design);if(!message){resetDesignHistory();updateUI();draw();}return message; },

@@ -80,8 +80,9 @@ test('two chapters contain eleven progressively unlocked levels, including the f
 test('legacy per-day campaign routes migrate to potential buildings', () => {
   const source=JSON.parse(JSON.stringify(LEVELS.find(item=>item.id==='growing-city'))),potential=source.campaign.routes;
   source.campaign.days=source.campaign.days.map((day,index)=>({...day,routes:materializeCampaignRoutes(source,index,Array.from({length:index},()=>({delivered:2000,income:100,satisfaction:100})))}));
+  const firstReference=source.campaign.days[0].referenceDesign;
   source.routes=source.campaign.days[0].routes;delete source.campaign.routes;migrateCampaignLevel(source);
-  assert.equal(source.campaign.routes.length,potential.length);assert.ok(source.campaign.days.every(day=>!Object.hasOwn(day,'routes')));
+  assert.equal(source.campaign.routes.length,potential.length);assert.ok(source.campaign.days.every(day=>!Object.hasOwn(day,'routes')));assert.deepEqual(source.campaign.days[0].referenceDesign,firstReference);
   assert.equal(materializeCampaignRoutes(source,1,[{delivered:42,income:18,satisfaction:100}]).length,2);
 });
 
@@ -112,6 +113,12 @@ test('multi-day campaign pays for quality, reveals construction, and replays che
   assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
 });
 
+test('campaign references respect the player actual accumulated budget', () => {
+  const campaign=new CampaignSession('growing-city'),last=campaign.days.at(-1).referenceDesign;
+  assert.throws(()=>campaign.createCity(campaign.days.length-1,campaign.level.budget,last),/建设预算不足/);
+  assert.equal(campaign.dayIndex,0);assert.equal(campaign.city.state,'planning');
+});
+
 test('multi-day campaign rewards rebuilding into affordable routes without intersections', () => {
   const campaign=new CampaignSession('growing-city');
   const plans=[
@@ -129,6 +136,8 @@ test('multi-day campaign rewards rebuilding into affordable routes without inter
       a.y===b.y&&p.y===a.y&&p.x>=Math.min(a.x,b.x)&&p.x<=Math.max(a.x,b.x);
   };
   for(let day=0;day<5;day++) {
+    const reference=campaign.days[day].referenceDesign,referenceCity=campaign.createCity(day,campaign.city.budget,reference);
+    assert.ok(reference);assert.ok(referenceCity.paths.every(Boolean),`day ${day+1} reference must serve every route`);assert.equal(referenceCity.remaining>=0,true);referenceCity.toggle();for(let step=0;step<(referenceCity.duration+1)*20;step++)referenceCity.step(.05);assert.equal(referenceCity.state,'won',`day ${day+1} reference must win`);
     if(day) {
       assert.ok(onDirectPath(campaign.city.routes[day-1],crossingCells[day]));
       assert.ok(onDirectPath(campaign.city.routes[day],crossingCells[day]),`day ${day+1} should tempt routes to cross`);

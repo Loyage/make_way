@@ -54,7 +54,7 @@
       });
     });
     level.campaign.routes = potential;
-    level.campaign.days = level.campaign.days.map(day => ({ duration: day.duration, maxIncome: day.maxIncome }));
+    level.campaign.days = level.campaign.days.map(day => { const copy=clone(day);delete copy.routes;return copy; });
     level.routes = materializeCampaignRoutes(level, 0, []);
     return level;
   }

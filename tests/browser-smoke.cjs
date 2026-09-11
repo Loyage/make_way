@@ -18,7 +18,9 @@ async function main() {
     const message=JSON.parse(event.data);
     if(message.id){const job=pending.get(message.id);pending.delete(message.id);message.error?job.reject(message.error):job.resolve(message.result);}
     else if(message.method==='Runtime.exceptionThrown')errors.push(message.params.exceptionDetails);
-    else if(message.method==='Log.entryAdded'&&message.params.entry.level==='error')errors.push(message.params.entry);
+    else if(message.method==='Log.entryAdded'&&message.params.entry.level==='error'){
+      const entry=message.params.entry,optionalOverride=entry.url?.endsWith('/levels.json')&&entry.text.includes('404');if(!optionalOverride)errors.push(entry);
+    }
   });
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
   const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
@@ -213,6 +215,11 @@ async function main() {
     assert.equal(await evaluate('document.querySelectorAll(".campaign-day").length'),5);
     assert.equal(await evaluate('document.querySelector("#legend-site").hidden'),false);
     assert.ok((await text('campaign-day-title')).includes('第 1 天'));
+    await evaluate(`(()=>{const catalog=${JSON.stringify(CATALOG)},level=catalog.chapters.flatMap(chapter=>chapter.levels).find(item=>item.id==='growing-city');level.duration=1;level.campaign.days[0].duration=1;TrafficGameAdmin.applyCatalog(catalog,level.id);TrafficGameAdmin.applyDesign(level.campaign.days[0].referenceDesign);})()`);
+    await click('#start');await click('#speed');await click('#speed');await waitFor('document.querySelector("#result-dialog").open','campaign day should reach its deadline');
+    assert.equal(await evaluate('document.querySelector("#result-reference").hidden'),false,'failed campaign day unlocks only its daily reference');await click('#result-reference');await click('#confirm-reference');
+    assert.equal(await evaluate('TrafficGameAdmin.campaignDayIndex()'),0);assert.equal(await evaluate('document.querySelector("#phase-label").textContent.includes("规划中")'),true);assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length===TrafficCore.LEVELS.find(level=>level.id==="growing-city").campaign.days[0].referenceDesign.roads.length'),true,'daily answer loads without resetting campaign progress');
+    await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
 
     await go(5);
     assert.equal(await evaluate('document.querySelector("#select-tool").hidden'),false);
@@ -247,7 +254,7 @@ async function main() {
       if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 11 progressive levels, transfer planning and reporting, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 11 progressive levels, transfer planning and reporting, daily campaign references, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
