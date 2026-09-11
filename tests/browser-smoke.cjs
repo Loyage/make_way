@@ -35,6 +35,22 @@ async function main() {
     await mouse('mouseReleased',...points[points.length-1]);
   }
   const drag=(x1,y1,x2,y2)=>dragThrough([[x1,y1],[x2,y2]]);
+  async function press(key,modifiers=0){
+    const codes={ArrowLeft:['ArrowLeft',37],ArrowRight:['ArrowRight',39],ArrowUp:['ArrowUp',38],ArrowDown:['ArrowDown',40],' ':['Space',32],Escape:['Escape',27],z:['KeyZ',90],y:['KeyY',89],'2':['Digit2',50],'3':['Digit3',51],p:['KeyP',80]},[code,windowsVirtualKeyCode]=codes[key];
+    await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode,modifiers});
+    await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode,modifiers});await delay(30);
+  }
+  async function touchDrag(x1,y1,x2,y2){
+    await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:2});
+    await evaluate('document.querySelector("canvas").scrollIntoView({block:"center"})');await delay(100);
+    const r=await evaluate('(()=>{const r=document.querySelector("canvas").getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}})()'),at=(x,y)=>({x:r.x+(x+.5)*r.w/16,y:r.y+(y+.5)*r.h/12,id:1,radiusX:6,radiusY:6,force:1});
+    await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[at(x1,y1)]});await delay(50);
+    assert.equal(await evaluate('document.querySelector("#touch-coordinate").hidden'),false,'touch start shows coordinates');
+    await send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[at(x2,y2)]});await delay(50);
+    await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await delay(80);
+    assert.equal(await evaluate('document.querySelector("#touch-coordinate").hidden'),true,'touch end hides coordinates');
+    await send('Emulation.setTouchEmulationEnabled',{enabled:false});
+  }
   async function go(index){
     const level=LEVELS[index],chapterIndex=CATALOG.chapters.findIndex(chapter=>chapter.levels.some(item=>item.id===level.id));
     await click(`.chapter-tab:nth-child(${chapterIndex+1})`);
@@ -84,6 +100,15 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
     await go(0);
+    await evaluate('document.querySelector("#map").focus()');assert.equal(await evaluate('document.activeElement.id'),'map');
+    await press('3');for(let i=0;i<4;i++)await press('ArrowRight');for(let i=0;i<2;i++)await press('ArrowDown');await press(' ');for(let i=0;i<4;i++)await press('ArrowRight');await press(' ');
+    assert.equal(await text('budget'),'33','keyboard-only path builds a complete road');
+    assert.equal(await evaluate('[[69,70],[70,71],[71,72],[72,73]].every(([a,b])=>TrafficGameAdmin.captureDesign().edges.some(edge=>edge[0]===a&&edge[1]===b))'),true);
+    await press('z',2);assert.equal(await text('budget'),'36','keyboard shortcut undoes planning');await press('y',2);assert.equal(await text('budget'),'33','keyboard shortcut redoes planning');await press('z',2);
+    await press('2');await press(' ');assert.deepEqual(await evaluate('TrafficGameAdmin.selectedCells()'),[73],'keyboard space selects the cursor cell');
+    await press('3');await press(' ');await press('ArrowLeft');await press('Escape');assert.equal(await text('budget'),'36','keyboard escape cancels an uncommitted path');
+    await press('p');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true,'keyboard starts preflight');await press('Escape');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),false,'keyboard cancels preflight');
+    await touchDrag(5,4,9,4);assert.equal(await text('budget'),'33','touch drag builds an interpolated road path');await press('z',2);assert.equal(await text('budget'),'36','touch planning participates in undo history');
     await click('#sandbox-mode');assert.equal(await evaluate('document.querySelector("#mode-dialog").open'),true);
     await click('#confirm-mode');assert.equal(await text('timer'),'∞');assert.equal(await evaluate('document.querySelector("#sandbox-mode").getAttribute("aria-pressed")'),'true');
     await click('#start');assert.equal(await evaluate('document.querySelector("#preflight-dialog").open'),true);await click('#confirm-preflight');
@@ -202,7 +227,7 @@ async function main() {
       if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 10 progressive levels, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 10 progressive levels, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
