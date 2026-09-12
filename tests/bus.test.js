@@ -169,6 +169,68 @@ test('bus itineraries include expected headway when choosing between equivalent 
   } finally { core.setLevels(original); }
 });
 
+test('running bus itineraries use live vehicle arrivals and keep planning estimates static', () => {
+  const original=JSON.parse(JSON.stringify(core.LEVELS)),levels=JSON.parse(JSON.stringify(core.LEVELS));levels.find(level=>level.id==='bus-school').busLineLimit=2;assert.equal(core.setLevels(levels),'');
+  try {
+    const city=new City('bus-school'),ring=loop(city),route=[ring[31],...ring.slice(0,5)];assert.equal(city.setBusRoute(route),'');const slow=city.activeBusLineId;assert.equal(city.updateBusLine(slow,{returnTrip:true,returnStops:true,headway:8}),'');
+    assert.equal(city.createBusLine('高频线','#d06b47'),'');const frequent=city.activeBusLineId;assert.equal(city.setBusRoute(route,frequent),'');assert.equal(city.updateBusLine(frequent,{returnTrip:true,returnStops:true,headway:2}),'');
+    assert.equal(city.busItineraryFor(0,0).legs[0].lineId,frequent,'planning uses the explainable half-headway estimate');
+    city.toggle();const frequentBus=city.buses.find(bus=>bus.lineId===frequent),routeCells=city.busOperatingRoute(city.busLine(frequent));frequentBus.routePosition=3;frequentBus.cell=routeCells[3];frequentBus.needsStop=false;city._busItineraryChoices.clear();
+    const live=city.busItineraryFor(0,0);assert.equal(live.legs[0].lineId,slow,'a bus waiting at the stop beats a nominally frequent bus farther away');assert.ok(live.expectedTime<live.staticExpectedTime);
+  } finally { core.setLevels(original); }
+});
+
+test('live bus estimates account for congestion and apply route-switch hysteresis', () => {
+  const original=JSON.parse(JSON.stringify(core.LEVELS)),levels=JSON.parse(JSON.stringify(core.LEVELS));levels.find(level=>level.id==='bus-school').busLineLimit=2;assert.equal(core.setLevels(levels),'');
+  try {
+    const city=new City('bus-school'),ring=loop(city),direct=[ring[31],...ring.slice(0,5)],around=ring.slice(4,32).reverse();assert.equal(city.setBusRoute(direct),'');const fast=city.activeBusLineId;assert.equal(city.updateBusLine(fast,{returnTrip:true,returnStops:true,headway:2}),'');
+    assert.equal(city.createBusLine('畅通绕行线','#d06b47'),'');const slow=city.activeBusLineId;assert.equal(city.setBusRoute(around,slow),'');assert.equal(city.updateBusLine(slow,{returnTrip:true,returnStops:true,headway:8}),'');assert.equal(city.busItineraryFor(0,0).legs[0].lineId,fast);
+    city.toggle();for(let i=1;i<direct.length-1;i++)for(let j=0;j<4;j++)city.cars.push({id:`jam-${i}-${j}`,cell:direct[i],next:null,active:true,blocked:2,heading:1,cellHeading:1,cellLane:0,cellSlot:1});city._busItineraryChoices.clear();
+    assert.equal(city.busItineraryFor(0,0).legs[0].lineId,slow,'severe live congestion can outweigh a shorter headway');
+    const costs={[fast]:8.5,[slow]:9},estimate=city.busDynamicItinerary;city.busDynamicItinerary=candidate=>({...candidate,expectedTime:costs[candidate.legs[0].lineId],staticExpectedTime:candidate.expectedTime});
+    assert.equal(city.busItineraryFor(0,0).legs[0].lineId,slow,'a small predicted advantage does not make waiting passengers flap between lines');
+    costs[fast]=7;assert.equal(city.busItineraryFor(0,0).legs[0].lineId,fast,'a clear improvement can replace the remembered choice');city.busDynamicItinerary=estimate;
+  } finally { core.setLevels(original); }
+});
+
+test('bus itinerary topology is cached and invalidated without caching destination capacity', () => {
+  const city=new City('transfer-school');buildReferencePlan(city);
+  let rebuilds=0;const rebuild=city.rebuildBusItineraryCache;
+  city.rebuildBusItineraryCache=function(signature){rebuilds++;return rebuild.call(this,signature);};
+  const expected=city.busItineraryFor(0,0);assert.equal(rebuilds,1);assert.equal(expected.legs.length,2);
+  for(let i=0;i<50;i++){assert.deepEqual(city.busItineraryFor(0,0),expected);city.busStopForecast(expected.legs[0].boardCell,expected.legs[0].lineId);}
+  assert.equal(rebuilds,1,'repeated itinerary and stop forecasts reuse one topology build');
+  const cache=city._busItineraryCache;city.goalAssigned[0]=city.goals[0].input;assert.equal(city.busItineraryFor(0,0),null);assert.equal(city._busItineraryCache,cache,'capacity filtering does not rebuild static topology');
+  city.goalAssigned[0]=0;assert.deepEqual(city.busItineraryFor(0,0),expected);
+  const second=city.busLine(expected.legs[1].lineId);assert.equal(city.updateBusLine(second.id,{headway:8}),'');assert.equal(city._busItineraryCache,null);city.busItineraryFor(0,0);assert.equal(rebuilds,2);
+  assert.equal(city.setBusStop(expected.transferCell,false,second.id),'');assert.equal(city.busItineraryFor(0,0),null);assert.equal(rebuilds,3);
+  assert.equal(city.setBusStop(expected.transferCell,true,second.id),'');const restored=city.busItineraryFor(0,0);assert.ok(restored);assert.equal(rebuilds,4);
+  const routeCell=city.busLine(expected.legs[0].lineId).route.find(cell=>(city.roadGrades.get(cell)||0)<2);assert.notEqual(routeCell,undefined);city.roadGrades.set(routeCell,(city.roadGrades.get(routeCell)||0)+1);
+  assert.ok(city.busItineraryFor(0,0).expectedTime<=restored.expectedTime);assert.equal(rebuilds,5,'an along-route speed change invalidates static ride times');
+  city.busLine(expected.legs[0].lineId).route=[];assert.equal(city.busItineraryFor(0,0),null,'signature also detects direct topology changes');assert.equal(rebuilds,6);
+});
+
+test('large-map multi-line itinerary queries stay within a bounded cached workload', () => {
+  const original=JSON.parse(JSON.stringify(core.LEVELS)),levels=JSON.parse(JSON.stringify(core.LEVELS)),source=levels.find(level=>level.id==='bus-school'),map=cell=>Math.floor(cell/16)*64+cell%16;
+  const large={...source,id:'bus-performance',name:'公交性能基准',width:64,height:64,budget:1000,busLineLimit:8,water:source.water.map(map),bridges:source.bridges.map(map),trees:source.trees.map(map),
+    routes:source.routes.map(route=>({...route,homes:route.homes.map(home=>({...home,cell:map(home.cell)})),goals:route.goals.map(goal=>({...goal,cell:map(goal.cell)}))})),
+    initialRoads:source.initialRoads.map(road=>({...road,cell:map(road.cell)})),initialEdges:source.initialEdges.map(edge=>edge.map(map))};
+  delete large.referenceDesign;assert.equal(core.setLevels([...levels,large]),'');
+  try {
+    const city=new City(large.id),route=loop(city);assert.equal(city.width,64);assert.equal(city.height,64);
+    assert.equal(city.setBusRoute(route),'');assert.equal(city.updateBusLine(city.activeBusLineId,{headway:2}),'');
+    for(let index=1;index<8;index++){assert.equal(city.createBusLine(`基准 ${index+1} 号线`,['#d06b47','#638d69','#9580b6','#317a57','#d18d4f','#147f99','#80602d'][index-1]),'');assert.equal(city.setBusRoute(route),'');assert.equal(city.updateBusLine(city.activeBusLineId,{headway:[2,4,6,8][index%4]}),'');}
+    let rebuilds=0,rideCalls=0;const rebuild=city.rebuildBusItineraryCache,ride=city.busRideTime;
+    city.rebuildBusItineraryCache=function(signature){rebuilds++;return rebuild.call(this,signature);};city.busRideTime=function(...args){rideCalls++;return ride.apply(this,args);};
+    const first=city.busItineraryFor(0,0),warmRideCalls=rideCalls,started=process.hrtime.bigint();assert.ok(first);
+    for(let index=0;index<500;index++)assert.deepEqual(city.busItineraryFor(index%city.homes.length,index%city.goals.length),city.busItineraryFor(index%city.homes.length,index%city.goals.length));
+    const elapsedMs=Number(process.hrtime.bigint()-started)/1e6;
+    assert.equal(rebuilds,1,'large repeated queries build topology only once');assert.equal(rideCalls,warmRideCalls,'cached queries do not recompute static segment travel');
+    assert.ok(warmRideCalls<=city.busLines.length*route.length*route.length,'static travel computations stay bounded by line and route positions');
+    assert.ok(elapsedMs<1500,`500 cached itinerary pairs should finish within 1.5s (actual ${elapsedMs.toFixed(1)}ms)`);
+  } finally { core.setLevels(original); }
+});
+
 test('valid transfer suppresses car exit warnings but invalid bus service does not', () => {
   const city=new City('transfer-school');buildReferencePlan(city);
   city.homes[0].generationRate=100;

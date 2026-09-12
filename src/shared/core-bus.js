@@ -62,26 +62,107 @@
       for(let offset=0;offset<distance;offset++){const a=route[(from+offset)%segments],b=route[(from+offset+1)%segments],speeds=[a,b].filter(cell=>this.roads.has(cell)).map(cell=>this.roadType(cell).speed);total+=1/(Math.min(...speeds)*BUS_SPEED_MULTIPLIER);}
       return total;
     }
-    busItineraryFor(homeIndex,goalIndex=null) {
-      const home=this.homes[homeIndex];if(!home)return null;
-      const goals=this.goals.map((goal,index)=>({goal,index})).filter(item=>(goalIndex===null||item.index===goalIndex)&&item.goal.route===home.route&&(item.goal.input==null||this.goalAssigned[item.index]<item.goal.input));
-      const lines=this.busLines.filter(line=>this.busLineOperational(line)),candidates=[];
-      const add=(goal,legs,expectedTime)=>candidates.push({goalIndex:goal.index,legs,expectedTime,transferCell:legs.length>1?legs[0].alightCell:null});
-      for(const first of lines)for(const boardPosition of this.busServicePositions(home.cell,first.id)){
-        for(const goal of goals)for(const alightPosition of this.busServicePositions(goal.goal.cell,first.id)){
-          const distance=this.busForwardSegments(first,boardPosition,alightPosition);if(distance)add(goal,[{lineId:first.id,boardPosition,boardCell:this.busOperatingRoute(first)[boardPosition],alightPosition,alightCell:this.busOperatingRoute(first)[alightPosition]}],first.headway/2+this.busRideTime(first,boardPosition,alightPosition));
+    busStopDwellEstimate(line,position) {
+      const route=this.busOperatingRoute(line),cell=route[position];
+      if(!line.stops.has(cell))return 0;
+      const homeWaiting=this.homes.reduce((sum,home,index)=>sum+(this.neighbors(home.cell).includes(cell)?this.queues[index]||0:0),0);
+      const transferWaiting=(this.transferQueues?.get(cell)||[]).filter(passenger=>passenger.legs?.[passenger.legIndex]?.lineId===line.id).length;
+      return Math.min(BUS_CAPACITY,homeWaiting+transferWaiting)/BUS_BOARDING_RATE;
+    }
+    busDynamicRideTime(line,from,to,self=null,fullCycle=false) {
+      const route=this.busOperatingRoute(line),segments=route.length-1,distance=fullCycle?segments:this.busForwardSegments(line,from,to);let total=0;
+      for(let offset=0;offset<distance;offset++){
+        const position=(from+offset)%segments,a=route[position],b=route[(position+1)%segments],speeds=[a,b].filter(cell=>this.roads.has(cell)).map(cell=>this.roadType(cell).speed);
+        const free=1/(Math.min(...speeds)*BUS_SPEED_MULTIPLIER),roadBase=this.roadTravelCost(a,b),dynamic=this.dynamicRoadTravelCost(a,b,self);
+        total+=free+Math.max(0,dynamic-roadBase)/BUS_SPEED_MULTIPLIER;
+        const arrival=(position+1)%segments;if(offset<distance-1&&line.stops.has(route[arrival]))total+=this.busStopDwellEstimate(line,arrival);
+      }
+      return total;
+    }
+    busHasSpaceAt(bus,line,boardPosition) {
+      if(bus.passengers.length<BUS_CAPACITY)return true;
+      const boardDistance=this.busForwardSegments(line,bus.routePosition,boardPosition)||this.busOperatingRoute(line).length-1;
+      return bus.passengers.some(passenger=>{const leg=passenger.legs?.[passenger.legIndex];if(!leg||leg.lineId!==line.id)return false;const alightDistance=this.busForwardSegments(line,bus.routePosition,leg.alightPosition);return alightDistance<=boardDistance;});
+    }
+    busArrivalEstimate(line,position,notBefore=0) {
+      const route=this.busOperatingRoute(line),segments=route.length-1,cycle=Math.max(.001,this.busDynamicRideTime(line,0,0,null,true));let best=Infinity;
+      for(const bus of this.buses.filter(item=>item.lineId===line.id)){
+        let eta;
+        if(!bus.active)eta=Math.max(0,bus.launchAt-this.elapsed)+this.busDynamicRideTime(line,0,position,bus);
+        else if(bus.routePosition===position&&bus.needsStop)eta=0;
+        else if(bus.routePosition===position)eta=(bus.dwell||0)+cycle;
+        else {
+          eta=(bus.dwell||0)+this.busDynamicRideTime(line,bus.routePosition,position,bus);
+          if(bus.next!==null&&bus.advancingRoute!==false)eta=Math.max(0,eta-(bus.progress||0)*this.busDynamicRideTime(line,bus.routePosition,(bus.routePosition+1)%segments,bus));
+          if(!eta)eta=cycle;
         }
-        for(const second of lines)if(second.id!==first.id)for(const transferCell of first.stops)if(second.stops.has(transferCell)){
-          for(const transferPosition of this.busStopServicePositions(transferCell,first.id)){
-            const firstDistance=this.busForwardSegments(first,boardPosition,transferPosition);if(!firstDistance)continue;
-            for(const secondBoard of this.busStopServicePositions(transferCell,second.id))for(const goal of goals)for(const alightPosition of this.busServicePositions(goal.goal.cell,second.id)){
-              const secondDistance=this.busForwardSegments(second,secondBoard,alightPosition);if(!secondDistance)continue;
-              add(goal,[{lineId:first.id,boardPosition,boardCell:this.busOperatingRoute(first)[boardPosition],alightPosition:transferPosition,alightCell:transferCell},{lineId:second.id,boardPosition:secondBoard,boardCell:transferCell,alightPosition,alightCell:this.busOperatingRoute(second)[alightPosition]}],first.headway/2+this.busRideTime(first,boardPosition,transferPosition)+second.headway/2+this.busRideTime(second,secondBoard,alightPosition));
+        if(!this.busHasSpaceAt(bus,line,position))eta+=cycle;
+        if(eta<notBefore)eta+=Math.ceil((notBefore-eta)/cycle)*cycle;
+        best=Math.min(best,eta);
+      }
+      return Number.isFinite(best)?best:line.headway/2;
+    }
+    busDynamicItinerary(candidate) {
+      let elapsed=0;
+      for(const leg of candidate.legs){const line=this.busLine(leg.lineId),arrival=this.busArrivalEstimate(line,leg.boardPosition,elapsed);elapsed=arrival+this.busDynamicRideTime(line,leg.boardPosition,leg.alightPosition);}
+      return {...candidate,expectedTime:elapsed,staticExpectedTime:candidate.expectedTime};
+    }
+    busCandidateKey(candidate) { return `${candidate.goalIndex}|${candidate.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|')}`; }
+    invalidateBusItineraries() { this._busItineraryCache=null;this._busItineraryChoices=null; }
+    busTopologySignature() {
+      const cells=new Set();
+      const lines=this.busLines.map(line=>{for(const cell of line.route)cells.add(cell);return [line.id,line.count,line.returnTrip,line.returnStops,line.headway,line.route,[...line.stops].sort((a,b)=>a-b)];});
+      const grades=[...cells].sort((a,b)=>a-b).map(cell=>[cell,this.roadGrades.get(cell)||0]);
+      return JSON.stringify([lines,grades]);
+    }
+    rebuildBusItineraryCache(signature) {
+      const lineData=this.busLines.filter(line=>this.busLineOperational(line)).map(line=>{
+        const route=this.busOperatingRoute(line),segments=route.length-1,stopPositions=new Map(),buildingPositions=new Map(),rideTimes=new Map();
+        const outboundLimit=line.route[0]===line.route[line.route.length-1]?segments:line.route.length;
+        for(let position=0;position<segments;position++){
+          const cell=route[position];if(!line.stops.has(cell)||position>=outboundLimit&&!line.returnStops)continue;
+          const positions=stopPositions.get(cell)||[];positions.push(position);stopPositions.set(cell,positions);
+          for(const building of this.neighbors(cell))if(this.buildings.has(building)){const served=buildingPositions.get(building)||[];served.push(position);buildingPositions.set(building,served);}
+        }
+        const rideTime=(from,to)=>{const key=`${from}:${to}`;if(rideTimes.has(key))return rideTimes.get(key);const value=this.busRideTime(line,from,to);rideTimes.set(key,value);return value;};
+        return {line,route,segments,stopPositions,buildingPositions,rideTime};
+      });
+      const transfers=new Map();
+      for(const first of lineData)for(const second of lineData)if(first!==second){
+        const options=[];for(const [cell,firstPositions] of first.stopPositions){const secondPositions=second.stopPositions.get(cell);if(secondPositions)options.push({cell,firstPositions,secondPositions});}
+        transfers.set(`${first.line.id}:${second.line.id}`,options);
+      }
+      const candidatesByHome=this.homes.map(home=>{
+        const candidates=[],goals=this.goals.map((goal,index)=>({goal,index})).filter(item=>item.goal.route===home.route);
+        const add=(goal,legs,expectedTime)=>candidates.push({goalIndex:goal.index,legs,expectedTime,transferCell:legs.length>1?legs[0].alightCell:null});
+        for(const first of lineData)for(const boardPosition of first.buildingPositions.get(home.cell)||[]){
+          for(const goal of goals)for(const alightPosition of first.buildingPositions.get(goal.goal.cell)||[]){
+            const distance=(alightPosition-boardPosition+first.segments)%first.segments;if(distance)add(goal,[{lineId:first.line.id,boardPosition,boardCell:first.route[boardPosition],alightPosition,alightCell:first.route[alightPosition]}],first.line.headway/2+first.rideTime(boardPosition,alightPosition));
+          }
+          for(const second of lineData)if(second!==first)for(const transfer of transfers.get(`${first.line.id}:${second.line.id}`))for(const transferPosition of transfer.firstPositions){
+            const firstDistance=(transferPosition-boardPosition+first.segments)%first.segments;if(!firstDistance)continue;
+            for(const secondBoard of transfer.secondPositions)for(const goal of goals)for(const alightPosition of second.buildingPositions.get(goal.goal.cell)||[]){
+              const secondDistance=(alightPosition-secondBoard+second.segments)%second.segments;if(!secondDistance)continue;
+              add(goal,[{lineId:first.line.id,boardPosition,boardCell:first.route[boardPosition],alightPosition:transferPosition,alightCell:transfer.cell},{lineId:second.line.id,boardPosition:secondBoard,boardCell:transfer.cell,alightPosition,alightCell:second.route[alightPosition]}],first.line.headway/2+first.rideTime(boardPosition,transferPosition)+second.line.headway/2+second.rideTime(secondBoard,alightPosition));
             }
           }
         }
+        return candidates.sort((a,b)=>a.expectedTime-b.expectedTime||a.legs.length-b.legs.length||a.goalIndex-b.goalIndex||a.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|').localeCompare(b.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|')));
+      });
+      return this._busItineraryCache={signature,candidatesByHome};
+    }
+    busItineraryFor(homeIndex,goalIndex=null) {
+      if(!this.homes[homeIndex])return null;
+      const signature=this.busTopologySignature(),cache=this._busItineraryCache?.signature===signature?this._busItineraryCache:this.rebuildBusItineraryCache(signature);
+      const available=cache.candidatesByHome[homeIndex].filter(item=>(goalIndex===null||item.goalIndex===goalIndex)&&(this.goals[item.goalIndex].input==null||this.goalAssigned[item.goalIndex]<this.goals[item.goalIndex].input));
+      let candidate=available[0];
+      if(candidate&&['running','paused'].includes(this.state)){
+        const ranked=available.map(item=>this.busDynamicItinerary(item)).sort((a,b)=>a.expectedTime-b.expectedTime||this.busCandidateKey(a).localeCompare(this.busCandidateKey(b)));
+        this._busItineraryChoices||=new Map();const choiceKey=`${homeIndex}:${goalIndex??'*'}`,previousKey=this._busItineraryChoices.get(choiceKey),previous=ranked.find(item=>this.busCandidateKey(item)===previousKey);
+        candidate=previous&&ranked[0].expectedTime>previous.expectedTime*.82?previous:ranked[0];
+        this._busItineraryChoices.set(choiceKey,this.busCandidateKey(candidate));
       }
-      return candidates.sort((a,b)=>a.expectedTime-b.expectedTime||a.legs.length-b.legs.length||a.goalIndex-b.goalIndex||a.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|').localeCompare(b.legs.map(leg=>`${leg.lineId}:${leg.boardPosition}:${leg.alightPosition}`).join('|')))[0]||null;
+      return candidate?{...candidate,legs:candidate.legs.map(leg=>({...leg}))}:null;
     }
     busCanReach(homeCell,goalCell) { const homeIndex=this.homes.findIndex(home=>home.cell===homeCell),goalIndex=this.goals.findIndex(goal=>goal.cell===goalCell);return homeIndex>=0&&goalIndex>=0&&Boolean(this.busItineraryFor(homeIndex,goalIndex)); }
     // Compatibility aliases keep older integrations focused on the selected line.
@@ -97,6 +178,7 @@
       if (typeof lineColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(lineColor)) return '线路颜色无效';
       const id = `line-${this.nextBusLineId++}`;
       this.busLines.push({ id, name: lineName, color: lineColor.toLowerCase(), route: [], count: 1, stops: new Set(), returnTrip: false, returnStops: false, headway: 4, stats: null });
+      this.invalidateBusItineraries();
       this.activeBusLineId = id;
       return '';
     }
@@ -137,7 +219,9 @@
         if (![2,4,6,8].includes(settings.headway)) return '发车间隔须为 2、4、6 或 8 秒';
         candidate.headway = settings.headway;
       }
+      const topologyChanged=['returnTrip','returnStops','headway'].some(key=>candidate[key]!==line[key]);
       Object.assign(line, candidate);
+      if(topologyChanged)this.invalidateBusItineraries();
       return '';
     }
     deleteBusLine(lineId = this.activeBusLineId) {
@@ -145,6 +229,7 @@
       const index = this.busLines.findIndex(line => line.id === lineId);
       if (index < 0) return '公交线路不存在';
       this.busLines.splice(index, 1);
+      this.invalidateBusItineraries();
       this.activeBusLineId = this.busLines[index]?.id || this.busLines[index - 1]?.id || null;
       return '';
     }
@@ -155,7 +240,7 @@
       if (!lineId) { const message = this.ensureBusLine(); if (message) return message; lineId = this.activeBusLineId; }
       const line = this.busLine(lineId);
       if (!line) return '公交线路不存在';
-      if (!path.length) { line.route = []; line.stops.clear(); return ''; }
+      if (!path.length) { line.route = []; line.stops.clear(); this.invalidateBusItineraries(); return ''; }
       if (path.length < 2) return '公交线路每段至少需要经过两格道路';
       if (path.some(n => !Number.isInteger(n) || !this.roads.has(n))) return '公交线路只能经过已有道路';
       for (let i = 1; i < path.length; i++) if (!this.edges.get(path[i - 1])?.has(path[i])) return '公交线路必须沿已经连通的道路绘制';
@@ -163,6 +248,7 @@
       line.route = [...path];
       if (line.route.length >= 3 && line.route[0] === line.route[line.route.length - 1]) line.returnTrip = false;
       line.stops = new Set(this.busRouteCells(line).filter(cell => this.neighbors(cell).some(n => this.buildings.has(n))));
+      this.invalidateBusItineraries();
       return '';
     }
     appendBusRoute(path, lineId = this.activeBusLineId) {
@@ -201,7 +287,7 @@
       const line = this.busLine(lineId);
       if (!line) return '公交线路不存在';
       if (line.route.length && this.remaining < (count - line.count) * BUS_COST) return `增加公交车辆需要 ${(count - line.count) * BUS_COST} 点预算`;
-      line.count = count;
+      if(line.count!==count){line.count=count;this.invalidateBusItineraries();}
       return '';
     }
     busStopPositions(buildingCell, lineId = this.activeBusLineId) {
@@ -217,7 +303,7 @@
     transferPassengers() { return [...(this.transferQueues?.values()||[])].flat(); }
     transferReport() { const waiting=this.transferPassengers().length,times=this.transferWaitTimes||[];return { transfers:this.transferCount||0,waiting,maxWaiting:this.maxTransferWaiting||0,averageWait:times.length?times.reduce((sum,value)=>sum+value,0)/times.length:0 }; }
     resetBusStats() {
-      this.transferQueues=new Map();this.transferCount=0;this.transferWaitTimes=[];this.maxTransferWaiting=0;
+      this.transferQueues=new Map();this.transferCount=0;this.transferWaitTimes=[];this.maxTransferWaiting=0;this._busItineraryChoices=new Map();
       for (const line of this.busLines) line.stats = { boarded: 0, alighted: 0, transfersIn:0, transfersOut:0, rejectedFull: 0, passengerSeconds: 0, vehicleSeconds: 0, cycles: 0, stops: {} };
     }
     busStopDemand(cell, lineId = this.activeBusLineId) {
@@ -240,7 +326,9 @@
       const line = this.busLine(lineId);
       if (!this.level.features.bus || !line?.route.length) return '请先规划公交线路';
       if (!this.canSetBusStop(cell, lineId) || typeof enabled !== 'boolean') return '公交站只能设置在线路经过的道路格';
+      if (line.stops.has(cell)===enabled) return '';
       if (enabled) line.stops.add(cell); else line.stops.delete(cell);
+      this.invalidateBusItineraries();
       return '';
     }
     busGoalFor(home, routePosition, lineId) {
