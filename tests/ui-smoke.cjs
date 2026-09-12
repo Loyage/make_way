@@ -86,14 +86,29 @@ async function main() {
       await click('#save-design');
       await click('#load-design');
       assert.equal(await evaluate('document.querySelector("#load-dialog").open'), true);
+      const dialogGeometry=await evaluate(`(()=>{const dialog=document.querySelector('#load-dialog'),r=dialog.getBoundingClientRect(),buttons=[...dialog.querySelectorAll('button')].map(button=>button.getBoundingClientRect());return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight,buttons:buttons.map(b=>({left:b.left,top:b.top,right:b.right,bottom:b.bottom}))};})()`);
+      assert.ok(dialogGeometry.left>=-1&&dialogGeometry.top>=-1&&dialogGeometry.right<=dialogGeometry.viewportWidth+1&&dialogGeometry.bottom<=dialogGeometry.viewportHeight+1,`load dialog must stay inside viewport at ${width}px`);
+      assert.ok(dialogGeometry.width>=Math.min(280,width-24),`load dialog remains usable at ${width}px`);
+      assert.equal(dialogGeometry.buttons.some((button,index)=>dialogGeometry.buttons.slice(index+1).some(other=>Math.min(button.right,other.right)-Math.max(button.left,other.left)>.5&&Math.min(button.bottom,other.bottom)-Math.max(button.top,other.top)>.5)),false,`dialog buttons must not overlap at ${width}px`);
       await click('#cancel-load');
       await click('.design-menu > summary');
       if (width <= 760) assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button, .zoom-controls button")).filter(button=>button.getClientRects().length).every(button=>button.getBoundingClientRect().height>=44)'), true, `touch targets at ${width}px`);
       await evaluate('window.scrollTo(0,0)');await delay(100);
-      const mapPosition=await evaluate('({top:document.querySelector("canvas").getBoundingClientRect().top,height:innerHeight})');
-      assert.ok(mapPosition.top<mapPosition.height*.55,`map must appear in the upper viewport at ${width}px (actual ${mapPosition.top})`);
-      assert.equal(await evaluate('document.querySelector(".toolbar").getBoundingClientRect().bottom <= document.querySelector(".canvas-wrap").getBoundingClientRect().top'), true, `toolbar must stay above the map at ${width}px`);
+      const layout=await evaluate(`(()=>{const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};},buttons=[...document.querySelectorAll('.toolbar button')].filter(button=>button.getClientRects().length).map(button=>{const r=button.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};});return {canvas:rect('canvas'),wrap:rect('.canvas-wrap'),toolbar:rect('.toolbar'),board:rect('.board-panel'),sidebar:rect('.sidebar'),buttons,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`);
+      assert.ok(layout.canvas.top<layout.viewportHeight*.55,`map must appear in the upper viewport at ${width}px (actual ${layout.canvas.top})`);
+      assert.ok(layout.toolbar.bottom<=layout.wrap.top+1,`toolbar must stay above the map at ${width}px`);
+      assert.ok(layout.canvas.left>=layout.wrap.left-1&&layout.canvas.right<=layout.wrap.right+1&&layout.canvas.top>=layout.wrap.top-1&&layout.canvas.bottom<=layout.wrap.bottom+1,`canvas must remain inside its map frame at ${width}px`);
+      assert.ok(layout.canvas.width>0&&layout.canvas.height>=180,`map must retain a usable visible area at ${width}px`);
+      assert.equal(layout.buttons.some((button,index)=>layout.buttons.slice(index+1).some(other=>Math.min(button.right,other.right)-Math.max(button.left,other.left)>.5&&Math.min(button.bottom,other.bottom)-Math.max(button.top,other.top)>.5)),false,`toolbar controls must not overlap at ${width}px`);
+      if (width <= 760) {
+        await click('#select-tool');
+        const drawer=await evaluate(`(()=>{const r=document.querySelector('#road-inspector').getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`);
+        assert.ok(drawer.left>=8&&drawer.right<=drawer.viewportWidth-8&&drawer.top>=-1&&drawer.bottom<=drawer.viewportHeight-8,`selection drawer must stay inside mobile viewport at ${width}px`);
+        assert.ok(drawer.height<=drawer.viewportHeight*.72+2,`selection drawer height must remain bounded at ${width}px`);
+        await click('#close-inspector');
+      }
       if (width > 760) {
+        assert.ok(layout.board.right<=layout.sidebar.left+1,`desktop map and sidebar must not overlap at ${width}px`);
         assert.equal(await evaluate('document.querySelector("#start").getBoundingClientRect().bottom <= innerHeight'), true, `operation button must fit the desktop viewport at ${width}px`);
         assert.equal(await evaluate('document.querySelector(".canvas-wrap").getBoundingClientRect().width / document.querySelector(".board-panel").getBoundingClientRect().width > .9'), true, `map must use the desktop workspace width at ${width}px`);
       }
@@ -107,7 +122,7 @@ async function main() {
       assert.ok(screenshot.nonLightRatio>.05&&screenshot.nonLightRatio<.95,`screenshot is neither blank nor fully obscured at ${width}px @${dpr}x`);
     }
     assert.deepEqual(errors, []);
-    console.log('UI smoke passed: six viewport screenshots, mobile and desktop high DPR, catalog, information panels, save/load, touch targets and map priority.');
+    console.log('UI smoke passed: six viewport screenshots, bounded dialogs and drawers, non-overlapping controls, mobile and desktop high DPR, catalog, information panels, save/load, touch targets and map priority.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`); ws.close();
   }
