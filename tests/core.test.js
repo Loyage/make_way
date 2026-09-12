@@ -57,6 +57,17 @@ test('sandbox has no deadline and permits safe road edits during operation', () 
   const empty=key(0,0);assert.equal(city.edit(empty,false,0),'');assert.ok(city.roads.has(empty));
   assert.equal(city.edit(empty,true,0),'');assert.ok(!city.roads.has(empty));
 });
+test('sandbox supports demand, continuous saturation and unlimited budget settings', () => {
+  const city=new City('neighborhood',{sandbox:true,demandMultiplier:2,continuousDemand:true,unlimitedBudget:true});
+  assert.equal(city.remaining,Infinity);assert.equal(city.homes[0].generationRate,city.homes[0].baseGenerationRate*2);
+  city.toggle();run(city,city.homes[0].passengers/city.homes[0].generationRate+1);
+  assert.ok(city.generated[0]>city.homes[0].passengers,'continuous demand exceeds the configured population');
+  assert.equal(city.passengerBreakdown(0).ungenerated,0);
+  city.stop();assert.equal(city.setSandboxSettings({demandMultiplier:.5,continuousDemand:false}),'');
+  assert.equal(city.homes[0].generationRate,city.homes[0].baseGenerationRate*.5);
+  assert.equal(city.setSandboxSettings({unlimitedBudget:false}),'');assert.equal(city.budget,city.level.budget);
+  assert.match(new City('neighborhood').setSandboxSettings({demandMultiplier:2}),/只有沙盒/);
+});
 test('operation records peak home queues and deterministic road hotspots', () => {
   const city=new City();connect(city);city.toggle();run(city,3);
   assert.ok(city.maxHomeQueues.some(count=>count>0));

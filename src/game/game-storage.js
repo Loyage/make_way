@@ -15,20 +15,28 @@
       levelId: city.level.id,
       mode,
       design: campaign ? null : city.serializeDesign(),
-      campaign: campaign ? campaign.serializeProgress() : null
+      campaign: campaign ? campaign.serializeProgress() : null,
+      sandbox: mode === 'sandbox' ? {
+        budgetMode: city.unlimitedBudget ? 'unlimited' : 'level',
+        demandMultiplier: city.demandMultiplier,
+        continuousDemand: city.continuousDemand
+      } : null
     };
   }
 
   function restoreSnapshot(saved, core) {
     if (!saved || saved.version !== 1 || typeof saved.levelId !== 'string' || !['challenge','sandbox'].includes(saved.mode)
       || !core?.LEVELS?.some(level=>level.id===saved.levelId)) throw new Error('进度存档格式无效');
+    const sandbox=saved.sandbox??(saved.mode==='sandbox'?{budgetMode:'level',demandMultiplier:1,continuousDemand:false}:null);
+    if(saved.mode==='sandbox'&&(!sandbox||!['level','unlimited'].includes(sandbox.budgetMode)||!Number.isFinite(sandbox.demandMultiplier)||sandbox.demandMultiplier<=0||sandbox.demandMultiplier>10||typeof sandbox.continuousDemand!=='boolean'))throw new Error('沙盒实验参数无效');
+    if(saved.mode==='challenge'&&saved.sandbox!=null)throw new Error('挑战进度不能包含沙盒参数');
     if (saved.campaign !== null) {
       if (saved.mode !== 'challenge' || !saved.campaign || saved.campaign.levelId !== saved.levelId || saved.design !== null) throw new Error('多日进度存档格式无效');
       const campaign=core.CampaignSession.restoreProgress(saved.campaign);
       return { mode: saved.mode, city: campaign.city, campaign };
     }
     if (!saved.design || saved.design.levelId !== saved.levelId) throw new Error('规划草稿格式无效');
-    const city=new core.City(saved.levelId,{sandbox:saved.mode==='sandbox'}),message=city.loadDesign(saved.design);
+    const city=new core.City(saved.levelId,{sandbox:saved.mode==='sandbox',unlimitedBudget:sandbox?.budgetMode==='unlimited',demandMultiplier:sandbox?.demandMultiplier,continuousDemand:sandbox?.continuousDemand}),message=city.loadDesign(saved.design);
     if(message)throw new Error(message);
     return { mode: saved.mode, city, campaign: null };
   }
