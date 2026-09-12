@@ -40,7 +40,7 @@ async function main() {
   }
   const drag=(x1,y1,x2,y2)=>dragThrough([[x1,y1],[x2,y2]]);
   async function press(key,modifiers=0){
-    const codes={ArrowLeft:['ArrowLeft',37],ArrowRight:['ArrowRight',39],ArrowUp:['ArrowUp',38],ArrowDown:['ArrowDown',40],' ':['Space',32],Escape:['Escape',27],z:['KeyZ',90],y:['KeyY',89],'2':['Digit2',50],'3':['Digit3',51],p:['KeyP',80]},[code,windowsVirtualKeyCode]=codes[key];
+    const codes={ArrowLeft:['ArrowLeft',37],ArrowRight:['ArrowRight',39],ArrowUp:['ArrowUp',38],ArrowDown:['ArrowDown',40],' ':['Space',32],Escape:['Escape',27],z:['KeyZ',90],y:['KeyY',89],'1':['Digit1',49],'2':['Digit2',50],'3':['Digit3',51],'4':['Digit4',52],'5':['Digit5',53],p:['KeyP',80]},[code,windowsVirtualKeyCode]=codes[key];
     await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode,modifiers});
     await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode,modifiers});await delay(30);
   }
@@ -109,6 +109,9 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
     await go(LEVELS.findIndex(level=>level.id==='bridge-transfer'));
+    for(const [shortcut,toolId] of [['1','view-tool'],['2','select-tool'],['3','road-tool'],['4','cut-tool'],['5','bus-tool']]){
+      await press(shortcut);assert.equal(await evaluate(`document.querySelector("#${toolId}").getAttribute("aria-pressed")`),'true',`shortcut ${shortcut} selects ${toolId}`);
+    }
     await click('#bus-tool');await dragThrough([[2,4],[3,4],[4,4],[5,4],[6,4],[6,5],[6,6],[7,6]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
     await click('#select-tool');await drag(7,6,7,6);await evaluate('document.querySelector(".bus-line-card .tool:last-child").click()');
     await click('#new-bus-line');await click('#bus-tool');await dragThrough([[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[13,7],[13,8]]);await select('bus-count','3');await click('#bus-return-trip');await click('#bus-return-stops');
