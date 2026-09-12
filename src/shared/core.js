@@ -145,6 +145,11 @@
       this.runtimeDuration = options.duration;
       this.deadlineMode = Boolean(options.deadlineMode);
       this.sandbox = Boolean(options.sandbox);
+      this.demandMultiplier = this.sandbox && Number.isFinite(options.demandMultiplier) && options.demandMultiplier > 0 ? options.demandMultiplier : 1;
+      this.continuousDemand = this.sandbox && Boolean(options.continuousDemand);
+      this.unlimitedBudget = this.sandbox && Boolean(options.unlimitedBudget);
+      this.sandboxBudget = this.sandbox && Number.isFinite(options.budget) ? options.budget : this.level.budget;
+      if (this.unlimitedBudget) this.runtimeBudget = Infinity;
       this.fixedCost = Number.isInteger(options.fixedCost) && options.fixedCost >= 0 ? options.fixedCost : 0;
       this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site, condition: site.condition ? { ...site.condition } : undefined }]));
       this.dormantBuildings = new Map((options.dormantBuildings || []).map(site => [site.cell, { ...site }]));
@@ -191,6 +196,30 @@
     get budget() { return this.runtimeBudget ?? this.level.budget; }
     get duration() { return this.sandbox ? Infinity : this.runtimeDuration ?? this.level.duration; }
     get target() { return this.homes.reduce((sum, home) => sum + home.passengers, 0); }
+    demandRate(home) { return home.baseGenerationRate * this.demandMultiplier; }
+    goalHasCapacity(goalIndex) { const goal=this.goals[goalIndex];return Boolean(goal)&&(this.continuousDemand||goal.input==null||this.goalAssigned[goalIndex]<goal.input); }
+    setSandboxSettings(settings = {}) {
+      if (!this.sandbox) return '只有沙盒模式可以调整实验参数';
+      if (settings.demandMultiplier !== undefined) {
+        const multiplier=Number(settings.demandMultiplier);
+        if (!Number.isFinite(multiplier)||multiplier<=0||multiplier>10)return '需求倍率须大于 0 且不超过 10';
+        const ratio=this.demandMultiplier/multiplier;
+        this.demandMultiplier=multiplier;
+        this.homes.forEach((home,index)=>{home.generationRate=this.demandRate(home);this.spawnTimers[index]*=ratio;});
+      }
+      if (settings.continuousDemand !== undefined) {
+        const continuous=Boolean(settings.continuousDemand);
+        if(continuous&&!this.continuousDemand)this.homes.forEach((home,index)=>{if(this.generated[index]>=home.passengers)this.spawnTimers[index]=1/this.demandRate(home);});
+        this.continuousDemand=continuous;
+      }
+      if (settings.unlimitedBudget !== undefined) {
+        const unlimited=Boolean(settings.unlimitedBudget),limitedBudget=this.sandboxBudget;
+        if (!unlimited && limitedBudget-this.fixedCost-[...this.roads].reduce((sum,n)=>sum+this.roadType(n).cost,0)-this.busLines.filter(line=>line.route.length).reduce((sum,line)=>sum+line.count*BUS_COST,0)<0) return '当前方案已超过本关预算，请先拆除或降级后再沿用预算';
+        this.unlimitedBudget=unlimited;this.runtimeBudget=unlimited?Infinity:limitedBudget;
+      }
+      this.refreshPaths();
+      return '';
+    }
     key(x, y) { return key(x, y, this.width); }
     point(n) { return point(n, this.width); }
     neighbors(n) { return neighbors(n, this.width, this.height); }
@@ -254,7 +283,7 @@
     rebuildRoutes() {
       const homes = [], goals = [];
       this.routes.forEach((r, ri) => {
-        for (const h of routeHomes(r)) homes.push({ route: ri, cell: h.cell, generationRate: h.generationRate, passengers: h.passengers ?? 0, color: r.color, light: r.light });
+        for (const h of routeHomes(r)) homes.push({ route: ri, cell: h.cell, baseGenerationRate: h.generationRate, generationRate: h.generationRate * this.demandMultiplier, passengers: h.passengers ?? 0, color: r.color, light: r.light });
         for (const g of routeGoals(r)) goals.push({ route: ri, cell: g.cell, label: g.label, input: g.input, color: r.color, light: r.light });
       });
       this.homes = homes;
@@ -317,7 +346,7 @@
       for (let gi = 0; gi < this.goals.length; gi++) {
         const g = this.goals[gi];
         if (g.route !== home.route) continue;
-        if (g.input != null && this.goalAssigned[gi] >= g.input) continue;
+        if (!this.goalHasCapacity(gi)) continue;
         const candidate = this.findCarPath(home.cell,g.cell,options),candidateCost=this.pathCost(candidate,options);
         if (candidate && (candidateCost + 1e-9 < cost || Math.abs(candidateCost-cost)<1e-9 && (!path || candidate.length<path.length))) { path = candidate; cost = candidateCost; goalIndex = gi; }
       }
@@ -359,8 +388,8 @@
     }
     passengerBreakdown(homeIndex = null) {
       const indices = homeIndex === null ? this.homes.map((_, index) => index) : Number.isInteger(homeIndex) && this.homes[homeIndex] ? [homeIndex] : [];
-      const selected = new Set(indices), total = indices.reduce((sum, index) => sum + this.homes[index].passengers, 0);
-      const generated = indices.reduce((sum, index) => sum + this.generated[index], 0);
+      const selected = new Set(indices), configuredTotal = indices.reduce((sum, index) => sum + this.homes[index].passengers, 0);
+      const generated = indices.reduce((sum, index) => sum + this.generated[index], 0), total=Math.max(configuredTotal,generated);
       const waiting = indices.reduce((sum, index) => sum + this.queues[index], 0);
       const carTransit = this.cars.filter(car => !car.done && selected.has(car.homeIndex)).length;
       const busTransit = this.buses.reduce((sum, bus) => sum + bus.passengers.filter(passenger => selected.has(passenger.homeIndex)).length, 0)+this.transferPassengers().filter(passenger=>selected.has(passenger.homeIndex)).length;
@@ -371,13 +400,13 @@
       const goal = this.goals[goalIndex];
       if (!goal) return null;
       const arrived = this.byGoal[goalIndex], reserved = Math.max(0, this.goalAssigned[goalIndex] - arrived);
-      return { capacity: goal.input, remaining: goal.input == null ? null : Math.max(0, goal.input - this.goalAssigned[goalIndex]), reserved, arrived };
+      return { capacity: this.continuousDemand ? null : goal.input, remaining: this.continuousDemand || goal.input == null ? null : Math.max(0, goal.input - this.goalAssigned[goalIndex]), reserved, arrived };
     }
     homeTravelInfo(homeIndex) {
       const home = this.homes[homeIndex];
       if (!home) return null;
       const matchingGoals = this.goals.map((goal, index) => goal.route === home.route ? index : -1).filter(index => index >= 0);
-      const availableGoals = matchingGoals.filter(index => this.goals[index].input == null || this.goalAssigned[index] < this.goals[index].input);
+      const availableGoals = matchingGoals.filter(index => this.goalHasCapacity(index));
       const dynamic=['running','paused'].includes(this.state),{ goalIndex: carGoalIndex, path } = this.bestGoalPath(homeIndex,dynamic?{dynamic:true}:{});
       const busItinerary=this.busItineraryFor(homeIndex),busGoalIndex=busItinerary?.goalIndex??null,busLine=this.busLine(busItinerary?.legs[0]?.lineId);
       const assignedGoalIndices = [...new Set([
@@ -801,7 +830,7 @@
       for (let ri = 0; ri < this.routes.length; ri++) {
         const homes = this.homes.filter(home => home.route === ri), goals = this.goals.filter(goal => goal.route === ri);
         const population = homes.reduce((sum, home) => sum + home.passengers, 0);
-        if (goals.length && goals.every(goal => goal.input != null)) {
+        if (!this.continuousDemand && goals.length && goals.every(goal => goal.input != null)) {
           const capacity = goals.reduce((sum, goal) => sum + goal.input, 0);
           if (capacity < population) issues.push({
             code: 'route-capacity', title: '目的地容量不足', cells: goals.map(goal => goal.cell),
@@ -838,7 +867,7 @@
           capacity[source][homeStart + i] = this.homes[hi].passengers;
           goalIndices.forEach((gi, j) => { if (reachable[hi][gi]) capacity[homeStart + i][goalStart + j] = this.homes[hi].passengers; });
         });
-        goalIndices.forEach((gi, j) => { capacity[goalStart + j][sink] = this.goals[gi].input ?? this.target; });
+        goalIndices.forEach((gi, j) => { capacity[goalStart + j][sink] = this.continuousDemand ? this.target : this.goals[gi].input ?? this.target; });
         while (true) {
           const parent = Array(sink + 1).fill(-1), queue = [source]; parent[source] = source;
           for (let q = 0; q < queue.length && parent[sink] < 0; q++) for (let next = 0; next <= sink; next++) {
@@ -875,11 +904,11 @@
       for (let hi = 0; hi < this.homes.length; hi++) {
         const home = this.homes[hi];
         this.spawnTimers[hi] -= dt;
-        while (this.spawnTimers[hi] <= 1e-9 && this.generated[hi] < home.passengers) {
+        while (this.spawnTimers[hi] <= 1e-9 && (this.continuousDemand || this.generated[hi] < home.passengers)) {
           this.generated[hi]++;
           this.queues[hi]++;
           this.queueTimes[hi]?.push(this.elapsed);
-          this.spawnTimers[hi] += 1 / home.generationRate;
+          this.spawnTimers[hi] += 1 / this.demandRate(home);
         }
         this.maxHomeQueues[hi]=Math.max(this.maxHomeQueues[hi]||0,this.queues[hi]);
         if (this.queues[hi]) {

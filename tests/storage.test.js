@@ -12,9 +12,10 @@ function memoryStorage(initial = {}) {
 
 test('automatic progress round-trips a normal challenge and sandbox atomically', () => {
   for(const mode of ['challenge','sandbox']){
-    const city=new Core.City('neighborhood',{sandbox:mode==='sandbox'});buildReferencePlan(city);
+    const city=new Core.City('neighborhood',{sandbox:mode==='sandbox',unlimitedBudget:mode==='sandbox',demandMultiplier:mode==='sandbox'?2:1,continuousDemand:mode==='sandbox'});buildReferencePlan(city);
     const snapshot=Storage.createSnapshot(city,null,mode),restored=Storage.restoreSnapshot(snapshot,Core);
     assert.equal(restored.mode,mode);assert.equal(restored.campaign,null);assert.equal(restored.city.sandbox,mode==='sandbox');
+    if(mode==='sandbox'){assert.equal(restored.city.unlimitedBudget,true);assert.equal(restored.city.demandMultiplier,2);assert.equal(restored.city.continuousDemand,true);}
     assert.deepEqual(restored.city.serializeDesign(),city.serializeDesign());
   }
   const legacy=Storage.restoreSnapshot({version:1,levelId:'neighborhood',mode:'challenge',campaign:null,design:{version:1,levelId:'neighborhood',roads:[],signals:[]}},Core);
