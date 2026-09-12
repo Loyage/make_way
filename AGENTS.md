@@ -45,6 +45,7 @@
 - 所有功能、规则、界面、工作流、配置项和测试入口变更都必须在同一任务中同步更新对应文档，不要等待用户再次提醒，也不能只在对话中说明。
 - 玩家端变更必须同步检查并更新 `src/game/manual.html` 游戏指南；管理员端变更必须同步检查并更新 `src/admin/admin-manual.html` 管理员操作手册。共享规则或同时影响两端的行为必须更新两份手册。
 - `README.md` 维护项目级功能、启动、部署和测试说明；`GAME_IMPROVEMENT_DIRECTIONS.md` 的完成状态须与实际实现一致。玩家可见文本、ARIA 标签和文档统一使用简体中文。
+- 功能改进很可能在分离的 worktree 中进行；改进完成并通过验证后，必须在对应的 `docs/improvements/*.md` 和 `GAME_IMPROVEMENT_DIRECTIONS.md` 中更新完成状态，然后将已完成的改进合并进 `main` 分支，避免只留在分支或 worktree 中。
 - 凡是涉及操作逻辑或游戏规则的变更（包括工具、输入方式、建设/拆除规则、车辆出行、道路容量、路口通行、运营控制与快捷键），必须在代码提交前完成上述文档同步。
 - 修改 HTML 元素 `id` 时，同步搜索并更新 `src/game/game.js`、CSS 选择器和浏览器冒烟测试。
 - Canvas 绘制应按 CSS 尺寸和设备像素比工作，并继续支持鼠标、触摸与键盘操作。
@@ -135,4 +136,5 @@ node tests/admin-browser-smoke.cjs
 - 新增静态资源已加入服务器白名单和测试
 - 玩家功能已同步 `src/game/manual.html`，管理员功能已同步 `src/admin/admin-manual.html`；共享行为已更新两份手册
 - README、改进方向、界面文本、ARIA 标签和测试保持一致
+- 分离 worktree 中完成的功能改进已更新对应改进条目和 `GAME_IMPROVEMENT_DIRECTIONS.md`，并已合并进 `main` 分支
 - 已执行适合改动范围的语法检查和测试，并如实报告未执行的可选浏览器测试
