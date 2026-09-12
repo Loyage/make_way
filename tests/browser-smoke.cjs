@@ -80,6 +80,9 @@ async function main() {
     await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
     assert.equal(await evaluate('document.querySelector(".design-menu").open'),false);
+    assert.equal(await evaluate('document.querySelector(".level-card[data-level-id=neighborhood] .level-status").textContent'),'未开始');
+    assert.equal(await evaluate('document.querySelector(".level-card[data-level-id=neighborhood]").classList.contains("recommended")'),true,'the first unfinished lesson is recommended without locking other lessons');
+    assert.ok((await evaluate('document.querySelector(".chapter-tab small").textContent')).includes('0/5 关'),'chapter tab summarizes completion and stars');
     assert.equal(await evaluate('document.querySelector("#context-guide").hidden'),false,'first visit shows contextual onboarding');
     assert.ok((await text('context-guide-title')).includes('拖拽模式'));await click('#context-guide-action');
     assert.equal(await evaluate('document.activeElement.id'),'road-tool','guide action locates the required control without building for the player');
@@ -274,6 +277,9 @@ async function main() {
     assert.equal(await evaluate('document.querySelector("#result-dialog").classList.contains("rewards-visible")'),true,'result rewards animate after the dialog opens');
     assert.equal(await evaluate('document.querySelector(".personal-best").classList.contains("new-best")'),true,'first completion celebrates the personal best');
     assert.equal(await evaluate('document.querySelector(".level-card.selected .level-stars").textContent'),'★ 3/3');
+    assert.equal(await evaluate('document.querySelector(".level-card.selected .level-status").textContent'),'已通关');
+    assert.ok((await text('result-recommendation-title')).includes('推荐下一课'));
+    assert.ok((await text('result-recommendation-text')).length>4,'settlement explains the next lesson focus');
 
     for(const width of [320,390,760,768,1024,1440]){
       await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<760});await delay(60);

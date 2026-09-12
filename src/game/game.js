@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
-  const ProgressStorage = TrafficGameStorage, Tutorial = TrafficGameTutorial;
+  const ProgressStorage = TrafficGameStorage, Tutorial = TrafficGameTutorial, Navigation = TrafficGameNavigation;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
   const PLAYER_SPEED_OPTIONS=[.5,1,2,4],ADMIN_SPEED_OPTIONS=[.5,1,2,4,Infinity],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
@@ -26,7 +26,7 @@
   let campaign = null, pendingCampaignScore = null, pendingRegionId = null;
   let pendingRestore = null, autoSaveSuspended = true, lastAutoSaveSignature = '';
   let tutorialUsedRoad = false, tutorialInspected = false, tutorialStarted = false, tutorialForced = false, activeGuide = null, activeGuideLevelId = null, tutorialCompleted = false, tutorialSeenIds = [];
-  let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
+  let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0, startedLevelIds = new Set(), recentLevelId = null;
   let celebratedDelivered = 0, connectedRoutes = new Set();
   let hintCity = null, hintSignature = '', planningHints = [];
   const arrivalEffects = TrafficEffects.createArrivalEffects(),drawResidentMood=TrafficEffects.drawResidentMood;
@@ -34,7 +34,7 @@
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
   const PERSONAL_BEST_PREFIX = 'traffic-game-personal-best-v1:';
   const STAR_PREFIX = 'traffic-game-stars-v1:';
-  const TUTORIAL_DONE_KEY='traffic-game-tutorial-v1',TUTORIAL_SEEN_KEY='traffic-game-tutorial-seen-v1';
+  const TUTORIAL_DONE_KEY='traffic-game-tutorial-v1',TUTORIAL_SEEN_KEY='traffic-game-tutorial-seen-v1',STARTED_LEVELS_KEY='traffic-game-started-v1';
   const failedLevels = new Set();
   const speedOptions=()=>adminMode&&!city?.sandbox?ADMIN_SPEED_OPTIONS:PLAYER_SPEED_OPTIONS;
   const speedLabel=value=>value===Infinity?'∞':String(value);
@@ -42,6 +42,8 @@
     try { return localStorage.getItem(STORAGE_PREFIX + levelId); }
     catch { return null; }
   }
+  function loadStartedLevels(){try{const ids=JSON.parse(localStorage.getItem(STARTED_LEVELS_KEY)||'[]');startedLevelIds=new Set(Array.isArray(ids)?ids.filter(id=>levels().some(level=>level.id===id)):[]);}catch{startedLevelIds=new Set();}}
+  function markLevelStarted(levelId=city.level.id){recentLevelId=levelId;if(adminMode||startedLevelIds.has(levelId))return;startedLevelIds.add(levelId);try{localStorage.setItem(STARTED_LEVELS_KEY,JSON.stringify([...startedLevelIds]));}catch{/* progress labels remain optional */}if(levelButtons.length)showChapter(visibleChapterIndex);}
   function dismissPendingRestore() {
     pendingRestore=null;$('continue-game').hidden=true;autoSaveSuspended=false;
   }
@@ -112,7 +114,7 @@
     if(designHistory[designHistoryIndex]!==before)designHistory[designHistoryIndex]=before;
     designHistory=designHistory.slice(0,designHistoryIndex+1);designHistory.push(after);
     if(designHistory.length>61)designHistory.shift();
-    designHistoryIndex=designHistory.length-1;updateHistoryControls();return true;
+    designHistoryIndex=designHistory.length-1;markLevelStarted();updateHistoryControls();return true;
   }
   function mutateDesign(action) { const before=designSnapshot(),message=action();recordDesignChange(before);return message; }
   function replayAnimation(element,className) {
@@ -143,23 +145,26 @@
     const routes=level.campaign?.routes||level.routes||[],population=routes.reduce((sum,route)=>sum+(route.homes||[]).reduce((total,home)=>total+(home.passengers||0),0),0);
     return {satisfaction:80,efficiency:{maxCost:level.budget,maxQueue:population}};
   }
-  function levelStarCount(level) {
-    if(level.campaign)return level.campaign.days.reduce((sum,_,index)=>sum+storedStars(level,index).length,0);
-    return storedStars(level).length;
+  function levelProgress(level){
+    const rows=level.campaign?level.campaign.days.map((_,index)=>storedStars(level,index)):[storedStars(level)];
+    return Navigation.levelProgress(level,startedLevelIds.has(level.id)||storedDesign(level.id)!==null||pendingRestore?.city.level.id===level.id,rows);
   }
+  function allLevelProgress(){return Object.fromEntries(levels().map(level=>[level.id,levelProgress(level)]));}
+  function recommendedLevel(){return Navigation.recommendedLevel(levels(),allLevelProgress(),recentLevelId||pendingRestore?.city.level.id||city?.level.id);}
   let levelButtons = [], chapterButtons = [], visibleChapterIndex = 0;
   function showChapter(chapterIndex) {
     const chapter=chapters()[chapterIndex];if(!chapter)return;
     visibleChapterIndex=chapterIndex;
-    chapterButtons.forEach((button,i)=>{button.classList.toggle('selected',i===chapterIndex);button.setAttribute('aria-pressed',String(i===chapterIndex));});
+    chapterButtons.forEach((button,i)=>{const item=chapters()[i],summary=Navigation.chapterProgress(item,allLevelProgress());button.querySelector('small').textContent=`${item.english} · ${summary.completed}/${summary.total} 关 · ★ ${summary.stars}/${summary.totalStars}`;button.setAttribute('aria-label',`${item.name}，已通关 ${summary.completed} / ${summary.total} 关，获得 ${summary.stars} / ${summary.totalStars} 星`);button.classList.toggle('selected',i===chapterIndex);button.setAttribute('aria-pressed',String(i===chapterIndex));});
     const list=$('level-list');list.replaceChildren();levelButtons=[];
     for(const level of chapter.levels) {
       const i=levels().indexOf(level),button=document.createElement('button');button.className='level-card';button.dataset.levelId=level.id;
       const number=document.createElement('span');number.className='level-number';number.textContent=String(i+1).padStart(2,'0');
       const name=document.createElement('strong');name.textContent=level.name;
       const detail=document.createElement('small');detail.textContent=`${level.difficulty} · ${level.lesson}`;
-      const starCount=levelStarCount(level),starTotal=level.campaign?level.campaign.days.length*3:3,stars=document.createElement('span');stars.className='level-stars';stars.setAttribute('aria-label',`已获得 ${starCount} / ${starTotal} 星`);stars.textContent=`★ ${starCount}/${starTotal}`;
-      button.append(number,name,detail,stars);button.onclick=()=>requestLevel(level.id);list.append(button);levelButtons.push(button);
+      const progress=levelProgress(level),status=document.createElement('span');status.className=`level-status ${progress.status}`;status.textContent=progress.status==='completed'?'已通关':progress.status==='in-progress'?'进行中':'未开始';
+      const stars=document.createElement('span');stars.className='level-stars';stars.setAttribute('aria-label',`已获得 ${progress.stars} / ${progress.totalStars} 星`);stars.textContent=`★ ${progress.stars}/${progress.totalStars}`;
+      button.classList.toggle('recommended',recommendedLevel()?.id===level.id);button.append(number,name,detail,status,stars);button.onclick=()=>requestLevel(level.id);list.append(button);levelButtons.push(button);
     }
     $('level-summary').textContent=`当前：${city.level.name}`;
     levelButtons.forEach(button=>{const selected=button.dataset.levelId===city.level.id;button.classList.toggle('selected',selected);button.setAttribute('aria-current',selected?'true':'false');});
@@ -170,10 +175,10 @@
       const button=document.createElement('button');button.className='chapter-tab';button.setAttribute('aria-pressed','false');
       const number=document.createElement('span');number.textContent=String(chapterIndex+1).padStart(2,'0');
       const name=document.createElement('strong');name.textContent=chapter.name;
-      const english=document.createElement('small');english.textContent=chapter.english;
-      button.append(number,name,english);button.onclick=()=>showChapter(chapterIndex);list.append(button);chapterButtons.push(button);
+      const summary=Navigation.chapterProgress(chapter,allLevelProgress()),english=document.createElement('small');english.textContent=`${chapter.english} · ${summary.completed}/${summary.total} 关 · ★ ${summary.stars}/${summary.totalStars}`;
+      button.append(number,name,english);button.setAttribute('aria-label',`${chapter.name}，已通关 ${summary.completed} / ${summary.total} 关，获得 ${summary.stars} / ${summary.totalStars} 星`);button.onclick=()=>showChapter(chapterIndex);list.append(button);chapterButtons.push(button);
     }
-    const current=chapters().findIndex(chapter=>chapter.levels.some(level=>level.id===city.level.id));showChapter(Math.max(0,current));
+    const focusId=pendingRestore?.city.level.id||city.level.id,current=chapters().findIndex(chapter=>chapter.levels.some(level=>level.id===focusId));showChapter(Math.max(0,current));
   }
   function renderCampaignProgress() {
     const panel=$('campaign-progress');panel.hidden=!campaign;$('legend-site').hidden=!campaign;$('legend-region').hidden=!campaign||!city.lockedRegions.size;
@@ -1044,8 +1049,14 @@
     const comparison=document.createElement('div');comparison.className='personal-best';comparison.classList.toggle('new-best',isBetter);comparison.textContent=!personalBest?'尚无通关个人最佳':isBetter&&!previousBest?'✦ 首次通关，已记录为个人最佳':isBetter?'✦ 刷新个人最佳！':`个人最佳：满意度 ${personalBest.score}% · P95 ${personalBest.p95.toFixed(1)} 秒 · 建设 ${personalBest.cost} 点；本次相差 ${currentResult.score-personalBest.score>=0?'+':''}${currentResult.score-personalBest.score} 分、${(currentResult.p95-personalBest.p95).toFixed(1)} 秒、${currentResult.cost-personalBest.cost} 点`;
     $('result-stats').replaceChildren(summary,meta,starPanel,conservation,distribution,comparison,...(operations.childNodes.length?[operations]:[]));
     showChapter(visibleChapterIndex);
-    $('next-level').hidden = campaign?finalDay:!won||levels().indexOf(city.level)===levels().length-1;
-    $('next-level').textContent=campaign?'进入下一天规划 ↗':'下一座小城 ↗';
+    const nextLesson=levels()[levels().indexOf(city.level)+1]||null,recommendation=$('result-recommendation');
+    recommendation.hidden=false;
+    if(campaign&&!finalDay){$('result-recommendation-title').textContent=`推荐下一步：第 ${campaign.dayIndex+2} 天`;$('result-recommendation-text').textContent='结算收入到账后，保留路网并应对新建筑与新区域。';}
+    else if(won&&nextLesson){$('result-recommendation-title').textContent=`推荐下一课：${nextLesson.name}`;$('result-recommendation-text').textContent=Navigation.lessonSummary(city.level,nextLesson);}
+    else if(won){$('result-recommendation-title').textContent='所有课程已完成';$('result-recommendation-text').textContent='可自由重玩关卡，继续补齐星级或尝试不同规划。';}
+    else{$('result-recommendation-title').textContent=`建议继续：${city.level.name}`;$('result-recommendation-text').textContent='返回当前设计，根据规划提示和运营报告调整瓶颈后再次尝试。';}
+    $('next-level').hidden = campaign?!finalDay?false:!won||!nextLesson:!won||!nextLesson;
+    $('next-level').textContent=campaign&&!finalDay?'进入下一天规划 ↗':nextLesson?`推荐下一课：${nextLesson.name} ↗`:'下一座小城 ↗';
     $('view-city').hidden=Boolean(campaign&&!finalDay);
     $('play-again').textContent=campaign?'重新开始五天':'再规划一次';
     $('result-reference').hidden=won||!currentReference();
@@ -1058,7 +1069,7 @@
     resultDialog.showModal();requestAnimationFrame(()=>resultDialog.classList.add('rewards-visible'));
   }
   function reset(levelId = city.level.id) {
-    const switching=Boolean(city&&levelId!==city.level.id);dismissPendingRestore();lastAutoSaveSignature='';
+    const switching=Boolean(city&&levelId!==city.level.id);dismissPendingRestore();lastAutoSaveSignature='';recentLevelId=levelId;
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=gameMode==='challenge'&&level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId,{sandbox:gameMode==='sandbox'});
     resetDesignHistory();
@@ -1347,7 +1358,7 @@
     dismissPendingRestore();saveAutoProgress();
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
-    if(planning){tutorialStarted=true;storeTutorialDone();setTool('view');}
+    if(planning){markLevelStarted();tutorialStarted=true;storeTutorialDone();setTool('view');}
     accumulator=0;updateUI();
   }
   function toggleOperation() {
@@ -1402,7 +1413,7 @@
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign&&campaign.dayIndex<campaign.days.length-1){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{
@@ -1508,11 +1519,11 @@
         if(message)throw new Error(message);
         TrafficGameBootstrap.validateRuntimeCatalog(TrafficCore);
       } else await TrafficGameBootstrap.loadActiveCatalog({ core: TrafficCore, catalogLoader: TrafficLevelCatalog });
-      city = new City(TrafficCore.LEVELS[0].id);loadTutorialState();
+      city = new City(TrafficCore.LEVELS[0].id);loadTutorialState();loadStartedLevels();
       let restoreProblem='';
       if(!adminMode){
         const stored=ProgressStorage.read(localStorage);restoreProblem=stored.error;
-        if(stored.snapshot)try{pendingRestore=ProgressStorage.restoreSnapshot(stored.snapshot,TrafficCore);}
+        if(stored.snapshot)try{pendingRestore=ProgressStorage.restoreSnapshot(stored.snapshot,TrafficCore);recentLevelId=pendingRestore.city.level.id;}
         catch(error){restoreProblem=error.message;ProgressStorage.clear(localStorage);}
       }
       resetDesignHistory();
