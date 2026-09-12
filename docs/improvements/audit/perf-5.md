@@ -9,5 +9,5 @@
   1. 引导顺序改为「先取 `levels.json`，成功即用；404/无效再取内置清单」，避免双份下载（注意保留现有「覆盖损坏时回退内置」的行为）。
   2. 对文本资源启用 gzip/br（`node:zlib` 零依赖）并加 `Vary: Accept-Encoding`；关卡 JSON 压缩比通常 >4×。
   3. 章节级懒加载（进入章节才取该章关卡）或把每章合并为单文件，把首屏请求数压到个位数；隐藏章节可延迟到管理员面板需要时再取。
-  4. 增加 favicon（内联 SVG 或白名单静态文件），消除控制台 404（`tests/browser-smoke.cjs:23` 目前显式容忍它）。
+  4. 增加 favicon（内联 SVG 或白名单静态文件），消除玩家浏览器冒烟当前显式容忍的控制台 404。
 - **验收**：`tests/server.test.js` 增加 gzip 与 `Vary` 断言；`tests/catalog.test.js` 增加「引导只请求一次清单」的 fetch 桩断言。

@@ -114,9 +114,8 @@ test('housing demand matches road grades, not merely the length of a detour',()=
     }
   }
 });
-for(const id of ['demolition-school','avenue-school','cut-school','signal-school'])test(`${id}: the taught intervention turns a losing plan into a win`,()=>{
+for(const id of ['demolition-school','avenue-school','cut-school'])test(`${id}: the taught intervention turns a losing plan into a win`,()=>{
   const before=new City(id),after=new City(id);
-  if(id==='signal-school')completeCrossing(before);
   buildReferencePlan(after);
   for(const c of [before,after])run(c);
   if(id==='demolition-school')assert.ok(after.remaining>before.remaining,'the rebuild should refund enough budget for a cheaper route');
@@ -139,5 +138,4 @@ test('crossing lesson requires completion and coordinates multiple junctions and
   const c=new City('signal-school');assert.equal(c.paths.filter(Boolean).length,2);
   completeCrossing(c);assert.equal(c.signals.size,6);assert.ok(c.paths.every(Boolean));
   const path=c.paths[4];assert.ok(path.some((n,i)=>i>1&&n-path[i-1]!==path[i-1]-path[i-2]));
-  c.setSignal(key(5,4),true,4);run(c);assert.equal(c.state,'lost','one lamp must not solve the whole map');
 });

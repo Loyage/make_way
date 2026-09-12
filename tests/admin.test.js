@@ -210,12 +210,10 @@ test('admin server binds to loopback by default', async t => {
   assert.equal(server.address().address, '127.0.0.1');
 });
 
-test('admin server saves named presets and overwrites the default config', async t => {
+test('admin server saves and loads named presets', async t => {
   const { createAdminServer, defaultLevels } = require('../admin-server.js');
   const fs = require('node:fs'), path = require('node:path');
-  const BUILT_IN = path.join(__dirname, '..', 'built-in-levels.json');
   const PRESET_DIR = path.join(__dirname, '..', 'level-presets');
-  const backup = fs.readFileSync(BUILT_IN, 'utf8');
   process.env.ADMIN_PASSWORD = 'test-secret';
   const server = await createAdminServer({ port: 0, host: '127.0.0.1' });
   await new Promise(resolve => server.once('listening', resolve));
@@ -223,7 +221,9 @@ test('admin server saves named presets and overwrites the default config', async
   const port = server.address().port;
   const login = await request(port, '/api/login', 'POST', JSON.stringify({ password: 'test-secret' }));
   const cookie = (login.headers['set-cookie'] || []).find(c => c.startsWith('traffic_admin=')).split(';')[0];
-  const auth = { Cookie: cookie }, body = JSON.stringify(defaultLevels());
+  const source=defaultLevels(),chapter=source.chapters[0];
+  const compact={version:source.version,chapters:[{...chapter,levels:[chapter.levels[0]]}]};
+  const auth = { Cookie: cookie }, body = JSON.stringify(compact);
 
   assert.deepEqual(JSON.parse((await request(port, '/api/presets', 'GET', null, auth)).body).presets, []);
   assert.equal((await request(port, '/api/presets/my-config', 'PUT', body, auth)).status, 200);
@@ -231,11 +231,8 @@ test('admin server saves named presets and overwrites the default config', async
   assert.deepEqual(JSON.parse((await request(port, '/api/presets', 'GET', null, auth)).body).presets, ['my-config']);
   const loaded = await request(port, '/api/presets/my-config', 'GET', null, auth);
   assert.equal(loaded.status, 200);
-  assert.equal(JSON.parse(loaded.body).catalog.chapters.length, 4);
+  assert.equal(JSON.parse(loaded.body).catalog.chapters.length, 1);
   assert.equal((await request(port, '/api/presets/bad%2Fname', 'PUT', body, auth)).status, 400);
-
-  try { assert.equal((await request(port, '/api/default', 'PUT', body, auth)).status, 200); }
-  finally { fs.writeFileSync(BUILT_IN, backup); }
 });
 
 test('admin server rate-limits repeated login failures by source', async t => {

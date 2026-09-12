@@ -20,8 +20,8 @@
 - `built-in-levels.json`：默认章节路径总清单；`levels/<章节>/chapter.json` 保存本章关卡路径，每关独立 JSON
 - `levels.json` / `levels.local/`：管理员生成的可选覆盖清单与分关数据（被 .gitignore 忽略）
 - `tests/*.test.js`：Node 内置测试运行器执行的逻辑、关卡和服务器测试
-- `tests/browser-smoke.cjs` / `tests/ui-smoke.cjs`：通过 CDP 执行的可选玩家端浏览器集成测试
-- `tests/admin-browser-smoke.cjs`：通过 CDP 执行的可选管理端完整流程测试；在浏览器内拦截管理 API，不写入真实关卡文件
+- `tests/browser-smoke.cjs`：通过 CDP 执行的精简玩家端关键路径测试
+- `tests/admin-browser-smoke.cjs`：通过 CDP 执行的可选管理端关键流程测试；在浏览器内拦截管理 API，不写入真实关卡文件
 - `deploy/`：systemd 用户服务安装脚本及 NixOS 网络配置示例
 
 ## 架构约束
@@ -72,7 +72,7 @@ node --check admin-server.js
 node --test tests/*.test.js
 ```
 
-根据改动范围至少运行相关测试；修改核心模拟、关卡或公共行为时运行完整 Node 测试集。新增行为应在最接近的测试文件中加入回归测试：
+日常修改只需运行最接近改动的测试文件；不要把完整套件或浏览器测试当作每次改动的固定步骤。修改核心模拟、关卡或公共行为，以及准备发布时，才运行完整 Node 测试集。新增行为应在最接近的测试文件中加入回归测试：
 
 - 地图、状态、存档和基础模拟：`tests/core.test.js`
 - 道路连接与剪断：`tests/connections.test.js`
@@ -96,7 +96,6 @@ node server.js
 ```sh
 chromium --headless --remote-debugging-port=9333 --user-data-dir=/tmp/traffic-game-browser
 node tests/browser-smoke.cjs
-node tests/ui-smoke.cjs
 ```
 
 管理端流程测试还需启动管理员服务，再执行：
@@ -106,7 +105,7 @@ ADMIN_PASSWORD=测试密码 node admin-server.js
 node tests/admin-browser-smoke.cjs
 ```
 
-可通过 `GAME_URL`、`ADMIN_URL` 和 `CDP_URL` 覆盖默认地址。管理端浏览器测试会拦截 API，不会发布或写入真实关卡。CDP 调试端口只能监听本机，测试后关闭浏览器。涉及 DOM、Canvas、触摸、响应式布局、对话框、存档或 CSP 的改动应尽量运行对应测试。
+可通过 `GAME_URL`、`ADMIN_URL` 和 `CDP_URL` 覆盖默认地址。管理端浏览器测试会拦截 API，不会发布或写入真实关卡。CDP 调试端口只能监听本机，测试后关闭浏览器。仅在改动玩家 DOM、输入、Canvas、响应式布局或 CSP 时运行玩家冒烟测试；仅在改动管理员登录、编辑、发布门禁或管理 API 时运行管理端冒烟测试。存档与规则优先运行对应 Node 测试。
 
 ## 本地运行与部署注意事项
 

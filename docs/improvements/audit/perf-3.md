@@ -11,4 +11,4 @@
   1. 改为 roving tabindex（只有当前格 `tabIndex=0`，方向键在格间移动并同步画布光标），补齐 `role="row"`/`aria-rowindex`/`aria-colindex`。
   2. 只在「选中格 ± 视口范围」（或视口内可见格）更新标签，并把 `elapsed` 从签名里去掉（改为按事件更新）。
   3. 如果保留「整格朗读」而无法访问，不如改为单个 `aria-live` 文本区播报当前格，删除 4096 个按钮。
-- **验收**：`tests/ui-smoke.cjs` 增加「Tab 可进入网格、方向键可移动、`aria-rowindex` 递增」断言；性能上断言 0.5 s 内不重写全部格标签（可 stub 计数）。
+- **验收**：增加轻量 UI 单测验证「Tab 可进入网格、方向键可移动、`aria-rowindex` 递增」；性能上断言 0.5 s 内不重写全部格标签（可 stub 计数）。

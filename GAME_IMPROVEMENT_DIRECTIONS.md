@@ -47,8 +47,8 @@
 每项改进都必须：
 
 1. 同步更新受影响的 README、玩家指南和管理员手册。
-2. 修改关卡、预算、需求或交通规则后运行完整 Node 测试并验证参考方案。
-3. 涉及浏览器界面、存档或 CSP 时运行对应的浏览器/UI 冒烟测试。
+2. 日常开发运行最接近改动的 Node 测试；修改关卡、预算、需求、交通规则或准备发布时才运行完整套件并验证玩家关卡参考方案。
+3. 仅涉及玩家 DOM、输入、响应式布局或 CSP 时运行精简玩家冒烟测试；管理员登录、编辑和发布流程变化时才运行管理端冒烟测试。存档优先由对应 Node 测试覆盖。
 4. 为存档变化提供版本、严格校验、原子加载和迁移测试。
 5. 完成功能后更新对应条目文件的状态；部分实现标记为 🟡 并写明剩余验收项。
 
@@ -94,7 +94,7 @@
 | A11Y-3 | P2 | ⬜ | [画布禁止页面缩放、文字最小 8–10 px](docs/improvements/audit/a11y-3.md) |
 | A11Y-4 | P2 | ⬜ | [画布 `aria-label` 不随模式更新](docs/improvements/audit/a11y-4.md) |
 | ENG-1 | P1 | ⬜ | [没有 CI，也没有统一命令入口](docs/improvements/audit/eng-1.md) |
-| ENG-2 | P1 | ⬜ | [浏览器冒烟测试长期处于「可选且易失效」状态](docs/improvements/audit/eng-2.md) |
+| ENG-2 | P1 | 🟡 | [浏览器冒烟测试长期处于「可选且易失效」状态](docs/improvements/audit/eng-2.md) |
 | ENG-3 | P1 | ⬜ | [`game.js`（1457 行）没有单元测试](docs/improvements/audit/eng-3.md) |
 | ENG-4 | P2 | ⬜ | [管理员页面注入依赖精确字符串](docs/improvements/audit/eng-4.md) |
 | ENG-5 | P2 | ⬜ | [关卡格式没有文档化 schema](docs/improvements/audit/eng-5.md) |

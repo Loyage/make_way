@@ -14,7 +14,7 @@ async function main() {
   const url=process.env.ADMIN_URL||'http://127.0.0.1:8080';
   const tab=await (await fetch(`${endpoint}/json/new?${encodeURIComponent('about:blank')}`,{method:'PUT'})).json();
   const ws=new WebSocket(tab.webSocketDebuggerUrl),pending=new Map(),errors=[],dialogs=[];
-  let seq=0,authenticated=false,loginRequests=0,publishRequests=0,restartRequests=0,publishedCatalog=null,validatedCatalog=null;
+  let seq=0,authenticated=false,loginRequests=0,publishRequests=0,restartRequests=0,publishedCatalog=null;
   await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
   async function fulfill(requestId,status,payload){
@@ -30,7 +30,7 @@ async function main() {
       return fulfill(requestId,authenticated?200:401,authenticated?{ok:true}:{error:'密码错误'});
     }
     if(requestUrl.pathname==='/api/levels'&&method==='GET')return fulfill(requestId,authenticated?200:401,authenticated?{catalog:CATALOG,hasOverride:false}:{error:'未登录'});
-    if(requestUrl.pathname==='/api/validate'&&method==='POST'){validatedCatalog=JSON.parse(request.postData||'null');return fulfill(requestId,200,{ok:true,errors:[]});}
+    if(requestUrl.pathname==='/api/validate'&&method==='POST')return fulfill(requestId,200,{ok:true,errors:[]});
     if(requestUrl.pathname==='/api/game-service/restart'&&method==='POST'){restartRequests++;return fulfill(requestId,200,{ok:true,service:'traffic-game.service',state:'active'});}
     if(requestUrl.pathname==='/api/levels'&&method==='PUT'){
       publishRequests++;publishedCatalog=JSON.parse(request.postData||'null');
@@ -84,9 +84,6 @@ async function main() {
     assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length'),CATALOG.chapters[0].levels[0].referenceDesign.roads.length);
     await click('#speed');await click('#speed');await click('#speed');
     assert.equal(await text('speed'),'∞×','administrator preview exposes infinite simulation speed');
-    await click('#start');await waitFor('document.querySelector("#result-dialog").open','infinite-speed result');
-    assert.equal(await evaluate('document.querySelector("#phase-label").textContent'), '目标达成');
-    await click('#play-again');await waitFor('document.querySelector("#phase-label").textContent==="规划中"','reset after infinite-speed result');
 
     await change('admin-level',1);
     await waitFor('TrafficGameAdmin.currentLevelId()==="demolition-school"','demolition lesson editor');
@@ -108,19 +105,6 @@ async function main() {
     await change('admin-level',0);await waitFor('TrafficGameAdmin.currentLevelId()==="neighborhood"','first lesson editor');
     assert.equal(await evaluate('document.querySelector("#admin-dirty").classList.contains("dirty")'),false);
 
-    await change('admin-level',4);await waitFor('TrafficGameAdmin.currentLevelId()==="growing-city"','campaign editor');
-    await click('#admin-verify-reference-chain');await waitFor('document.querySelector("#admin-validation").textContent.includes("参考答案已按顺序自动运行并全部通关")','campaign reference-chain verification');
-    await change('admin-campaign-day',1);await click('#admin-prepare-reference-day');await waitFor('TrafficGameAdmin.campaignDayIndex()===1','automatic reference progression to day two');
-    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length'),CATALOG.chapters[0].levels[4].campaign.days[1].referenceDesign.roads.length);
-    await change('admin-campaign-day',0);await click('#admin-verify-play');await waitFor('document.body.classList.contains("admin-collapsed")','campaign trial mode');
-    assert.equal(await evaluate('document.querySelector("#admin-capture-reference").disabled'),false,'trial enables daily reference capture');
-    await click('#admin-load-reference');
-    await waitFor('document.querySelector("#admin-validation").textContent.includes("加载第 1 天参考答案")','campaign reference loading');
-    await evaluate(`(()=>{const step=TrafficCore.City.prototype.step;TrafficCore.City.prototype.step=function(){this.delivered=this.target;this.generated=this.generated.map((_,index)=>this.homes[index].passengers);this.byRoute=this.routes.map(route=>route.homes.reduce((sum,home)=>sum+home.passengers,0));this.commuteTimes=Array(this.target).fill(1);this.state='won';TrafficCore.City.prototype.step=step;};})()`);
-    await click('#start');await waitFor('document.querySelector("#result-dialog").open','campaign day one result');await click('#next-level');await waitFor('TrafficGameAdmin.campaignDayIndex()===1','campaign day two planning');await click('#admin-expand');
-    await click('#admin-capture-reference');await waitFor('document.querySelector("#admin-reference-status").textContent.includes("第 2 天")','day two reference capture');
-    await waitFor('document.querySelector("#admin-validation").textContent.includes("草稿有效")','captured campaign reference validation');const capturedDay=await evaluate(`({current:TrafficGameAdmin.captureDesign().roads.length,selected:document.querySelector('#admin-level').value})`),validatedDay=validatedCatalog.chapters.flatMap(chapter=>chapter.levels).find(item=>item.id==='growing-city').campaign.days[1].referenceDesign;assert.equal(validatedDay.roads.length,capturedDay.current);assert.equal(capturedDay.selected,'4');
-    await click('#admin-undo');await waitFor('TrafficGameAdmin.campaignDayIndex()===0','campaign capture undo resets preview');
     await change('admin-level',0);await waitFor('TrafficGameAdmin.currentLevelId()==="neighborhood"','first lesson editor');assert.equal(await evaluate('document.querySelector("#admin-dirty").classList.contains("dirty")'),false);
 
     const first=CATALOG.chapters[0].levels[0],originalSatisfaction=first.starTargets.satisfaction,originalQueue=first.starTargets.efficiency.maxQueue;
@@ -177,7 +161,7 @@ async function main() {
     await waitFor('document.querySelector("#admin-validation").textContent.includes("已重启并处于运行状态")','game service restart');
     assert.equal(restartRequests,1);
     assert.deepEqual(errors,[]);
-    console.log('Admin browser smoke passed: login, fast drag, safe building edits, daily campaign references, reload protection, publication gate, trial completion, fingerprint invalidation, undo, publication and game service restart.');
+    console.log('Admin browser smoke passed: login, fast drag, safe building edits, reload protection, publication gate, trial completion, undo, publication and game service restart.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }

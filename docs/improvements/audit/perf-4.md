@@ -14,4 +14,4 @@
   1. 引入脏标记：设计/状态/统计变化时才刷新文本类 HUD，其余时间 5–10 Hz 节流；画布保持 60 fps，但空闲（无动画、无车辆移动）时跳过重绘。
   2. `liveSatisfactionReport()` 改为增量维护直方图（分档计数 + 总时长），避免每帧 O(人口) 扫描。
   3. `updateBusLineInspector()` 的 DOM 只在选择格/线路数据变化时重建。
-- **验收**：新增 `tests/ui-timing.js`（或在 ui-smoke 中）统计规划状态下 3 s 内的 DOM 写入次数/帧时间；配合 `prefers-reduced-motion` 与后台标签页做冒烟。
+- **验收**：新增按需运行的 `tests/ui-timing.js`，统计规划状态下 3 s 内的 DOM 写入次数/帧时间；不并入日常冒烟，配合 `prefers-reduced-motion` 与后台标签页专项执行。

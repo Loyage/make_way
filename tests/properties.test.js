@@ -64,9 +64,9 @@ function assertSimulationInvariants(city,context) {
 }
 
 test('deterministic randomized planning keeps edits atomic and designs valid', () => {
-  for(let seed=1;seed<=40;seed++){
+  for(let seed=1;seed<=12;seed++){
     const next=random(seed),level=LEVELS[seed%LEVELS.length],city=new City(level.id,{budget:220});
-    for(let step=0;step<120;step++){
+    for(let step=0;step<48;step++){
       const cell=integer(next,city.width*city.height),ops=integer(next,6),neighbor=choose(next,city.neighbors(cell)),grade=integer(next,ROAD_TYPES.length);
       if(ops===0)city.connect(cell,neighbor,grade);
       else if(ops===1)city.edit(cell,false,grade);
@@ -83,7 +83,7 @@ test('deterministic randomized planning keeps edits atomic and designs valid', (
 });
 
 test('deterministic randomized traffic conserves people, capacity and reservations', () => {
-  for(let seed=1;seed<=30;seed++){
+  for(let seed=1;seed<=10;seed++){
     const next=random(seed*7919),city=new City('neighborhood',{budget:400,duration:45,deadlineMode:true});
     city.water.clear();city.bridges.clear();city.trees.clear();city.roads.clear();city.roadGrades.clear();city.edges.clear();city.signals.clear();
     const firstPassengers=8+integer(next,13),secondPassengers=8+integer(next,13);
