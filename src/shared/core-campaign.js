@@ -66,27 +66,36 @@
     return level;
   }
 
-  function materializeCampaignRoutes(level, dayIndex, results = []) {
-    const source = clone(level.campaign?.routes || level.routes || []), dayNumber = dayIndex + 1;
-    return source.map(route => ({
-      ...route,
-      homes: routeHomes(route).filter(home => conditionMet(home.unlock, dayNumber, results)).map(home => {
-        const copy = { ...home };delete copy.unlock;delete copy.upgrades;
-        for (const upgrade of home.upgrades || []) if (conditionMet(upgrade.condition, dayNumber, results)) {
-          if (upgrade.generationRate !== undefined) copy.generationRate = upgrade.generationRate;
-          if (upgrade.passengers !== undefined) copy.passengers = upgrade.passengers;
-        }
-        return copy;
-      }),
-      goals: routeGoals(route).filter(goal => conditionMet(goal.unlock, dayNumber, results)).map(goal => {
-        const copy = { ...goal };delete copy.unlock;delete copy.upgrades;
-        for (const upgrade of goal.upgrades || []) if (conditionMet(upgrade.condition, dayNumber, results)) {
-          if (upgrade.input === null) delete copy.input;
-          else if (upgrade.input !== undefined) copy.input = upgrade.input;
-        }
-        return copy;
-      })
-    })).filter(route => route.homes.length && route.goals.length);
+  function campaignRegionForCell(level, cell) {
+    return (level.campaign?.regions || []).find(region => region.cells.includes(cell)) || null;
+  }
+  function materializeBuilding(source, kind, dayNumber, results) {
+    const copy = { ...source };delete copy.unlock;delete copy.upgrades;
+    for (const upgrade of source.upgrades || []) if (conditionMet(upgrade.condition, dayNumber, results)) {
+      if (kind === 'home') {
+        if (upgrade.generationRate !== undefined) copy.generationRate = upgrade.generationRate;
+        if (upgrade.passengers !== undefined) copy.passengers = upgrade.passengers;
+      } else if (upgrade.input === null) delete copy.input;
+      else if (upgrade.input !== undefined) copy.input = upgrade.input;
+    }
+    return copy;
+  }
+  function campaignBuildingState(level, dayIndex, results = [], unlockedRegionIds = []) {
+    const dayNumber=dayIndex+1,unlocked=new Set(unlockedRegionIds),routes=[],dormant=[];
+    for (const sourceRoute of clone(level.campaign?.routes || level.routes || [])) {
+      const eligible=(building,kind)=>conditionMet(building.unlock,dayNumber,results)&&(!campaignRegionForCell(level,building.cell)||unlocked.has(campaignRegionForCell(level,building.cell).id));
+      const homes=routeHomes(sourceRoute).filter(home=>eligible(home,'home')).map(home=>materializeBuilding(home,'home',dayNumber,results));
+      const goals=routeGoals(sourceRoute).filter(goal=>eligible(goal,'goal')).map(goal=>materializeBuilding(goal,'goal',dayNumber,results));
+      if(homes.length&&goals.length)routes.push({...sourceRoute,homes,goals});
+      else {
+        dormant.push(...homes.map(building=>({...building,kind:'home',routeName:sourceRoute.name,color:sourceRoute.color,light:sourceRoute.light})));
+        dormant.push(...goals.map(building=>({...building,kind:'goal',routeName:sourceRoute.name,color:sourceRoute.color,light:sourceRoute.light})));
+      }
+    }
+    return {routes,dormant};
+  }
+  function materializeCampaignRoutes(level, dayIndex, results = [], unlockedRegionIds = []) {
+    return campaignBuildingState(level,dayIndex,results,unlockedRegionIds).routes;
   }
 
   class CampaignSession {
@@ -100,26 +109,42 @@
       this.dayIndex = 0;
       this.results = [];
       this.checkpoints = [];
+      this.unlockedRegionIds = new Set();
+      this.regionSpent = 0;
       this.referenceDivergenceDay = null;
       this.city = this.createCity(0, this.level.budget);
     }
-    routes(dayIndex = this.dayIndex) { return materializeCampaignRoutes(this.level, dayIndex, this.results.slice(0, dayIndex)); }
+    routes(dayIndex = this.dayIndex) { return materializeCampaignRoutes(this.level,dayIndex,this.results.slice(0,dayIndex),this.unlockedRegionIds); }
+    buildingState(dayIndex=this.dayIndex){return campaignBuildingState(this.level,dayIndex,this.results.slice(0,dayIndex),this.unlockedRegionIds);}
+    lockedRegions() { return (this.level.campaign.regions||[]).filter(region=>!this.unlockedRegionIds.has(region.id)).map(region=>({...clone(region),available:conditionMet(region.unlock,this.dayIndex+1,this.results)})); }
+    availableRegions(){return this.lockedRegions().filter(region=>region.available);}
     pendingBuildings(dayIndex = this.dayIndex) {
-      const activeRoutes = this.routes(dayIndex), active = new Set(activeRoutes.flatMap(route => [...route.homes, ...route.goals].map(building => building.cell)));
-      const sites = [];
+      const state=this.buildingState(dayIndex),known=new Set([...state.routes.flatMap(route=>[...route.homes,...route.goals]),...state.dormant].map(building=>building.cell)),sites=[];
       for (const route of this.level.campaign.routes) for (const [kind, buildings] of [['home', routeHomes(route)], ['goal', routeGoals(route)]]) for (const building of buildings) {
-        if (active.has(building.cell)) continue;
-        const condition = clone(building.unlock || {}), unlockDay = condition.day || 1;
-        sites.push({ cell: building.cell, kind, daysUntil: Math.max(0, unlockDay - dayIndex - 1), conditional: Boolean(condition.delivered || condition.income || condition.satisfaction), condition });
+        if (known.has(building.cell)) continue;
+        const condition=clone(building.unlock||{}),region=campaignRegionForCell(this.level,building.cell),unlockDay=condition.day||1;
+        sites.push({cell:building.cell,kind,daysUntil:Math.max(0,unlockDay-dayIndex-1),conditional:Boolean(condition.delivered||condition.income||condition.satisfaction),condition,regionId:region?.id||null});
       }
       return sites;
     }
     createCity(dayIndex, budget, design = null) {
-      const day = this.days[dayIndex], routes = this.routes(dayIndex);
+      const day=this.days[dayIndex],state=this.buildingState(dayIndex),routes=state.routes;
       if (!routes.length) throw new RangeError(`Campaign day has no active route: ${this.level.id}`);
-      const city = new City(this.level.id, { routes, budget, duration: day.duration, pendingBuildings: this.pendingBuildings(dayIndex) });
+      const city=new City(this.level.id,{routes,budget,duration:day.duration,fixedCost:this.regionSpent,pendingBuildings:this.pendingBuildings(dayIndex),dormantBuildings:state.dormant,lockedRegions:this.lockedRegions()});
       if (design) { const message = city.loadDesign(design); if (message) throw new Error(message); }
       return city;
+    }
+    unlockRegion(regionId) {
+      if(this.city.state!=='planning')return '只能在规划阶段开放区域';
+      const region=(this.level.campaign.regions||[]).find(item=>item.id===regionId);
+      if(!region)return '没有这个待开放区域';
+      if(this.unlockedRegionIds.has(regionId))return '';
+      if(!conditionMet(region.unlock,this.dayIndex+1,this.results))return '尚未完成该区域的开放任务';
+      if(this.city.remaining<region.cost)return `建设点不足，还需要 ${region.cost-this.city.remaining} 点`;
+      const design=this.city.serializeDesign(),budget=this.city.budget;
+      this.unlockedRegionIds.add(regionId);this.regionSpent+=region.cost;
+      try{this.city=this.createCity(this.dayIndex,budget,design);}catch(error){this.unlockedRegionIds.delete(regionId);this.regionSpent-=region.cost;return error.message;}
+      return '';
     }
     reference(dayIndex = this.dayIndex) { return this.days[dayIndex]?.referenceDesign || null; }
     loadReference(dayIndex = this.dayIndex, ignoreDivergence = false) {
@@ -134,11 +159,13 @@
       const design = this.city.serializeDesign(), reference=this.reference();
       if(this.referenceDivergenceDay===null&&reference&&designFingerprint(design)!==designFingerprint(reference))this.referenceDivergenceDay=this.dayIndex;
       const message = this.city.toggle();
-      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: clone(design), results: clone(this.results), referenceDivergenceDay: this.referenceDivergenceDay };
+      if (!message) this.checkpoints[this.dayIndex] = { budget: this.city.budget, design: clone(design), results: clone(this.results), unlockedRegionIds: [...this.unlockedRegionIds], regionSpent: this.regionSpent, referenceDivergenceDay: this.referenceDivergenceDay };
       return message;
     }
     runReferenceDay(step = 0.05) {
-      const day=this.dayIndex,message=this.loadReference(day,true);if(message)return {ok:false,day:day+1,error:message};
+      const day=this.dayIndex;
+      for(const region of this.availableRegions()){const unlock=this.unlockRegion(region.id);if(unlock)return {ok:false,day:day+1,error:`无法开放「${region.name}」：${unlock}`};}
+      const message=this.loadReference(day,true);if(message)return {ok:false,day:day+1,error:message};
       const begin=this.beginDay();if(begin)return {ok:false,day:day+1,error:begin};
       const limit=Math.ceil(this.city.duration/step)+4;let count=0;
       while(this.city.state==='running'&&count++<limit)this.city.step(step);
@@ -166,6 +193,8 @@
       this.dayIndex = dayIndex;
       this.results = clone(checkpoint.results || this.results.slice(0, dayIndex));
       this.checkpoints = this.checkpoints.slice(0, dayIndex + 1);
+      this.unlockedRegionIds=new Set(checkpoint.unlockedRegionIds||[]);
+      this.regionSpent=checkpoint.regionSpent||0;
       this.referenceDivergenceDay = checkpoint.referenceDivergenceDay ?? null;
       this.city = this.createCity(dayIndex, checkpoint.budget, checkpoint.design);
       return '';
@@ -181,5 +210,5 @@
     return {ok:true,days:session.days.length,results};
   }
 
-  return { CampaignSession, campaignIncome, commuteSatisfaction, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, verifyCampaignReferenceChain };
+  return { CampaignSession, campaignIncome, commuteSatisfaction, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, campaignBuildingState, campaignRegionForCell, verifyCampaignReferenceChain };
 });

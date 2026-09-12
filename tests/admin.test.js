@@ -64,6 +64,8 @@ test('validateLevels rejects chapter and level structural problems', () => {
   assert.equal(validateLevels(variableDays),'');
   const badDays=JSON.parse(JSON.stringify(good)),campaignLevel=badDays.chapters[0].levels.find(level=>level.id==='growing-city');campaignLevel.campaign.days.length=1;
   assert.match(validateLevels(badDays),/2 至 30 天/);
+  const badRegion=JSON.parse(JSON.stringify(good)),regionLevel=badRegion.chapters[0].levels.find(level=>level.id==='growing-city');regionLevel.campaign.regions[1].cells.push(regionLevel.campaign.regions[0].cells[0]);
+  assert.match(validateLevels(badRegion),/扩建区域.*重叠格子/);
   const impossiblePotential=JSON.parse(JSON.stringify(good)),potentialLevel=impossiblePotential.chapters[0].levels.find(level=>level.id==='growing-city');potentialLevel.campaign.routes[0].goals[0].input=1;
   assert.match(validateLevels(impossiblePotential),/潜在建筑.*住宅总人口.*最多可接收/);
   const mismatchedFirst=JSON.parse(JSON.stringify(good)),mismatch=mismatchedFirst.chapters[0].levels.find(level=>level.id==='growing-city');mismatch.campaign.days[0].duration++;
@@ -186,7 +188,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.body,/id="admin-inspector"/);assert.match(page.body,/id="admin-add-chapter"/);assert.match(page.body,/id="admin-chapter"/);
-  assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);assert.match(page.body,/id="admin-star-satisfaction"/);assert.match(page.body,/id="admin-day-star-queue"/);
+  assert.match(page.body,/id="admin-campaign-enabled"/);assert.match(page.body,/id="admin-campaign-day"/);assert.match(page.body,/id="admin-day-income"/);assert.match(page.body,/id="admin-star-satisfaction"/);assert.match(page.body,/id="admin-day-star-queue"/);assert.match(page.body,/id="admin-region"/);assert.match(page.body,/id="admin-region-use-selection"/);
   assert.match(page.body,/id="admin-selection"/);assert.match(page.body,/id="admin-capture-roads"/);assert.match(page.body,/data-terrain="water"/);
   assert.match(page.body,/id="admin-capture-reference"/);assert.match(page.body,/id="admin-delete-reference"/);assert.match(page.body,/id="reference-design"/);
   assert.match(page.body,/id="admin-verify-play"/);assert.match(page.body,/id="admin-trial-status"/);assert.match(page.body,/id="admin-publish"/);assert.match(page.body,/id="admin-restart-game"/);assert.match(page.body,/id="admin-undo"/);assert.match(page.body,/src="core.js"/);

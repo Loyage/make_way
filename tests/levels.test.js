@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, verifyCampaignReferenceChain, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
+const { City, CampaignSession, campaignIncome, conditionMet, migrateCampaignLevel, materializeCampaignRoutes, campaignBuildingState, verifyCampaignReferenceChain, LEVELS, CHAPTERS, WIDTH, HEIGHT, key, point } = require('../src/shared/core.js');
 const { validateLevelCatalog } = require('../src/shared/level-validation.js');
 const { commuteReport, starReport } = require('../src/game/game-results.js');
 
@@ -72,11 +72,11 @@ test('three player chapters follow roads, junctions and public transit, with an 
 });
 test('legacy per-day campaign routes migrate to potential buildings', () => {
   const source=JSON.parse(JSON.stringify(LEVELS.find(item=>item.id==='growing-city'))),potential=source.campaign.routes;
-  source.campaign.days=source.campaign.days.map((day,index)=>({...day,routes:materializeCampaignRoutes(source,index,Array.from({length:index},()=>({delivered:2000,income:100,satisfaction:100})))}));
+  source.campaign.days=source.campaign.days.map((day,index)=>({...day,routes:materializeCampaignRoutes(source,index,Array.from({length:index},()=>({delivered:2000,income:100,satisfaction:100})),source.campaign.regions.filter(region=>(region.unlock.day||1)<=index+1).map(region=>region.id))}));
   const firstReference=source.campaign.days[0].referenceDesign;
   source.routes=source.campaign.days[0].routes;delete source.campaign.routes;migrateCampaignLevel(source);
   assert.equal(source.campaign.routes.length,potential.length);assert.ok(source.campaign.days.every(day=>!Object.hasOwn(day,'routes')));assert.deepEqual(source.campaign.days[0].referenceDesign,firstReference);
-  assert.equal(materializeCampaignRoutes(source,1,[{delivered:42,income:18,satisfaction:100}]).length,2);
+  assert.equal(materializeCampaignRoutes(source,1,[{delivered:42,income:18,satisfaction:100}],['expansion-2']).length,2);
 });
 
 test('multi-day campaign conditions unlock and upgrade potential buildings', () => {
@@ -84,30 +84,39 @@ test('multi-day campaign conditions unlock and upgrade potential buildings', () 
   assert.equal(conditionMet({day:2,delivered:41},2,[{delivered:40,income:20,satisfaction:100}]),false);
   const level=LEVELS.find(item=>item.id==='growing-city');
   assert.equal(materializeCampaignRoutes(level,0,[]).length,1);
-  const day2=materializeCampaignRoutes(level,1,[{delivered:100000,income:100,satisfaction:100}]);
+  const day2=materializeCampaignRoutes(level,1,[{delivered:100000,income:100,satisfaction:100}],['expansion-2']);
   assert.equal(day2.length,2);assert.ok(day2[0].homes[0].passengers>=level.routes[0].homes[0].passengers);
 });
 
-test('multi-day campaign pays for quality, reveals construction, and replays checkpoints', () => {
+test('multi-day campaign pays to open qualified map regions and replays checkpoints', () => {
   assert.equal(campaignIncome(50,100,80,20),12);
-  const campaign=new CampaignSession('growing-city');
+  const campaign=new CampaignSession('growing-city'),region=campaign.level.campaign.regions[0];
   assert.equal(campaign.days.length,5);assert.equal(campaign.city.pendingBuildings.size,8);
   assert.equal(campaign.city.pendingBuildings.get(20).daysUntil,1);
-  assert.equal(campaign.city.pendingBuildings.get(20).condition.day,2);
-  assert.match(campaign.city.edit(20),/建设用地/);
+  assert.match(campaign.city.edit(region.cells[0]),/区域尚未开放/);
+  assert.equal(campaign.unlockRegion(region.id),'尚未完成该区域的开放任务');
   assert.equal(campaign.city.edit(0),'');
   assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);
   campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
-  assert.equal(campaign.city.state,'won','campaign days end as soon as every resident arrives');
   const firstPopulation=campaign.city.target,baseBudget=campaign.level.budget,maxIncome=campaign.days[0].maxIncome;
-  const result=campaign.advance(100);assert.equal(result.population,firstPopulation);assert.equal(result.delivered,firstPopulation);assert.equal(result.income,maxIncome);assert.equal(campaign.dayIndex,1);
-  assert.equal(campaign.city.budget,baseBudget+maxIncome);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
-  assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);
+  const result=campaign.advance(100);assert.equal(result.population,firstPopulation);assert.equal(result.income,maxIncome);assert.equal(campaign.dayIndex,1);
+  assert.equal(campaign.city.homes.length,1,'新建筑须等待玩家支付区域费用');
+  const before=campaign.city.remaining;assert.equal(campaign.unlockRegion(region.id),'');assert.equal(campaign.city.remaining,before-region.cost);assert.equal(campaign.city.homes.length,2);
+  assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);assert.equal(campaign.unlockedRegionIds.size,0);
   assert.equal(campaign.city.budget,baseBudget);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
+});
+
+test('one-sided unlocked buildings stay dormant and do not enter population scoring', () => {
+  const level=JSON.parse(JSON.stringify(LEVELS.find(item=>item.id==='growing-city'))),route=level.campaign.routes[1];
+  route.goals[0].unlock.day=3;
+  const state=campaignBuildingState(level,1,[{delivered:20,income:18,satisfaction:100}],['expansion-2']);
+  assert.equal(state.routes.length,1);assert.ok(state.dormant.some(building=>building.kind==='home'&&building.cell===route.homes[0].cell));
+  assert.ok(!state.dormant.some(building=>building.kind==='goal'&&building.cell===route.goals[0].cell));
 });
 
 test('campaign references respect the player actual accumulated budget', () => {
   const campaign=new CampaignSession('growing-city'),last=campaign.days.at(-1).referenceDesign;
+  campaign.unlockedRegionIds=new Set(campaign.level.campaign.regions.map(region=>region.id));campaign.regionSpent=campaign.level.campaign.regions.reduce((sum,region)=>sum+region.cost,0);
   assert.throws(()=>campaign.createCity(campaign.days.length-1,campaign.level.budget,last),/建设预算不足/);
   assert.equal(campaign.dayIndex,0);assert.equal(campaign.city.state,'planning');
 });
@@ -147,6 +156,7 @@ test('multi-day campaign rewards rebuilding into affordable routes without inter
       a.y===b.y&&p.y===a.y&&p.x>=Math.min(a.x,b.x)&&p.x<=Math.max(a.x,b.x);
   };
   for(let day=0;day<5;day++) {
+    for(const region of campaign.availableRegions())assert.equal(campaign.unlockRegion(region.id),'');
     const reference=campaign.days[day].referenceDesign,referenceCity=campaign.createCity(day,campaign.city.budget,reference);
     assert.ok(reference);assert.ok(referenceCity.paths.every(Boolean),`day ${day+1} reference must serve every route`);assert.equal(referenceCity.remaining>=0,true);referenceCity.toggle();for(let step=0;step<(referenceCity.duration+1)*20;step++)referenceCity.step(.05);assert.equal(referenceCity.state,'won',`day ${day+1} reference must win`);
     if(day) {

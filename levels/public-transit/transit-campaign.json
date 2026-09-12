@@ -1302,6 +1302,42 @@
           "activeBusLineId": "line-1"
         }
       }
+    ],
+    "regions": [
+      {
+        "id": "expansion-2",
+        "name": "第 2 阶段扩建区",
+        "cells": [
+          120,
+          121,
+          122,
+          126,
+          137,
+          142,
+          143,
+          158
+        ],
+        "cost": 3,
+        "unlock": {
+          "day": 2
+        }
+      },
+      {
+        "id": "expansion-3",
+        "name": "第 3 阶段扩建区",
+        "cells": [
+          81,
+          82,
+          83,
+          98,
+          110,
+          127
+        ],
+        "cost": 3,
+        "unlock": {
+          "day": 3
+        }
+      }
     ]
   }
 }

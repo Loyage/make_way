@@ -82,6 +82,11 @@ async function main() {
     await click('#admin-load-reference');
     await waitFor('document.querySelector("#admin-validation").textContent.includes("已加载本关参考答案")','administrator reference loading');
     assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length'),CATALOG.chapters[0].levels[0].referenceDesign.roads.length);
+    await click('#speed');await click('#speed');await click('#speed');
+    assert.equal(await text('speed'),'∞×','administrator preview exposes infinite simulation speed');
+    await click('#start');await waitFor('document.querySelector("#result-dialog").open','infinite-speed result');
+    assert.equal(await evaluate('document.querySelector("#phase-label").textContent'), '目标达成');
+    await click('#play-again');await waitFor('document.querySelector("#phase-label").textContent==="规划中"','reset after infinite-speed result');
 
     await change('admin-level',1);
     await waitFor('TrafficGameAdmin.currentLevelId()==="demolition-school"','demolition lesson editor');

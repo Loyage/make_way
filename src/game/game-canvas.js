@@ -5,6 +5,19 @@
   else root.TrafficCanvas = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
+  function calculateFocusView({ mapWidth, mapHeight, viewportWidth, viewportHeight, cells, padding=1.15, maxZoom=2.25 }) {
+    const baseSize=Math.min(viewportWidth/mapWidth,viewportHeight/mapHeight);
+    if(!cells?.length||!Number.isFinite(baseSize)||baseSize<=0)return { zoom:1,cellSize:baseSize||0,x:(viewportWidth-mapWidth*(baseSize||0))/2,y:(viewportHeight-mapHeight*(baseSize||0))/2 };
+    const xs=cells.map(cell=>cell%mapWidth),ys=cells.map(cell=>Math.floor(cell/mapWidth));
+    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+    const focusWidth=maxX-minX+1+padding*2,focusHeight=maxY-minY+1+padding*2;
+    const zoom=Math.max(1,Math.min(maxZoom,viewportWidth/(focusWidth*baseSize),viewportHeight/(focusHeight*baseSize)));
+    const cellSize=baseSize*zoom,centerX=(minX+maxX+1)/2,centerY=(minY+maxY+1)/2;
+    const worldWidth=mapWidth*cellSize,worldHeight=mapHeight*cellSize;
+    const minViewX=worldWidth<=viewportWidth?(viewportWidth-worldWidth)/2:viewportWidth-worldWidth,maxViewX=worldWidth<=viewportWidth?(viewportWidth-worldWidth)/2:0;
+    const minViewY=worldHeight<=viewportHeight?(viewportHeight-worldHeight)/2:viewportHeight-worldHeight,maxViewY=worldHeight<=viewportHeight?(viewportHeight-worldHeight)/2:0;
+    return { zoom,cellSize,x:Math.max(minViewX,Math.min(maxViewX,viewportWidth/2-centerX*cellSize)),y:Math.max(minViewY,Math.min(maxViewY,viewportHeight/2-centerY*cellSize)) };
+  }
   function createCanvasTools(ctx, point) {
     function rounded(x, y, w, h, r, fill, stroke) {
       ctx.beginPath();ctx.roundRect(x, y, w, h, r);
@@ -72,5 +85,5 @@
     }
     return { rounded, line, circle, label, buildingBubble, busSegment, strokeBusConnector, drawBusRoute };
   }
-  return { createCanvasTools };
+  return { createCanvasTools, calculateFocusView };
 });

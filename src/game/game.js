@@ -3,7 +3,7 @@
   const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
-  const SPEED_OPTIONS=[.5,1,2,4],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
+  const PLAYER_SPEED_OPTIONS=[.5,1,2,4],ADMIN_SPEED_OPTIONS=[.5,1,2,4,Infinity],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
   const adminMode=document.body.classList.contains('admin-page');
@@ -22,7 +22,7 @@
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, pendingMode = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
-  let campaign = null, pendingCampaignScore = null;
+  let campaign = null, pendingCampaignScore = null, pendingRegionId = null;
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
   let celebratedDelivered = 0, connectedRoutes = new Set();
   let hintCity = null, hintSignature = '', planningHints = [];
@@ -32,6 +32,8 @@
   const PERSONAL_BEST_PREFIX = 'traffic-game-personal-best-v1:';
   const STAR_PREFIX = 'traffic-game-stars-v1:';
   const failedLevels = new Set();
+  const speedOptions=()=>adminMode&&!city?.sandbox?ADMIN_SPEED_OPTIONS:PLAYER_SPEED_OPTIONS;
+  const speedLabel=value=>value===Infinity?'∞':String(value);
   function storedDesign(levelId = city.level.id) {
     try { return localStorage.getItem(STORAGE_PREFIX + levelId); }
     catch { return null; }
@@ -134,7 +136,7 @@
     const current=chapters().findIndex(chapter=>chapter.levels.some(level=>level.id===city.level.id));showChapter(Math.max(0,current));
   }
   function renderCampaignProgress() {
-    const panel=$('campaign-progress');panel.hidden=!campaign;$('legend-site').hidden=!campaign;
+    const panel=$('campaign-progress');panel.hidden=!campaign;$('legend-site').hidden=!campaign;$('legend-region').hidden=!campaign||!city.lockedRegions.size;
     if(!campaign)return;
     $('campaign-day-title').textContent=`第 ${campaign.dayIndex+1} 天 · ${city.state==='planning'?'改造规划':'通勤运营'}`;
     $('campaign-income').textContent=`累计收入 ${campaign.results.reduce((sum,result)=>sum+result.income,0)} 点 · 可用 ${city.remaining} 点`;
@@ -150,7 +152,7 @@
       button.onclick=()=>{
         if(!confirm(`回到第 ${index+1} 天运营前？第 ${index+1} 天及之后的运营记录会被覆盖。`))return;
         const message=campaign.replay(index);if(message){toast(message);return;}
-        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
+        city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`已回到第 ${index+1} 天运营前`);
       };
       button.append(title,detail);list.append(button);
     });
@@ -214,8 +216,8 @@
     updateDesignControls();renderCampaignProgress();buildAccessibleMap();
   }
   function accessibleCellLabel(cell) {
-    const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),site=city.pendingBuildings.get(cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
-    let content=city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:site?`${site.kind==='home'?'住宅':'目的地'}建设用地，${campaignConditionText(site)}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
+    const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),site=city.pendingBuildings.get(cell),dormant=city.dormantBuildings.get(cell),region=city.lockedRegions.get(cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
+    let content=region?`待开放区域「${region.name}」，${region.available?`可支付 ${region.cost} 点开放`:'开放任务尚未完成'}`:city.roads.has(cell)?`${city.roadType(cell).name}，连接 ${city.links(cell).map(next=>directions[next-cell]).filter(Boolean).join('、')||'无'}`:homeIndex>=0?`住宅，总人口 ${city.homes[homeIndex].passengers}，等待 ${city.queues[homeIndex]}`:goalIndex>=0?`目的地，已抵达 ${city.byGoal[goalIndex]}`:dormant?`${dormant.kind==='home'?'住宅人口':'目的地容量'}锁定，等待同色建筑启用`:site?`${site.kind==='home'?'住宅':'目的地'}建设用地，${campaignConditionText(site)}`:city.water.has(cell)?'水面':city.trees.has(cell)?'绿地':city.bridges.has(cell)?'空桥':'空地';
     if(city.roads.has(cell)){const policy=city.roadPolicies.get(cell);if(policy)content+=policy==='prefer'?'，汽车偏好':'，汽车禁行';content+=`，占用或驶入 ${city.load(cell).total} 辆`;}
     return `第 ${p.y+1} 行第 ${p.x+1} 列，${content}${planningHints.filter(issue=>issue.cells?.includes(cell)).map(issue=>`，提示：${issue.title}`).join('')}${routeSelection?.includes(cell)||selection?.start===cell&&selection?.end===cell?'，已选择':''}`;
   }
@@ -338,7 +340,7 @@
   }
   function dragNewRoads() {
     if(dragDraft?.kind!=='build'||dragDraft.sourceGrade===null)return [];
-    return [...new Set(dragDraft.path)].filter((cell,index)=>index>0&&!city.roads.has(cell)&&!city.buildings.has(cell)&&!city.pendingBuildings.has(cell)&&!city.trees.has(cell)&&(!city.water.has(cell)||city.bridges.has(cell)));
+    return [...new Set(dragDraft.path)].filter((cell,index)=>index>0&&!city.roads.has(cell)&&!city.buildings.has(cell)&&!city.pendingBuildings.has(cell)&&!city.dormantBuildings.has(cell)&&!city.lockedRegions.has(cell)&&!city.trees.has(cell)&&(!city.water.has(cell)||city.bridges.has(cell)));
   }
   function updateDragIntent() {
     const panel=$('drag-intent'),changes=dragGradeChanges(),newRoads=dragNewRoads();panel.hidden=!changes.length&&!newRoads.length;
@@ -352,6 +354,17 @@
     const cells=selectedCells();if(tool!=='select'||cells.length!==1)return null;
     const homeIndex=city.homes.findIndex(home=>home.cell===cells[0]);
     return homeIndex<0?null:city.homeTravelInfo(homeIndex);
+  }
+  function openRegionDialog(region) {
+    if(!campaign||!region||city.state!=='planning')return;
+    pendingRegionId=region.id;
+    $('region-dialog-title').textContent=`开放「${region.name}」？`;
+    $('region-dialog-description').textContent=region.available
+      ? `将支付 ${region.cost} 点建设点，开放 ${region.cells.length} 格地图。区域开放后，已满足自身条件的住宅和目的地才会启用；缺少同色对应建筑时，其人口或容量继续锁定且不计入满意度。`
+      : `开放任务尚未完成。${campaignConditionText({condition:region.unlock})}`;
+    $('confirm-region').disabled=!region.available||city.remaining<region.cost;
+    $('confirm-region').textContent=region.available&&city.remaining<region.cost?`还差 ${region.cost-city.remaining} 点`:`支付 ${region.cost} 点并开放`;
+    $('region-dialog').showModal();
   }
   function campaignConditionText(site) {
     const condition=site.condition||{},results=campaign?.results||[],day=campaign?campaign.dayIndex+1:1;
@@ -476,7 +489,9 @@
     $('prefer-road').disabled=!roads.length||!planning;
     $('avoid-road').disabled=!roads.length||!planning;
     $('clear-road-policy').disabled=!roads.some(cell=>city.roadPolicies.has(cell))||!planning;
-    $('build-road').disabled=!(n!==null&&!city.roads.has(n)&&!city.buildings.has(n)&&!city.pendingBuildings.has(n)&&(!city.water.has(n)||city.bridges.has(n))&&!city.trees.has(n))||!planning;
+    const selectedRegion=n===null?null:city.lockedRegions.get(n);
+    $('unlock-region').hidden=!selectedRegion;$('unlock-region').disabled=!planning||!selectedRegion?.available||city.remaining<(selectedRegion?.cost||0);
+    $('build-road').disabled=!(n!==null&&!city.roads.has(n)&&!city.buildings.has(n)&&!city.pendingBuildings.has(n)&&!city.dormantBuildings.has(n)&&!city.lockedRegions.has(n)&&(!city.water.has(n)||city.bridges.has(n))&&!city.trees.has(n))||!planning;
     $('select-road-route').hidden=!singleRoad||!segment.length;
     $('select-road-route').disabled=!planning;
     $('upgrade-road').textContent=isRoute?'↑ 升级整段':cells.length>1?'↑ 全部升级':'↑ 升级';
@@ -523,11 +538,11 @@
         const serving=city.linesServingBuilding(n);
         $('signal-phase').textContent=`建筑可作为拖拽起点；向空地延伸时固定从支路开始。${serving.length?` · 相邻站点：${serving.map(line=>line.name).join('、')}`:''}`;
       } else {
-        const site=city.pendingBuildings.get(n);
-        const kind=site?`${site.kind==='home'?'住宅':'目的地'}建设用地`:city.bridges.has(n)?'桥梁（空）':city.water.has(n)?'水面':city.trees.has(n)?'绿地':'空地';
+        const site=city.pendingBuildings.get(n),dormant=city.dormantBuildings.get(n),region=city.lockedRegions.get(n);
+        const kind=region?`待开放区域「${region.name}」`:dormant?`${dormant.kind==='home'?'住宅':'目的地'}（数值锁定）`:site?`${site.kind==='home'?'住宅':'目的地'}建设用地`:city.bridges.has(n)?'桥梁（空）':city.water.has(n)?'水面':city.trees.has(n)?'绿地':'空地';
         $('road-detail').textContent=`(${p.x+1}, ${p.y+1}) ${kind}${site?site.conditional?' · 达成条件后落成':` · ${site.daysUntil} 天后落成`:''}`;
-        $('road-load').textContent=site?'建设期间不可铺路，请为建筑和出口预留空间。':kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';
-        $('signal-phase').textContent=site?campaignConditionText(site):'';
+        $('road-load').textContent=region?(region.available?`开放任务已完成，可支付 ${region.cost} 点建设点开放全部 ${region.cells.length} 格。`:`开放任务尚未完成。${campaignConditionText({condition:region.unlock})}`):dormant?'同色路线尚缺住宅或目的地；人口或容量不产生需求，也不计入满意度。':site?'建设期间不可铺路，请为建筑和出口预留空间。':kind==='空地'||kind==='桥梁（空）'?'可在此建设一格支路；拖拽后才会建立连接。':'此处不能建设道路。';
+        $('signal-phase').textContent=site?campaignConditionText(site):region&&region.available?(city.remaining>=region.cost?'点击“开放区域”确认支付。':`建设点不足，还差 ${region.cost-city.remaining} 点。`):'';
       }
     }
     updateSignalControls(signal,planning);
@@ -544,6 +559,13 @@
   function resetView() {
     viewZoom=1;cellSize=Math.min(viewportWidth/city.width,viewportHeight/city.height);
     viewX=(viewportWidth-city.width*cellSize)/2;viewY=(viewportHeight-city.height*cellSize)/2;viewTarget=null;
+  }
+  function focusInitialView() {
+    resetView();
+    if(!campaign||adminMode)return;
+    const cells=[...new Set([...city.roads,...city.buildings])].filter(cell=>!city.lockedRegions.has(cell));
+    const focus=TrafficCanvas.calculateFocusView({mapWidth:city.width,mapHeight:city.height,viewportWidth,viewportHeight,cells});
+    viewZoom=focus.zoom;cellSize=focus.cellSize;viewX=focus.x;viewY=focus.y;viewTarget=null;
   }
   function setZoom(next,screenX=viewportWidth/2,screenY=viewportHeight/2) {
     const oldSize=cellSize,worldX=(screenX-viewX)/oldSize,worldY=(screenY-viewY)/oldSize;
@@ -646,7 +668,7 @@
     for(let y=0;y<city.height;y++) for(let x=0;x<city.width;x++) {
       if((x*7+y*11)%13===0) { ctx.fillStyle='#e3ebd7';ctx.fillRect(x*s,y*s,s,s); }
       ctx.strokeStyle='#dce5d04d';ctx.lineWidth=.65;ctx.strokeRect(x*s,y*s,s,s);
-      if((x*3+y*7)%9===0 && !city.water.has(key(x,y)) && !city.roads.has(key(x,y)) && !city.buildings.has(key(x,y)) && !city.pendingBuildings.has(key(x,y))) {
+      if((x*3+y*7)%9===0 && !city.water.has(key(x,y)) && !city.roads.has(key(x,y)) && !city.buildings.has(key(x,y)) && !city.pendingBuildings.has(key(x,y)) && !city.dormantBuildings.has(key(x,y))) {
         line((x+.2)*s,(y+.72)*s,(x+.23)*s,(y+.64)*s,'#cedcbd',1);
         line((x+.27)*s,(y+.74)*s,(x+.3)*s,(y+.67)*s,'#cedcbd',1);
       }
@@ -735,6 +757,25 @@
       line(cx,cy,cx,cy+s*.31,'#a5b18d',s*.055);
       circle(cx-s*.1,cy,s*.19,'#a9c398');circle(cx+s*.1,cy+s*.015,s*.19,'#9ab88a');circle(cx,cy-s*.13,s*.19,'#b3cba1');
     }
+    for(const region of lockedRegionList()) {
+      const cells=new Set(region.cells),path=new Path2D();
+      for(const cell of cells){const {x,y}=point(cell);path.rect(x*s,y*s,s,s);}
+      ctx.save();ctx.clip(path);
+      ctx.fillStyle=region.available?'#7d878164':'#7b817e82';ctx.fill(path);
+      for(const [index,cell] of region.cells.entries()) {
+        if(index%2)continue;
+        const {x,y}=point(cell),gradient=ctx.createRadialGradient((x+.25)*s,(y+.3)*s,0,(x+.5)*s,(y+.5)*s,s*.82);
+        gradient.addColorStop(0,region.available?'#e7ece58a':'#d9ddda99');gradient.addColorStop(1,'#79817d08');ctx.fillStyle=gradient;ctx.fillRect(x*s,y*s,s,s);
+      }
+      ctx.restore();
+      ctx.save();ctx.strokeStyle=region.available?'#596a608f':'#555c5899';ctx.lineWidth=Math.max(1.2,s*.035);ctx.lineCap='round';
+      for(const cell of cells){const {x,y}=point(cell);if(!cells.has(cell-city.width))line(x*s,y*s,(x+1)*s,y*s,ctx.strokeStyle,ctx.lineWidth);if(!cells.has(cell+city.width))line(x*s,(y+1)*s,(x+1)*s,(y+1)*s,ctx.strokeStyle,ctx.lineWidth);if(x===0||!cells.has(cell-1))line(x*s,y*s,x*s,(y+1)*s,ctx.strokeStyle,ctx.lineWidth);if(x===city.width-1||!cells.has(cell+1))line((x+1)*s,y*s,(x+1)*s,(y+1)*s,ctx.strokeStyle,ctx.lineWidth);}
+      const lock=regionLockPosition(region),cx=lock.x*s,cy=lock.y*s,accent=region.available?'#d3a84b':'#59605c';
+      circle(cx,cy,s*.27,'#f4f5f0dc');circle(cx,cy,s*.22,accent);
+      ctx.beginPath();ctx.arc(cx,cy-s*.035,s*.095,Math.PI,0);ctx.strokeStyle='#f7f5e9';ctx.lineWidth=Math.max(2,s*.045);ctx.stroke();
+      rounded(cx-s*.14,cy-s*.035,s*.28,s*.22,s*.045,'#f7f5e9');circle(cx,cy+s*.055,s*.025,accent);
+      ctx.restore();
+    }
     for(const site of city.pendingBuildings.values()) {
       const {x,y}=point(site.cell),cx=(x+.5)*s,cy=(y+.5)*s;
       ctx.save();ctx.globalAlpha=.78;ctx.setLineDash([s*.08,s*.06]);
@@ -742,6 +783,9 @@
       label(site.kind==='home'?'⌂':'▣',cx,cy-s*.08,s*.34,'#6f756f','700');
       rounded(cx-s*.2,cy+s*.16,s*.4,s*.22,s*.1,'#676d68');label(site.conditional?'✓':String(site.daysUntil),cx,cy+s*.27,s*.14,'#fffef9','800');
       ctx.restore();
+    }
+    for(const building of city.dormantBuildings.values()) {
+      const {x,y}=point(building.cell),cx=(x+.5)*s,cy=(y+.5)*s;ctx.save();ctx.globalAlpha=.72;rounded(x*s+s*.08,y*s+s*.07,s*.84,s*.84,s*.17,'#b8bcb7','#6e746f');label(building.kind==='home'?'⌂':'▣',cx,cy-s*.06,s*.34,'#626863','700');rounded(cx-s*.2,cy+s*.16,s*.4,s*.22,s*.1,'#656b67');label('锁',cx,cy+s*.27,s*.14,'#fffef9','800');ctx.restore();
     }
     city.homes.forEach((h,i)=>drawBuilding({...h,isHome:true,index:i}));
     city.goals.forEach((g,i)=>drawBuilding({...g,isHome:false,index:i}));
@@ -806,7 +850,7 @@
       rounded(x*s+1,y*s+1,s-2,s-2,s*.1,retracting?'#d18d4f22':'#317a5719',retracting?'#c68b56':'#6d936b');
       if(tool==='cut')label('✂',(x+.5)*s,(y+.5)*s,s*.42,'#a97346');
       if(tool==='bus')label(busEditMode==='trim'?'−':'▰',(x+.5)*s,(y+.5)*s,s*.34,busEditMode==='trim'?'#c8844f':city.activeBusLine?.color||'#1686a0','800');
-      if(tool==='road'&&!city.buildings.has(selected)&&!city.pendingBuildings.has(selected)&&!city.roads.has(selected))label(retracting?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,retracting?'#bd8253':'#82a277');
+      if(tool==='road'&&!city.buildings.has(selected)&&!city.pendingBuildings.has(selected)&&!city.dormantBuildings.has(selected)&&!city.lockedRegions.has(selected)&&!city.roads.has(selected))label(retracting?'−':'+',(x+.5)*s,(y+.5)*s,s*.42,retracting?'#bd8253':'#82a277');
     }
     if(city.state==='paused') {
       rounded(w/2-52,14,104,27,14,'#fffef9e8');label('Ⅱ  规划暂停中',w/2,28,11,'#63715b');
@@ -862,7 +906,7 @@
     $('waiting').textContent=`${homeWaiting} 人在住宅等待${transferWaiting?` · ${transferWaiting} 人在换乘站等待`:''} · ${city.cars.length} 辆小汽车${city.buses.length?` · ${city.buses.length} 辆公交载客 ${onboard} 人`:''}`;
     const states={planning:'规划中',running:'运营中',paused:'已暂停',won:'目标达成',lost:'运营结束'};
     $('phase-label').textContent=city.sandbox?`${states[city.state]} · 沙盒`:states[city.state];
-    $('board-status').textContent=city.state==='planning'?(city.sandbox?'沙盒规划，可随时开跑':'先规划，再出发'):`${states[city.state]} · ${speed}× 速度${city.sandbox?' · 可实时修改':''}`;
+    $('board-status').textContent=city.state==='planning'?(city.sandbox?'沙盒规划，可随时开跑':'先规划，再出发'):`${states[city.state]} · ${speedLabel(speed)}× 速度${city.sandbox?' · 可实时修改':''}`;
     $('start').textContent=city.state==='running'?'Ⅱ 暂停运营':city.state==='paused'?'▶ 继续运营':city.state==='planning'?'▶ 开始运营':'本局已结束';
     $('start').disabled=['won','lost'].includes(city.state);
     $('stop').disabled=!['running','paused'].includes(city.state);
@@ -908,9 +952,10 @@
     if(planned.length>1) $('bus-status').textContent+=` · 已规划 ${planned.length}/${city.busLineLimit} 条`;
     updateBusVisibilityControls();
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
-    $('speed').textContent=speed+'×';
-    $('speed').setAttribute('aria-label',`切换运营倍速，当前 ${speed} 倍`);
-    $('speed').title=`当前 ${speed}×；点击切换为 ${SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length]}×`;
+    const availableSpeeds=speedOptions(),nextSpeed=availableSpeeds[(availableSpeeds.indexOf(speed)+1)%availableSpeeds.length];
+    $('speed').textContent=speedLabel(speed)+'×';
+    $('speed').setAttribute('aria-label',speed===Infinity?'切换运营倍速，当前无限速':`切换运营倍速，当前 ${speed} 倍`);
+    $('speed').title=`当前 ${speedLabel(speed)}×；点击切换为 ${speedLabel(nextSpeed)}×${nextSpeed===Infinity?'（立即完成模拟）':''}`;
     $('connection-count').textContent=city.routes.filter((r,i)=>city.routeConnected(i)).length+' / '+city.routes.length;
     connectionRows.forEach(({row,status},i)=>{
       const connected=city.routeConnected(i),wasConnected=connectedRoutes.has(i);row.classList.toggle('connected',connected);status.textContent=connected?'已连接 ✓':'待连接';
@@ -980,7 +1025,7 @@
     speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
     arrivalEffects.reset();
     pendingLevel=null;pendingMode=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
-    resetView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
+    focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
     window.dispatchEvent(new CustomEvent('traffic-game-levelchange',{detail:{levelId:city.level.id}}));
   }
   function switchGameMode(mode) {
@@ -990,10 +1035,20 @@
     $('mode-confirm-description').textContent=`当前设计、车辆和运营成绩会被清空。${mode==='sandbox'?'沙盒不限时间且运营中可改路；公交仍须停止后修改。':'挑战恢复关卡时限、规划锁定和胜负结算。'}`;
     openPausedDialog($('mode-dialog'));
   }
+  function lockedRegionList(){return [...new Map([...city.lockedRegions.values()].map(region=>[region.id,region])).values()];}
+  function regionLockPosition(region) {
+    const points=region.cells.map(point),top=Math.min(...points.map(item=>item.y)),topCells=points.filter(item=>item.y===top).sort((a,b)=>a.x-b.x),anchor=topCells[Math.floor((topCells.length-1)/2)];
+    return {x:anchor.x+.5,y:anchor.y+.18};
+  }
   function eventPoint(event) { const rect=canvas.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
   function eventCell(event) {
     const p=eventPoint(event),x=Math.floor((p.x-viewX)/cellSize),y=Math.floor((p.y-viewY)/cellSize);
     return x>=0&&x<city.width&&y>=0&&y<city.height?key(x,y):null;
+  }
+  function eventRegion(event) {
+    const p=eventPoint(event);
+    for(const region of lockedRegionList()){const lock=regionLockPosition(region),x=viewX+lock.x*cellSize,y=viewY+lock.y*cellSize;if(Math.hypot(p.x-x,p.y-y)<=Math.max(18,cellSize*.34))return region;}
+    const cell=eventCell(event);return cell===null?null:city.lockedRegions.get(cell)||null;
   }
   function moveView(dx,dy) {
     const b=viewBounds(),rubber=(value,min,max)=>value<min?min+(value-min)*.32:value>max?max+(value-max)*.32:value;
@@ -1082,6 +1137,8 @@
       const [a,b]=[...pointers.values()],center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
       pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom:viewZoom,worldX:(center.x-viewX)/cellSize,worldY:(center.y-viewY)/cellSize};return;
     }
+    const pressedCell=eventCell(e),pressedRegion=eventRegion(e);
+    if(!adminMode&&pressedRegion){dragging=false;hover=pressedCell;openRegionDialog(pressedRegion);return;}
     if(tool==='view'){panLast=p;hover=null;return;}
     keyboardAnchor=null;keyboardMode=false;dragging=true;hover=eventCell(e);showTouchCoordinate(hover,e.pointerType==='touch');if(hover===null)return;
     if(tool==='select'){routeSelection=null;selectionAnchor=hover;selection={start:hover,end:hover};updateUI();draw();return;}
@@ -1144,6 +1201,14 @@
     const signal=city.signals.get(inspectedCell);if(!signal)return;
     applySignalSettings({phases:[...signal.phases.map(actions=>[...actions]),['north-straight']],phaseGreens:[...signal.phaseGreens,2]},'已添加信号阶段');
   };
+  $('unlock-region').onclick=()=>{const cell=selectedCells()[0],region=cell===undefined?null:city.lockedRegions.get(cell);if(region)openRegionDialog(region);};
+  $('cancel-region').onclick=()=>{pendingRegionId=null;$('region-dialog').close();};
+  $('confirm-region').onclick=()=>{
+    const id=pendingRegionId;pendingRegionId=null;$('region-dialog').close();if(!id)return;
+    const region=(campaign.level.campaign.regions||[]).find(item=>item.id===id),message=campaign.unlockRegion(id);if(message){toast(message);return;}
+    city=campaign.city;selection=null;routeSelection=null;inspectedCell=null;resetDesignHistory();configureLevel();updateUI();draw();toast(`已开放「${region.name}」，支出 ${region.cost} 点建设点`);
+  };
+  $('region-dialog').addEventListener('cancel',event=>{event.preventDefault();pendingRegionId=null;$('region-dialog').close();});
   $('build-road').onclick=()=>{
     const cells=selectedCells();if(cells.length!==1)return;
     const message=mutateDesign(()=>city.transact([{type:'edit',cell:cells[0],erase:false,grade:0}]));
@@ -1242,7 +1307,7 @@
   $('stop').onclick=()=>openPausedDialog($('stop-dialog'));
   $('cancel-stop').onclick=()=>closePausedDialog($('stop-dialog'));
   $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
-  $('speed').onclick=()=>{speed=SPEED_OPTIONS[(SPEED_OPTIONS.indexOf(speed)+1)%SPEED_OPTIONS.length];updateUI();};
+  $('speed').onclick=()=>{const options=speedOptions();speed=options[(options.indexOf(speed)+1)%options.length];updateUI();};
   $('challenge-mode').onclick=()=>switchGameMode('challenge');
   $('sandbox-mode').onclick=()=>switchGameMode('sandbox');
   $('help').onclick=()=>openPausedDialog($('help-dialog'));
@@ -1271,7 +1336,7 @@
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();resetView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{
@@ -1333,8 +1398,14 @@
     const delta=lastFrame?Math.min((now-lastFrame)/1000,.25):0;lastFrame=now;
     if(viewTarget){const amount=Math.min(1,delta*14);viewX+=(viewTarget.x-viewX)*amount;viewY+=(viewTarget.y-viewY)*amount;if(Math.hypot(viewTarget.x-viewX,viewTarget.y-viewY)<.25){viewX=viewTarget.x;viewY=viewTarget.y;viewTarget=null;}}
     if(city.state==='running') {
-      accumulator+=delta*speed;
-      while(accumulator>=.05){city.step(.05);accumulator-=.05;}
+      if(speed===Infinity) {
+        const maxSteps=Math.ceil(Math.max(0,city.duration-city.elapsed)/.05)+2;
+        for(let step=0;step<maxSteps&&city.state==='running';step++)city.step(.05);
+        accumulator=0;
+      } else {
+        accumulator+=delta*speed;
+        while(accumulator>=.05){city.step(.05);accumulator-=.05;}
+      }
     } else accumulator=0;
     arrivalEffects.sync(city);arrivalEffects.step(delta);
     updateUI();draw();requestAnimationFrame(frame);
@@ -1358,6 +1429,7 @@
       if(!Number.isInteger(dayIndex)||dayIndex<0||dayIndex>=target.campaign.days.length)return '参考答案日期无效';
       const prepared=new CampaignSession(levelId);
       for(let index=0;index<dayIndex;index++){const outcome=prepared.runReferenceDay();if(!outcome.ok)return `第 ${outcome.day} 天参考答案运行失败：${outcome.error}`;}
+      for(const region of prepared.availableRegions()){const message=prepared.unlockRegion(region.id);if(message)return `第 ${dayIndex+1} 天扩建区域开放失败：${message}`;}
       if(prepared.reference()){const message=prepared.loadReference(dayIndex,true);if(message)return `第 ${dayIndex+1} 天参考答案加载失败：${message}`;}
       campaign=prepared;city=campaign.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();configureLevel();setTool('view');updateUI();draw();return '';
     },

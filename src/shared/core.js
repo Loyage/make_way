@@ -145,7 +145,11 @@
       this.runtimeDuration = options.duration;
       this.deadlineMode = Boolean(options.deadlineMode);
       this.sandbox = Boolean(options.sandbox);
+      this.fixedCost = Number.isInteger(options.fixedCost) && options.fixedCost >= 0 ? options.fixedCost : 0;
       this.pendingBuildings = new Map((options.pendingBuildings || []).map(site => [site.cell, { ...site, condition: site.condition ? { ...site.condition } : undefined }]));
+      this.dormantBuildings = new Map((options.dormantBuildings || []).map(site => [site.cell, { ...site }]));
+      this.lockedRegions = new Map();
+      for (const region of options.lockedRegions || []) for (const cell of region.cells || []) this.lockedRegions.set(cell, { ...region, cells: [...region.cells], condition: region.condition ? { ...region.condition } : undefined });
       this.water = new Set(this.level.water);
       this.bridges = new Set(this.level.bridges);
       this.roads = new Set();
@@ -212,6 +216,7 @@
     connect(a,b,grade=0) {
       if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(a) || !Number.isInteger(b) || a<0 || b<0 || a>=this.width*this.height || b>=this.width*this.height || !this.neighbors(a).includes(b)) return '请沿相邻方格拖动';
+      if (this.lockedRegions.has(a) || this.lockedRegions.has(b)) return '该区域尚未开放，不能建设或连接道路';
       if (this.buildings.has(a) && this.buildings.has(b)) return '建筑之间需要道路';
       if (!this.edges.get(a)?.has(b) && [a,b].some(n=>this.roads.has(n) && this.links(n).length===2 && this.occupants(n).length)) return '请等车辆通过后再增设路口';
       const roads=new Set(this.roads), grades=new Map(this.roadGrades);
@@ -244,7 +249,7 @@
       let spent = 0;
       for (const n of this.roads) spent += this.roadType(n).cost;
       for (const line of this.busLines) if (line.route.length) spent += line.count * BUS_COST;
-      return this.budget - spent;
+      return this.budget - this.fixedCost - spent;
     }
     rebuildRoutes() {
       const homes = [], goals = [];
@@ -574,8 +579,9 @@
       if (!Number.isInteger(n) || n < 0 || n >= this.width * this.height) return '';
       if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
       if (!Number.isInteger(grade) || !ROAD_TYPES[grade]) return '无效的道路等级';
+      if (this.lockedRegions.has(n)) return '该区域尚未开放，不能建设道路';
       if (this.buildings.has(n)) return '把道路修到建筑旁边，即可连接';
-      if (this.pendingBuildings.has(n)) return '这里是建设用地，请为即将落成的建筑预留空间';
+      if (this.pendingBuildings.has(n) || this.dormantBuildings.has(n)) return '这里是建设用地，请为即将启用的建筑预留空间';
       if (erase) {
         if (!this.roads.has(n)) return '';
         if (this.busLines.some(line => line.route.includes(n))) return '这格道路正在公交线路上，请先删除或重画线路';
@@ -648,8 +654,9 @@
         || design.version>=7&&(design.width!==this.width||design.height!==this.height)
         || design.version<7&&(this.width!==WIDTH||this.height!==HEIGHT)) return '存档格式无效、地图尺寸不匹配或不属于当前关卡';
       const candidate = new City(this.level.id, {
-        routes: this.routes, budget: this.budget, duration: this.duration,
-        deadlineMode: this.deadlineMode, pendingBuildings: [...this.pendingBuildings.values()]
+        routes: this.routes, budget: this.budget, duration: this.duration, fixedCost: this.fixedCost,
+        deadlineMode: this.deadlineMode, pendingBuildings: [...this.pendingBuildings.values()],
+        dormantBuildings: [...this.dormantBuildings.values()], lockedRegions: [...new Map([...this.lockedRegions.values()].map(region => [region.id,region])).values()]
       }), seenRoads = new Set(), seenSignals = new Set();
       candidate.roads.clear();candidate.roadGrades.clear();candidate.edges.clear();candidate.signals.clear();
       candidate.refreshPaths();

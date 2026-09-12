@@ -211,7 +211,27 @@ function validateLevelsFirst(data) {
         const potentialError=validateLevelsFirst({version:1,chapters:[{id:'campaign-potential',name:'多日任务校验',english:'CAMPAIGN CHECK',levels:[potentialLevel]}]});
         if(potentialError)return `关卡「${level.id}」的潜在建筑：${potentialError}`;
       }
-      let maximumBudget=level.budget;const referenceResults=[];
+      const validateCondition = (condition, label) => {
+        if (!condition || typeof condition !== 'object' || Array.isArray(condition)) return `${label}缺少条件`;
+        if (condition.day !== undefined && (!Number.isInteger(condition.day) || condition.day < 1 || condition.day > level.campaign.days.length)) return `${label}的日期条件无效`;
+        for (const field of ['delivered','income']) if (condition[field] !== undefined && (!Number.isInteger(condition[field]) || condition[field] < 0)) return `${label}的 ${field} 条件无效`;
+        if (condition.satisfaction !== undefined && (!Number.isFinite(condition.satisfaction) || condition.satisfaction < 0 || condition.satisfaction > 100)) return `${label}的满意度条件无效`;
+        return '';
+      };
+      const regionIds=new Set(),regionCells=new Set();
+      if(level.campaign.regions!==undefined&&!Array.isArray(level.campaign.regions))return `关卡「${level.id}」的 campaign.regions 必须是数组`;
+      for(const region of level.campaign.regions||[]){
+        if(!region||typeof region.id!=='string'||!/^[a-z0-9-]+$/.test(region.id)||regionIds.has(region.id))return `关卡「${level.id}」的扩建区域 id 无效或重复`;
+        regionIds.add(region.id);
+        if(typeof region.name!=='string'||!region.name.trim())return `关卡「${level.id}」的扩建区域「${region.id}」缺少名称`;
+        if(!Number.isInteger(region.cost)||region.cost<1)return `关卡「${level.id}」的扩建区域「${region.id}」费用必须是正整数`;
+        const error=validateCondition(region.unlock,`扩建区域「${region.id}」的开放`);if(error)return `关卡「${level.id}」${error}`;
+        if(!Array.isArray(region.cells)||!region.cells.length)return `关卡「${level.id}」的扩建区域「${region.id}」必须包含格子`;
+        const local=new Set();for(const cell of region.cells){if(!isCoord(cell,width,height)||local.has(cell)||regionCells.has(cell))return `关卡「${level.id}」的扩建区域「${region.id}」包含越界、重复或重叠格子 ${cell}`;local.add(cell);regionCells.add(cell);}
+      }
+      for(const road of level.initialRoads||[])if(regionCells.has(road.cell))return `关卡「${level.id}」的初始道路位于待开放区域 ${road.cell}`;
+      for(const edge of level.initialEdges||[])if(regionCells.has(edge[0])||regionCells.has(edge[1]))return `关卡「${level.id}」的初始连接进入待开放区域`;
+      let maximumBudget=level.budget,regionSpent=0;const referenceResults=[],referenceUnlocked=[];
       for (let dayIndex = 0; dayIndex < level.campaign.days.length; dayIndex++) {
         const day = level.campaign.days[dayIndex];
         if (!day || !Number.isFinite(day.duration) || day.duration < 1) return `关卡「${level.id}」第 ${dayIndex + 1} 天的时长无效`;
@@ -224,11 +244,14 @@ function validateLevelsFirst(data) {
           const dayError = validateLevelsFirst({ version: 1, chapters: [{ id: 'campaign-check', name: '多日任务校验', english: 'CAMPAIGN CHECK', levels: [dayLevel] }] });
           if (dayError) return `关卡「${level.id}」第 ${dayIndex + 1} 天：${dayError}`;
         } else if (day.routes !== undefined) return `关卡「${level.id}」不能混用新旧多日任务格式`;
+        for(const region of level.campaign.regions||[])if(!referenceUnlocked.includes(region.id)&&core.conditionMet(region.unlock,dayIndex+1,referenceResults)){referenceUnlocked.push(region.id);regionSpent+=region.cost;}
         if(day.referenceDesign!==undefined){
-          const referenceRoutes=legacy?day.routes:materializeCampaignRoutes(level,dayIndex,referenceResults),activeCells=new Set(referenceRoutes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
+          const referenceRoutes=legacy?day.routes:materializeCampaignRoutes(level,dayIndex,referenceResults,referenceUnlocked),activeCells=new Set(referenceRoutes.flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)));
           const pendingCells=new Set((level.campaign.routes||[]).flatMap(route=>[...route.homes,...route.goals].map(building=>building.cell)).filter(cell=>!activeCells.has(cell)));
           if(day.referenceDesign.roads?.some(road=>pendingCells.has(road.cell)))return `关卡「${level.id}」第 ${dayIndex+1} 天的参考答案占用了尚未解锁的建筑工地`;
-          const referenceLevel={...level,duration:day.duration,budget:maximumBudget,routes:referenceRoutes,referenceDesign:day.referenceDesign};delete referenceLevel.campaign;
+          const lockedCells=new Set((level.campaign.regions||[]).filter(region=>!referenceUnlocked.includes(region.id)).flatMap(region=>region.cells));
+          if(day.referenceDesign.roads?.some(road=>lockedCells.has(road.cell)))return `关卡「${level.id}」第 ${dayIndex+1} 天的参考答案进入了尚未开放的地图区域`;
+          const referenceLevel={...level,duration:day.duration,budget:maximumBudget-regionSpent,routes:referenceRoutes,referenceDesign:day.referenceDesign};delete referenceLevel.campaign;
           const referenceError=validateLevelsFirst({version:1,chapters:[{id:'campaign-reference',name:'多日参考答案校验',english:'CAMPAIGN REFERENCE',levels:[referenceLevel]}]});
           if(referenceError)return `关卡「${level.id}」第 ${dayIndex+1} 天的参考答案：${referenceError}`;
         }
@@ -243,13 +266,6 @@ function validateLevelsFirst(data) {
         for (const road of level.initialRoads || []) if (futureCells.has(road.cell)) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;
         for (const edge of level.initialEdges || []) if (futureCells.has(edge[0]) || futureCells.has(edge[1])) return `关卡「${level.id}」的初始道路占用了未来建筑工地`;
       } else {
-        const validateCondition = (condition, label) => {
-          if (!condition || typeof condition !== 'object') return `${label}缺少条件`;
-          if (condition.day !== undefined && (!Number.isInteger(condition.day) || condition.day < 1 || condition.day > level.campaign.days.length)) return `${label}的日期条件无效`;
-          for (const field of ['delivered','income']) if (condition[field] !== undefined && (!Number.isInteger(condition[field]) || condition[field] < 0)) return `${label}的 ${field} 条件无效`;
-          if (condition.satisfaction !== undefined && (!Number.isFinite(condition.satisfaction) || condition.satisfaction < 0 || condition.satisfaction > 100)) return `${label}的满意度条件无效`;
-          return '';
-        };
         if (!Array.isArray(level.campaign.routes) || !level.campaign.routes.length) return `关卡「${level.id}」的多日任务必须包含潜在路线`;
         const potentialLevel={...level,routes:level.campaign.routes};delete potentialLevel.campaign;
         const potentialError=validateLevelsFirst({version:1,chapters:[{id:'campaign-potential',name:'多日任务校验',english:'CAMPAIGN CHECK',levels:[potentialLevel]}]});
