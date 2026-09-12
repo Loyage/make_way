@@ -139,7 +139,7 @@
   }
   function render() {
     if(!catalog)return;
-    fillSelect($('admin-chapter'),chapters().map((item,index)=>option(index,`${index+1}. ${item.name}`)),chapterIndex);
+    fillSelect($('admin-chapter'),chapters().map((item,index)=>option(index,`${index+1}. ${item.name}${item.hidden?'（仅管理员）':''}`)),chapterIndex);
     fillSelect($('admin-level'),(chapter()?.levels||[]).map((item,index)=>option(index,`${index+1}. ${item.name}`)),levelIndex);
     const target=level();if(!target)return;
     const fields={id:'id',name:'name',english:'english',difficulty:'difficulty',lesson:'lesson',budget:'budget',duration:'duration','bus-limit':'busLineLimit',title:'title',description:'description',tip:'tip'};

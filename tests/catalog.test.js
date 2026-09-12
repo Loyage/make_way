@@ -12,9 +12,10 @@ const builtInManifest = path.join(__dirname, '..', 'built-in-levels.json');
 test('split catalog loads chapter manifests and one file per level', () => {
   const manifest = JSON.parse(fs.readFileSync(builtInManifest, 'utf8'));
   assert.equal(isManifest(manifest), true);
-  assert.deepEqual(manifest.chapters, ['levels/road-basics/chapter.json', 'levels/city-control/chapter.json']);
+  assert.deepEqual(manifest.chapters, ['levels/road-basics/chapter.json','levels/junction-control/chapter.json','levels/public-transit/chapter.json','levels/design-archive/chapter.json']);
   const catalog = loadCatalogSync(builtInManifest);
-  assert.deepEqual(catalog.chapters.map(chapter => chapter.levels.length), [5, 6]);
+  assert.deepEqual(catalog.chapters.map(chapter => chapter.levels.length), [5,7,5,5]);
+  assert.equal(catalog.chapters.at(-1).hidden,true);
   for (const chapter of catalog.chapters) {
     const chapterManifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'levels', chapter.id, 'chapter.json'), 'utf8'));
     assert.ok(chapterManifest.levels.every(reference => /^[a-z0-9-]+\.json$/.test(reference)));

@@ -30,6 +30,7 @@ function validateLevelsFirst(data) {
     chapterIds.add(chapter.id);
     if (typeof chapter.name !== 'string' || !chapter.name.trim()) return `章节「${chapter.id}」缺少名称`;
     if (typeof chapter.english !== 'string' || !chapter.english.trim()) return `章节「${chapter.id}」缺少英文名`;
+    if (chapter.hidden !== undefined && typeof chapter.hidden !== 'boolean') return `章节「${chapter.id}」的 hidden 必须是布尔值`;
     if (!Array.isArray(chapter.levels)) return `章节「${chapter.id}」的 levels 必须是数组`;
   }
   const list = catalog.chapters.flatMap(chapter => chapter.levels);
@@ -307,6 +308,7 @@ function validateLevelCatalog(data) {
     else chapterIds.add(chapterId);
     if (typeof chapter.name !== 'string' || !chapter.name.trim()) add(`章节「${chapterId || ci + 1}」缺少名称`, { chapterId, path: `${chapterPath}.name` });
     if (typeof chapter.english !== 'string' || !chapter.english.trim()) add(`章节「${chapterId || ci + 1}」缺少英文名`, { chapterId, path: `${chapterPath}.english` });
+    if (chapter.hidden !== undefined && typeof chapter.hidden !== 'boolean') add(`章节「${chapterId || ci + 1}」的 hidden 必须是布尔值`, { chapterId, path: `${chapterPath}.hidden` });
     if (!Array.isArray(chapter.levels)) { add(`章节「${chapterId || ci + 1}」的 levels 必须是数组`, { chapterId, path: `${chapterPath}.levels` });return; }
     chapter.levels.forEach((level, li) => {
       const base=`${chapterPath}.levels[${li}]`;

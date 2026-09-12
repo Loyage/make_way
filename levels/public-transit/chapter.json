@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "public-transit",
+  "name": "公共交通",
+  "english": "PUBLIC TRANSIT",
+  "levels": [
+    "bus-intro.json",
+    "bus-pipeline.json",
+    "bridge-transfer.json",
+    "bus-only-street.json",
+    "transit-campaign.json"
+  ]
+}

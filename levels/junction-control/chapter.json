@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "junction-control",
+  "name": "路口调度",
+  "english": "JUNCTION CONTROL",
+  "levels": [
+    "junction-basics.json",
+    "woodland.json",
+    "signal-cross.json",
+    "signal-demand.json",
+    "signal-timing.json",
+    "signal-distribution.json",
+    "junction-campaign.json"
+  ]
+}

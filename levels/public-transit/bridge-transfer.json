@@ -1,0 +1,394 @@
+{
+  "id": "bridge-transfer",
+  "name": "桥头换乘",
+  "english": "BRIDGE TRANSFER",
+  "difficulty": "教学三",
+  "title": "用公交跨过唯一的通勤卡点。",
+  "description": "河面只有中央桥可通行。先用西岸接驳线把居民送到桥头，再用跨桥线路接往东岸目的地；两线必须在同一个桥头站换乘。",
+  "tip": "建立两条原路返回线路，并在西桥头道路格为两线都启用站点。相邻但不同站格不能换乘。",
+  "lesson": "单桥卡点与公交换乘",
+  "busLineLimit": 2,
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": false,
+    "bus": true
+  },
+  "budget": 72,
+  "duration": 75,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 72,
+      "maxQueue": 80
+    }
+  },
+  "water": [
+    7,
+    8,
+    23,
+    24,
+    39,
+    40,
+    55,
+    56,
+    71,
+    72,
+    87,
+    88,
+    103,
+    104,
+    119,
+    120,
+    135,
+    136,
+    151,
+    152,
+    167,
+    168,
+    183,
+    184
+  ],
+  "bridges": [
+    103,
+    104
+  ],
+  "trees": [],
+  "routes": [
+    {
+      "name": "河西住宅 → 河东学校",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 65,
+          "generationRate": 6,
+          "passengers": 48
+        }
+      ],
+      "goals": [
+        {
+          "cell": 142,
+          "label": "河东学校"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 66,
+      "grade": 1
+    },
+    {
+      "cell": 67,
+      "grade": 1
+    },
+    {
+      "cell": 68,
+      "grade": 1
+    },
+    {
+      "cell": 69,
+      "grade": 1
+    },
+    {
+      "cell": 70,
+      "grade": 1
+    },
+    {
+      "cell": 86,
+      "grade": 1
+    },
+    {
+      "cell": 102,
+      "grade": 1
+    },
+    {
+      "cell": 103,
+      "grade": 1
+    },
+    {
+      "cell": 104,
+      "grade": 1
+    },
+    {
+      "cell": 105,
+      "grade": 1
+    },
+    {
+      "cell": 106,
+      "grade": 1
+    },
+    {
+      "cell": 107,
+      "grade": 1
+    },
+    {
+      "cell": 108,
+      "grade": 1
+    },
+    {
+      "cell": 109,
+      "grade": 1
+    },
+    {
+      "cell": 125,
+      "grade": 1
+    },
+    {
+      "cell": 141,
+      "grade": 1
+    }
+  ],
+  "initialEdges": [
+    [
+      66,
+      67
+    ],
+    [
+      67,
+      68
+    ],
+    [
+      68,
+      69
+    ],
+    [
+      69,
+      70
+    ],
+    [
+      70,
+      86
+    ],
+    [
+      86,
+      102
+    ],
+    [
+      102,
+      103
+    ],
+    [
+      103,
+      104
+    ],
+    [
+      104,
+      105
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      106,
+      107
+    ],
+    [
+      107,
+      108
+    ],
+    [
+      108,
+      109
+    ],
+    [
+      109,
+      125
+    ],
+    [
+      125,
+      141
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "bridge-transfer",
+    "roads": [
+      {
+        "cell": 66,
+        "grade": 1
+      },
+      {
+        "cell": 67,
+        "grade": 1
+      },
+      {
+        "cell": 68,
+        "grade": 1
+      },
+      {
+        "cell": 69,
+        "grade": 1
+      },
+      {
+        "cell": 70,
+        "grade": 1
+      },
+      {
+        "cell": 86,
+        "grade": 1
+      },
+      {
+        "cell": 102,
+        "grade": 1
+      },
+      {
+        "cell": 103,
+        "grade": 1
+      },
+      {
+        "cell": 104,
+        "grade": 1
+      },
+      {
+        "cell": 105,
+        "grade": 1
+      },
+      {
+        "cell": 106,
+        "grade": 1
+      },
+      {
+        "cell": 107,
+        "grade": 1
+      },
+      {
+        "cell": 108,
+        "grade": 1
+      },
+      {
+        "cell": 109,
+        "grade": 1
+      },
+      {
+        "cell": 125,
+        "grade": 1
+      },
+      {
+        "cell": 141,
+        "grade": 1
+      }
+    ],
+    "edges": [
+      [
+        66,
+        67
+      ],
+      [
+        67,
+        68
+      ],
+      [
+        68,
+        69
+      ],
+      [
+        69,
+        70
+      ],
+      [
+        70,
+        86
+      ],
+      [
+        86,
+        102
+      ],
+      [
+        102,
+        103
+      ],
+      [
+        103,
+        104
+      ],
+      [
+        104,
+        105
+      ],
+      [
+        105,
+        106
+      ],
+      [
+        106,
+        107
+      ],
+      [
+        107,
+        108
+      ],
+      [
+        108,
+        109
+      ],
+      [
+        109,
+        125
+      ],
+      [
+        125,
+        141
+      ]
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [
+      {
+        "id": "line-1",
+        "name": "西岸接驳",
+        "color": "#1686a0",
+        "route": [
+          66,
+          67,
+          68,
+          69,
+          70,
+          86,
+          102,
+          103
+        ],
+        "count": 2,
+        "stops": [
+          66,
+          103
+        ],
+        "returnTrip": true,
+        "returnStops": true,
+        "headway": 2
+      },
+      {
+        "id": "line-2",
+        "name": "跨河干线",
+        "color": "#d06b47",
+        "route": [
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          125,
+          141
+        ],
+        "count": 3,
+        "stops": [
+          103,
+          141
+        ],
+        "returnTrip": true,
+        "returnStops": true,
+        "headway": 2
+      }
+    ],
+    "activeBusLineId": "line-1"
+  }
+}

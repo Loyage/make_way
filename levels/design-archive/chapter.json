@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "id": "city-control",
-  "name": "城市调度",
-  "english": "CITY CONTROL",
+  "id": "design-archive",
+  "name": "设计素材库",
+  "english": "DESIGN ARCHIVE",
+  "hidden": true,
   "levels": [
-    "woodland.json",
     "rush-hour.json",
     "signal-school.json",
     "multi-route-school.json",

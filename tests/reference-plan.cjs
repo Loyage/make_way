@@ -12,6 +12,8 @@ function completeCrossing(city) {
   line(city,5,3,5,10,1);line(city,6,1,6,10,1);line(city,10,8,10,1,1);line(city,10,1,12,1,1);
 }
 function buildReferencePlan(city) {
+  const reference=city.level.referenceDesign||city.level.campaign?.days?.[0]?.referenceDesign;
+  if(reference){assert.equal(city.loadDesign(reference),'');return;}
   if(city.level.id==='demolition-school') {
     for(const n of [...city.roads]) assert.equal(city.edit(n,true),'');
     line(city,4,2,2,2);line(city,2,2,2,6);line(city,2,6,4,6);line(city,4,6,4,8);return;

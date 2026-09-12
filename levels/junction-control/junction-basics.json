@@ -1,0 +1,463 @@
+{
+  "id": "junction-basics",
+  "name": "礼让路口",
+  "english": "YIELD AT JUNCTIONS",
+  "difficulty": "教学一",
+  "title": "用一个路口，省下一大圈绕路。",
+  "description": "道路已形成 T 形与十字交汇。客流不大时，无灯路口会按到达顺序自动避让，比为每组居民铺独立远路更省预算。",
+  "tip": "直接运营并观察路口；选中交汇格可看到“自动让行”。这一课不必开启红绿灯。",
+  "lesson": "T 形、十字路口与自动避让",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": false,
+    "bus": false
+  },
+  "budget": 30,
+  "duration": 70,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 30,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "西岸住宅 → 东岸工坊",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 81,
+          "generationRate": 1,
+          "passengers": 18
+        }
+      ],
+      "goals": [
+        {
+          "cell": 94,
+          "label": "东岸工坊"
+        }
+      ]
+    },
+    {
+      "name": "北园住宅 → 南街学校",
+      "color": "#d19157",
+      "light": "#f2dfbf",
+      "homes": [
+        {
+          "cell": 23,
+          "generationRate": 1,
+          "passengers": 18
+        }
+      ],
+      "goals": [
+        {
+          "cell": 155,
+          "label": "南街学校"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 39,
+      "grade": 0
+    },
+    {
+      "cell": 55,
+      "grade": 0
+    },
+    {
+      "cell": 71,
+      "grade": 0
+    },
+    {
+      "cell": 82,
+      "grade": 0
+    },
+    {
+      "cell": 83,
+      "grade": 0
+    },
+    {
+      "cell": 84,
+      "grade": 0
+    },
+    {
+      "cell": 85,
+      "grade": 0
+    },
+    {
+      "cell": 86,
+      "grade": 0
+    },
+    {
+      "cell": 87,
+      "grade": 0
+    },
+    {
+      "cell": 88,
+      "grade": 0
+    },
+    {
+      "cell": 89,
+      "grade": 0
+    },
+    {
+      "cell": 90,
+      "grade": 0
+    },
+    {
+      "cell": 91,
+      "grade": 0
+    },
+    {
+      "cell": 92,
+      "grade": 0
+    },
+    {
+      "cell": 93,
+      "grade": 0
+    },
+    {
+      "cell": 103,
+      "grade": 0
+    },
+    {
+      "cell": 119,
+      "grade": 0
+    },
+    {
+      "cell": 135,
+      "grade": 0
+    },
+    {
+      "cell": 136,
+      "grade": 0
+    },
+    {
+      "cell": 137,
+      "grade": 0
+    },
+    {
+      "cell": 138,
+      "grade": 0
+    },
+    {
+      "cell": 139,
+      "grade": 0
+    }
+  ],
+  "initialEdges": [
+    [
+      82,
+      83
+    ],
+    [
+      83,
+      84
+    ],
+    [
+      84,
+      85
+    ],
+    [
+      85,
+      86
+    ],
+    [
+      86,
+      87
+    ],
+    [
+      87,
+      88
+    ],
+    [
+      88,
+      89
+    ],
+    [
+      89,
+      90
+    ],
+    [
+      90,
+      91
+    ],
+    [
+      91,
+      92
+    ],
+    [
+      92,
+      93
+    ],
+    [
+      39,
+      55
+    ],
+    [
+      55,
+      71
+    ],
+    [
+      71,
+      87
+    ],
+    [
+      87,
+      103
+    ],
+    [
+      103,
+      119
+    ],
+    [
+      119,
+      135
+    ],
+    [
+      135,
+      136
+    ],
+    [
+      136,
+      137
+    ],
+    [
+      137,
+      138
+    ],
+    [
+      138,
+      139
+    ],
+    [
+      81,
+      82
+    ],
+    [
+      94,
+      93
+    ],
+    [
+      23,
+      39
+    ],
+    [
+      155,
+      139
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "junction-basics",
+    "roads": [
+      {
+        "cell": 39,
+        "grade": 0
+      },
+      {
+        "cell": 55,
+        "grade": 0
+      },
+      {
+        "cell": 71,
+        "grade": 0
+      },
+      {
+        "cell": 82,
+        "grade": 0
+      },
+      {
+        "cell": 83,
+        "grade": 0
+      },
+      {
+        "cell": 84,
+        "grade": 0
+      },
+      {
+        "cell": 85,
+        "grade": 0
+      },
+      {
+        "cell": 86,
+        "grade": 0
+      },
+      {
+        "cell": 87,
+        "grade": 0
+      },
+      {
+        "cell": 88,
+        "grade": 0
+      },
+      {
+        "cell": 89,
+        "grade": 0
+      },
+      {
+        "cell": 90,
+        "grade": 0
+      },
+      {
+        "cell": 91,
+        "grade": 0
+      },
+      {
+        "cell": 92,
+        "grade": 0
+      },
+      {
+        "cell": 93,
+        "grade": 0
+      },
+      {
+        "cell": 103,
+        "grade": 0
+      },
+      {
+        "cell": 119,
+        "grade": 0
+      },
+      {
+        "cell": 135,
+        "grade": 0
+      },
+      {
+        "cell": 136,
+        "grade": 0
+      },
+      {
+        "cell": 137,
+        "grade": 0
+      },
+      {
+        "cell": 138,
+        "grade": 0
+      },
+      {
+        "cell": 139,
+        "grade": 0
+      }
+    ],
+    "edges": [
+      [
+        82,
+        83
+      ],
+      [
+        83,
+        84
+      ],
+      [
+        84,
+        85
+      ],
+      [
+        85,
+        86
+      ],
+      [
+        86,
+        87
+      ],
+      [
+        87,
+        88
+      ],
+      [
+        88,
+        89
+      ],
+      [
+        89,
+        90
+      ],
+      [
+        90,
+        91
+      ],
+      [
+        91,
+        92
+      ],
+      [
+        92,
+        93
+      ],
+      [
+        39,
+        55
+      ],
+      [
+        55,
+        71
+      ],
+      [
+        71,
+        87
+      ],
+      [
+        87,
+        103
+      ],
+      [
+        103,
+        119
+      ],
+      [
+        119,
+        135
+      ],
+      [
+        135,
+        136
+      ],
+      [
+        136,
+        137
+      ],
+      [
+        137,
+        138
+      ],
+      [
+        138,
+        139
+      ],
+      [
+        81,
+        82
+      ],
+      [
+        94,
+        93
+      ],
+      [
+        23,
+        39
+      ],
+      [
+        155,
+        139
+      ]
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [],
+    "activeBusLineId": null
+  }
+}

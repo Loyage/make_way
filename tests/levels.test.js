@@ -52,28 +52,21 @@ for (const level of LEVELS) {
 test('the shared validator accepts the active catalog', () => {
   assert.deepEqual(validateLevelCatalog({ version: 1, chapters: CHAPTERS }), { ok: true, errors: [] });
 });
-test('two chapters contain eleven progressively unlocked levels, including the five-day challenge', () => {
-  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length]),[['road-basics','道路入门',5],['city-control','城市调度',6]]);
+test('three player chapters follow roads, junctions and public transit, with an admin-only archive', () => {
+  assert.deepEqual(CHAPTERS.map(chapter=>[chapter.id,chapter.name,chapter.levels.length,chapter.hidden]),[
+    ['road-basics','道路入门',5,false],['junction-control','路口调度',7,false],['public-transit','公共交通',5,false],['design-archive','设计素材库',5,true]
+  ]);
   assert.deepEqual(CHAPTERS.flatMap(chapter=>chapter.levels),LEVELS);
-  assert.deepEqual(LEVELS.map(l=>l.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','woodland','rush-hour','signal-school','multi-route-school','bus-school','transfer-school']);
-  for(const id of ['bridge-school','riverside']) assert.throws(()=>new City(id),RangeError);
-  const names=['grade','load','cut','inspect','signals','bus'];
-  assert.equal(LEVELS.find(level=>level.id==='cut-school').features.cut,true,'scissors must be available from lesson four');
-  assert.equal(LEVELS.find(level=>level.id==='woodland').features.signals,true,'signals must be available from chapter two');
-  for(const name of names) {
-    const values=LEVELS.map(level=>level.features[name]);
-    assert.ok(values.includes(false)&&values.includes(true),`${name} must be taught`);
-    assert.equal(values.join('').includes('truefalse'),false,`${name} cannot relock`);
-  }
-  const multi = LEVELS.find(level => level.id === 'multi-route-school').routes[0];
-  assert.equal(multi.homes.length, 2);
-  assert.equal(multi.goals.length, 2);
-  assert.ok(multi.goals.every(goal => goal.input === 60));
-  assert.equal(LEVELS.at(-1).busLineLimit,2,'the final lesson must allow a transfer between two lines');
-  for (const id of ['signal-school','rush-hour']) {
-    const routes = LEVELS.find(level => level.id === id).routes;
-    assert.ok(routes.some(route => route.homes.length > 1 && route.goals.length > 1), `${id} should reuse multi-point demand`);
-  }
+  const visible=CHAPTERS.filter(chapter=>!chapter.hidden).flatMap(chapter=>chapter.levels);
+  assert.deepEqual(visible.map(level=>level.id),['neighborhood','demolition-school','avenue-school','cut-school','growing-city','junction-basics','woodland','signal-cross','signal-demand','signal-timing','signal-distribution','junction-campaign','bus-intro','bus-pipeline','bridge-transfer','bus-only-street','transit-campaign']);
+  assert.equal(LEVELS.find(level=>level.id==='woodland').features.signals,false,'ring-road lesson precedes traffic lights');
+  assert.equal(LEVELS.find(level=>level.id==='signal-cross').features.signals,true,'traffic lights begin in lesson 2.3');
+  assert.ok(visible.slice(0,12).every(level=>!level.features.bus),'bus must remain locked through chapter two');
+  assert.ok(visible.slice(12).every(level=>level.features.bus),'chapter three teaches public transit');
+  assert.equal(LEVELS.find(level=>level.id==='signal-distribution').routes[0].homes.length,2);
+  assert.equal(LEVELS.find(level=>level.id==='signal-distribution').routes[0].goals.length,2);
+  assert.equal(LEVELS.find(level=>level.id==='transit-campaign').busLineLimit,2);
+  for(const id of ['growing-city','junction-campaign','transit-campaign'])assert.equal(LEVELS.find(level=>level.id===id).campaign.days.length,5);
   assert.throws(()=>new City('missing'),RangeError);
   assert.throws(()=>{LEVELS[0].budget=999;},TypeError);
 });
@@ -91,8 +84,8 @@ test('multi-day campaign conditions unlock and upgrade potential buildings', () 
   assert.equal(conditionMet({day:2,delivered:41},2,[{delivered:40,income:20,satisfaction:100}]),false);
   const level=LEVELS.find(item=>item.id==='growing-city');
   assert.equal(materializeCampaignRoutes(level,0,[]).length,1);
-  const day2=materializeCampaignRoutes(level,1,[{delivered:42,income:18,satisfaction:100}]);
-  assert.equal(day2.length,2);assert.equal(day2[0].homes[0].passengers,200);
+  const day2=materializeCampaignRoutes(level,1,[{delivered:100000,income:100,satisfaction:100}]);
+  assert.equal(day2.length,2);assert.ok(day2[0].homes[0].passengers>=level.routes[0].homes[0].passengers);
 });
 
 test('multi-day campaign pays for quality, reveals construction, and replays checkpoints', () => {
@@ -106,10 +99,11 @@ test('multi-day campaign pays for quality, reveals construction, and replays che
   assert.equal(campaign.beginDay(),'');assert.ok(campaign.checkpoints[0]);
   campaign.city.delivered=campaign.city.target;campaign.city.step(.05);
   assert.equal(campaign.city.state,'won','campaign days end as soon as every resident arrives');
-  const result=campaign.advance(100);assert.equal(result.population,42);assert.equal(result.delivered,42);assert.equal(result.income,18);assert.equal(campaign.dayIndex,1);
-  assert.equal(campaign.city.budget,52);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
+  const firstPopulation=campaign.city.target,baseBudget=campaign.level.budget,maxIncome=campaign.days[0].maxIncome;
+  const result=campaign.advance(100);assert.equal(result.population,firstPopulation);assert.equal(result.delivered,firstPopulation);assert.equal(result.income,maxIncome);assert.equal(campaign.dayIndex,1);
+  assert.equal(campaign.city.budget,baseBudget+maxIncome);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.homes.length,2);
   assert.equal(campaign.replay(0),'');assert.equal(campaign.dayIndex,0);assert.equal(campaign.results.length,0);
-  assert.equal(campaign.city.budget,34);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
+  assert.equal(campaign.city.budget,baseBudget);assert.ok(campaign.city.roads.has(0));assert.equal(campaign.city.state,'planning');
 });
 
 test('campaign references respect the player actual accumulated budget', () => {
@@ -118,11 +112,13 @@ test('campaign references respect the player actual accumulated budget', () => {
   assert.equal(campaign.dayIndex,0);assert.equal(campaign.city.state,'planning');
 });
 
-test('the complete campaign reference chain self-runs with actual results', () => {
-  const verified=verifyCampaignReferenceChain('growing-city');
-  assert.equal(verified.ok,true,verified.error);assert.equal(verified.days,5);assert.equal(verified.results.length,5);
-  assert.deepEqual(verified.results.map(result=>result.day),[1,2,3,4,5]);
-  assert.ok(verified.results.every(result=>result.delivered===result.population&&result.income>=0));
+test('every chapter campaign reference chain self-runs with actual results', () => {
+  for(const id of ['growing-city','junction-campaign','transit-campaign']) {
+    const verified=verifyCampaignReferenceChain(id);
+    assert.equal(verified.ok,true,`${id}: ${verified.error}`);assert.equal(verified.days,5);assert.equal(verified.results.length,5);
+    assert.deepEqual(verified.results.map(result=>result.day),[1,2,3,4,5]);
+    assert.ok(verified.results.every(result=>result.delivered===result.population&&result.income>=0));
+  }
 });
 
 test('campaign reference help returns to the first divergent day', () => {

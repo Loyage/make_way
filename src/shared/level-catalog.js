@@ -44,7 +44,7 @@
       const chapterUrl = resolveUrl(rootUrl, chapterRef), chapter = await fetchJson(chapterUrl);
       if (!chapter || !Array.isArray(chapter.levels) || chapter.levels.some(item => typeof item !== 'string')) throw new Error(`章节清单无效：${chapterRef}`);
       const levels = await Promise.all(chapter.levels.map(levelRef => fetchJson(resolveUrl(chapterUrl, levelRef))));
-      return { id: chapter.id, name: chapter.name, english: chapter.english, levels };
+      return { id: chapter.id, name: chapter.name, english: chapter.english, hidden: chapter.hidden === true, levels };
     }));
     return { version: 1, chapters };
   }
@@ -65,7 +65,7 @@
       const chapterFile = resolveSafe(rootDir, chapterRef), chapter = readJson(chapterFile);
       if (!chapter || !Array.isArray(chapter.levels) || chapter.levels.some(item => typeof item !== 'string')) throw new Error(`章节清单无效：${chapterRef}`);
       const levels = chapter.levels.map(levelRef => readJson(resolveSafe(path.dirname(chapterFile), levelRef)));
-      return { id: chapter.id, name: chapter.name, english: chapter.english, levels };
+      return { id: chapter.id, name: chapter.name, english: chapter.english, hidden: chapter.hidden === true, levels };
     });
     return { version: 1, chapters };
   }
@@ -86,7 +86,7 @@
         const filename = `${level.id}.json`;levelRefs.push(filename);
         await fs.writeFile(path.join(chapterDir, filename), JSON.stringify(level, null, 2) + '\n', 'utf8');
       }
-      await fs.writeFile(path.join(chapterDir, 'chapter.json'), JSON.stringify({ version: 1, id: chapter.id, name: chapter.name, english: chapter.english, levels: levelRefs }, null, 2) + '\n', 'utf8');
+      await fs.writeFile(path.join(chapterDir, 'chapter.json'), JSON.stringify({ version: 1, id: chapter.id, name: chapter.name, english: chapter.english, ...(chapter.hidden === true ? { hidden: true } : {}), levels: levelRefs }, null, 2) + '\n', 'utf8');
       chapterRefs.push(path.relative(path.dirname(absoluteManifest), path.join(absoluteData, chapter.id, 'chapter.json')).split(path.sep).join('/'));
     }
     await fs.rm(backup, { recursive: true, force: true });

@@ -2,26 +2,26 @@
   "id": "woodland",
   "name": "林间环城",
   "english": "FEED THE RING",
-  "difficulty": "教学五",
-  "title": "让支线汇入已建好的快速环路。",
-  "description": "树林外围已铺好完整快速环路。四组建筑都还没有接通，把客流引到环路上，不必重建主路。汇入口默认减速礼让。",
-  "tip": "从快速环路向建筑拖出短支线可沿用快速路等级，避免接入时误降级；用路况检查汇入口，剪刀可断开多余连接。",
-  "lesson": "环路集散",
+  "difficulty": "教学二",
+  "title": "把短支线接入既有环路。",
+  "description": "林地让逐组铺设直达道路代价很高。利用已建成的快速环路，只需为住宅与目的地补上短支线，就能让多组低流量居民共享主路。",
+  "tip": "先找每栋建筑离环路最近的位置，再拖出最短支线；共享环路比穿林绕行节省很多预算。",
+  "lesson": "既有环路集散",
   "features": {
     "grade": true,
     "load": true,
     "cut": true,
     "inspect": true,
-    "signals": true,
+    "signals": false,
     "bus": false
   },
   "budget": 108,
-  "duration": 130,
+  "duration": 75,
   "starTargets": {
-    "satisfaction": 50,
+    "satisfaction": 45,
     "efficiency": {
-      "maxCost": 93,
-      "maxQueue": 35
+      "maxCost": 98,
+      "maxQueue": 20
     }
   },
   "water": [],
@@ -55,7 +55,7 @@
         {
           "cell": 34,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 22
         }
       ],
       "goals": [
@@ -73,7 +73,7 @@
         {
           "cell": 157,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 22
         }
       ],
       "goals": [
@@ -91,7 +91,7 @@
         {
           "cell": 114,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 22
         }
       ],
       "goals": [
@@ -109,7 +109,7 @@
         {
           "cell": 125,
           "generationRate": 1,
-          "passengers": 50
+          "passengers": 22
         }
       ],
       "goals": [

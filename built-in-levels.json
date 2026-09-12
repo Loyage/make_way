@@ -2,6 +2,8 @@
   "version": 2,
   "chapters": [
     "levels/road-basics/chapter.json",
-    "levels/city-control/chapter.json"
+    "levels/junction-control/chapter.json",
+    "levels/public-transit/chapter.json",
+    "levels/design-archive/chapter.json"
   ]
 }

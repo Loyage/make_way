@@ -1,0 +1,344 @@
+{
+  "id": "bus-only-street",
+  "name": "公交专用街",
+  "english": "BUS ONLY STREET",
+  "difficulty": "教学四",
+  "title": "切断私家车路径，让公交独享通道。",
+  "description": "住宅和目的地都只邻近道路但没有汽车出口连接，居民只能在站点乘公交。也可选择道路设为“汽车禁行”，公交仍会正常通过。",
+  "tip": "沿直路设置原路返回公交；不要把建筑拖接到道路。选中道路可看到汽车禁行不会影响公交。",
+  "lesson": "公交强制通勤与汽车禁行",
+  "busLineLimit": 1,
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": false,
+    "bus": true
+  },
+  "budget": 60,
+  "duration": 55,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 60,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "两处住宅 → 两处目的地",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 82,
+          "generationRate": 6,
+          "passengers": 36
+        },
+        {
+          "cell": 85,
+          "generationRate": 6,
+          "passengers": 36
+        }
+      ],
+      "goals": [
+        {
+          "cell": 122,
+          "label": "文化馆",
+          "input": 40
+        },
+        {
+          "cell": 125,
+          "label": "体育馆",
+          "input": 40
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 98,
+      "grade": 2
+    },
+    {
+      "cell": 99,
+      "grade": 2
+    },
+    {
+      "cell": 100,
+      "grade": 2
+    },
+    {
+      "cell": 101,
+      "grade": 2
+    },
+    {
+      "cell": 102,
+      "grade": 2
+    },
+    {
+      "cell": 103,
+      "grade": 2
+    },
+    {
+      "cell": 104,
+      "grade": 2
+    },
+    {
+      "cell": 105,
+      "grade": 2
+    },
+    {
+      "cell": 106,
+      "grade": 2
+    },
+    {
+      "cell": 107,
+      "grade": 2
+    },
+    {
+      "cell": 108,
+      "grade": 2
+    },
+    {
+      "cell": 109,
+      "grade": 2
+    }
+  ],
+  "initialEdges": [
+    [
+      98,
+      99
+    ],
+    [
+      99,
+      100
+    ],
+    [
+      100,
+      101
+    ],
+    [
+      101,
+      102
+    ],
+    [
+      102,
+      103
+    ],
+    [
+      103,
+      104
+    ],
+    [
+      104,
+      105
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      106,
+      107
+    ],
+    [
+      107,
+      108
+    ],
+    [
+      108,
+      109
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "bus-only-street",
+    "roads": [
+      {
+        "cell": 98,
+        "grade": 2
+      },
+      {
+        "cell": 99,
+        "grade": 2
+      },
+      {
+        "cell": 100,
+        "grade": 2
+      },
+      {
+        "cell": 101,
+        "grade": 2
+      },
+      {
+        "cell": 102,
+        "grade": 2
+      },
+      {
+        "cell": 103,
+        "grade": 2
+      },
+      {
+        "cell": 104,
+        "grade": 2
+      },
+      {
+        "cell": 105,
+        "grade": 2
+      },
+      {
+        "cell": 106,
+        "grade": 2
+      },
+      {
+        "cell": 107,
+        "grade": 2
+      },
+      {
+        "cell": 108,
+        "grade": 2
+      },
+      {
+        "cell": 109,
+        "grade": 2
+      }
+    ],
+    "edges": [
+      [
+        98,
+        99
+      ],
+      [
+        99,
+        100
+      ],
+      [
+        100,
+        101
+      ],
+      [
+        101,
+        102
+      ],
+      [
+        102,
+        103
+      ],
+      [
+        103,
+        104
+      ],
+      [
+        104,
+        105
+      ],
+      [
+        105,
+        106
+      ],
+      [
+        106,
+        107
+      ],
+      [
+        107,
+        108
+      ],
+      [
+        108,
+        109
+      ]
+    ],
+    "roadPolicies": [
+      {
+        "cell": 98,
+        "policy": "avoid"
+      },
+      {
+        "cell": 99,
+        "policy": "avoid"
+      },
+      {
+        "cell": 100,
+        "policy": "avoid"
+      },
+      {
+        "cell": 101,
+        "policy": "avoid"
+      },
+      {
+        "cell": 102,
+        "policy": "avoid"
+      },
+      {
+        "cell": 103,
+        "policy": "avoid"
+      },
+      {
+        "cell": 104,
+        "policy": "avoid"
+      },
+      {
+        "cell": 105,
+        "policy": "avoid"
+      },
+      {
+        "cell": 106,
+        "policy": "avoid"
+      },
+      {
+        "cell": 107,
+        "policy": "avoid"
+      },
+      {
+        "cell": 108,
+        "policy": "avoid"
+      },
+      {
+        "cell": 109,
+        "policy": "avoid"
+      }
+    ],
+    "signals": [],
+    "busLines": [
+      {
+        "id": "line-1",
+        "name": "公交专用线",
+        "color": "#1686a0",
+        "route": [
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109
+        ],
+        "count": 3,
+        "stops": [
+          98,
+          101,
+          106,
+          109
+        ],
+        "returnTrip": true,
+        "returnStops": true,
+        "headway": 2
+      }
+    ],
+    "activeBusLineId": "line-1"
+  }
+}

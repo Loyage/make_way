@@ -1,0 +1,893 @@
+{
+  "id": "signal-distribution",
+  "name": "双路分流",
+  "english": "DISTRIBUTE TRAFFIC",
+  "difficulty": "教学六",
+  "title": "让多对多客流分散到两个受控路口。",
+  "description": "两座住宅可前往两个同色目的地。两条横路和两条纵路组成可选通道；在四个交汇点开启自动红绿灯，让车辆根据拥堵改走另一条路。",
+  "tip": "把四个十字路口都开启自动红绿灯；不要剪断平行通道，动态寻路会利用它们分流。",
+  "lesson": "多对多通勤与信号分流",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 105,
+  "duration": 100,
+  "starTargets": {
+    "satisfaction": 30,
+    "efficiency": {
+      "maxCost": 105,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "两处住宅 → 两处中心",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 49,
+          "generationRate": 4,
+          "passengers": 55
+        },
+        {
+          "cell": 145,
+          "generationRate": 4,
+          "passengers": 55
+        }
+      ],
+      "goals": [
+        {
+          "cell": 62,
+          "label": "北区工坊",
+          "input": 60
+        },
+        {
+          "cell": 158,
+          "label": "南区市场",
+          "input": 60
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 37,
+      "grade": 1
+    },
+    {
+      "cell": 42,
+      "grade": 1
+    },
+    {
+      "cell": 53,
+      "grade": 1
+    },
+    {
+      "cell": 58,
+      "grade": 1
+    },
+    {
+      "cell": 65,
+      "grade": 1
+    },
+    {
+      "cell": 66,
+      "grade": 1
+    },
+    {
+      "cell": 67,
+      "grade": 1
+    },
+    {
+      "cell": 68,
+      "grade": 1
+    },
+    {
+      "cell": 69,
+      "grade": 1
+    },
+    {
+      "cell": 70,
+      "grade": 1
+    },
+    {
+      "cell": 71,
+      "grade": 1
+    },
+    {
+      "cell": 72,
+      "grade": 1
+    },
+    {
+      "cell": 73,
+      "grade": 1
+    },
+    {
+      "cell": 74,
+      "grade": 1
+    },
+    {
+      "cell": 75,
+      "grade": 1
+    },
+    {
+      "cell": 76,
+      "grade": 1
+    },
+    {
+      "cell": 77,
+      "grade": 1
+    },
+    {
+      "cell": 78,
+      "grade": 1
+    },
+    {
+      "cell": 85,
+      "grade": 1
+    },
+    {
+      "cell": 90,
+      "grade": 1
+    },
+    {
+      "cell": 101,
+      "grade": 1
+    },
+    {
+      "cell": 106,
+      "grade": 1
+    },
+    {
+      "cell": 117,
+      "grade": 1
+    },
+    {
+      "cell": 122,
+      "grade": 1
+    },
+    {
+      "cell": 129,
+      "grade": 1
+    },
+    {
+      "cell": 130,
+      "grade": 1
+    },
+    {
+      "cell": 131,
+      "grade": 1
+    },
+    {
+      "cell": 132,
+      "grade": 1
+    },
+    {
+      "cell": 133,
+      "grade": 1
+    },
+    {
+      "cell": 134,
+      "grade": 1
+    },
+    {
+      "cell": 135,
+      "grade": 1
+    },
+    {
+      "cell": 136,
+      "grade": 1
+    },
+    {
+      "cell": 137,
+      "grade": 1
+    },
+    {
+      "cell": 138,
+      "grade": 1
+    },
+    {
+      "cell": 139,
+      "grade": 1
+    },
+    {
+      "cell": 140,
+      "grade": 1
+    },
+    {
+      "cell": 141,
+      "grade": 1
+    },
+    {
+      "cell": 142,
+      "grade": 1
+    },
+    {
+      "cell": 149,
+      "grade": 1
+    },
+    {
+      "cell": 154,
+      "grade": 1
+    },
+    {
+      "cell": 165,
+      "grade": 1
+    },
+    {
+      "cell": 170,
+      "grade": 1
+    }
+  ],
+  "initialEdges": [
+    [
+      65,
+      66
+    ],
+    [
+      66,
+      67
+    ],
+    [
+      67,
+      68
+    ],
+    [
+      68,
+      69
+    ],
+    [
+      69,
+      70
+    ],
+    [
+      70,
+      71
+    ],
+    [
+      71,
+      72
+    ],
+    [
+      72,
+      73
+    ],
+    [
+      73,
+      74
+    ],
+    [
+      74,
+      75
+    ],
+    [
+      75,
+      76
+    ],
+    [
+      76,
+      77
+    ],
+    [
+      77,
+      78
+    ],
+    [
+      129,
+      130
+    ],
+    [
+      130,
+      131
+    ],
+    [
+      131,
+      132
+    ],
+    [
+      132,
+      133
+    ],
+    [
+      133,
+      134
+    ],
+    [
+      134,
+      135
+    ],
+    [
+      135,
+      136
+    ],
+    [
+      136,
+      137
+    ],
+    [
+      137,
+      138
+    ],
+    [
+      138,
+      139
+    ],
+    [
+      139,
+      140
+    ],
+    [
+      140,
+      141
+    ],
+    [
+      141,
+      142
+    ],
+    [
+      37,
+      53
+    ],
+    [
+      53,
+      69
+    ],
+    [
+      69,
+      85
+    ],
+    [
+      85,
+      101
+    ],
+    [
+      101,
+      117
+    ],
+    [
+      117,
+      133
+    ],
+    [
+      133,
+      149
+    ],
+    [
+      149,
+      165
+    ],
+    [
+      42,
+      58
+    ],
+    [
+      58,
+      74
+    ],
+    [
+      74,
+      90
+    ],
+    [
+      90,
+      106
+    ],
+    [
+      106,
+      122
+    ],
+    [
+      122,
+      138
+    ],
+    [
+      138,
+      154
+    ],
+    [
+      154,
+      170
+    ],
+    [
+      49,
+      65
+    ],
+    [
+      145,
+      129
+    ],
+    [
+      62,
+      78
+    ],
+    [
+      158,
+      142
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "signal-distribution",
+    "roads": [
+      {
+        "cell": 37,
+        "grade": 1
+      },
+      {
+        "cell": 42,
+        "grade": 1
+      },
+      {
+        "cell": 53,
+        "grade": 1
+      },
+      {
+        "cell": 58,
+        "grade": 1
+      },
+      {
+        "cell": 65,
+        "grade": 1
+      },
+      {
+        "cell": 66,
+        "grade": 1
+      },
+      {
+        "cell": 67,
+        "grade": 1
+      },
+      {
+        "cell": 68,
+        "grade": 1
+      },
+      {
+        "cell": 69,
+        "grade": 1
+      },
+      {
+        "cell": 70,
+        "grade": 1
+      },
+      {
+        "cell": 71,
+        "grade": 1
+      },
+      {
+        "cell": 72,
+        "grade": 1
+      },
+      {
+        "cell": 73,
+        "grade": 1
+      },
+      {
+        "cell": 74,
+        "grade": 1
+      },
+      {
+        "cell": 75,
+        "grade": 1
+      },
+      {
+        "cell": 76,
+        "grade": 1
+      },
+      {
+        "cell": 77,
+        "grade": 1
+      },
+      {
+        "cell": 78,
+        "grade": 1
+      },
+      {
+        "cell": 85,
+        "grade": 1
+      },
+      {
+        "cell": 90,
+        "grade": 1
+      },
+      {
+        "cell": 101,
+        "grade": 1
+      },
+      {
+        "cell": 106,
+        "grade": 1
+      },
+      {
+        "cell": 117,
+        "grade": 1
+      },
+      {
+        "cell": 122,
+        "grade": 1
+      },
+      {
+        "cell": 129,
+        "grade": 1
+      },
+      {
+        "cell": 130,
+        "grade": 1
+      },
+      {
+        "cell": 131,
+        "grade": 1
+      },
+      {
+        "cell": 132,
+        "grade": 1
+      },
+      {
+        "cell": 133,
+        "grade": 1
+      },
+      {
+        "cell": 134,
+        "grade": 1
+      },
+      {
+        "cell": 135,
+        "grade": 1
+      },
+      {
+        "cell": 136,
+        "grade": 1
+      },
+      {
+        "cell": 137,
+        "grade": 1
+      },
+      {
+        "cell": 138,
+        "grade": 1
+      },
+      {
+        "cell": 139,
+        "grade": 1
+      },
+      {
+        "cell": 140,
+        "grade": 1
+      },
+      {
+        "cell": 141,
+        "grade": 1
+      },
+      {
+        "cell": 142,
+        "grade": 1
+      },
+      {
+        "cell": 149,
+        "grade": 1
+      },
+      {
+        "cell": 154,
+        "grade": 1
+      },
+      {
+        "cell": 165,
+        "grade": 1
+      },
+      {
+        "cell": 170,
+        "grade": 1
+      }
+    ],
+    "edges": [
+      [
+        65,
+        66
+      ],
+      [
+        66,
+        67
+      ],
+      [
+        67,
+        68
+      ],
+      [
+        68,
+        69
+      ],
+      [
+        69,
+        70
+      ],
+      [
+        70,
+        71
+      ],
+      [
+        71,
+        72
+      ],
+      [
+        72,
+        73
+      ],
+      [
+        73,
+        74
+      ],
+      [
+        74,
+        75
+      ],
+      [
+        75,
+        76
+      ],
+      [
+        76,
+        77
+      ],
+      [
+        77,
+        78
+      ],
+      [
+        129,
+        130
+      ],
+      [
+        130,
+        131
+      ],
+      [
+        131,
+        132
+      ],
+      [
+        132,
+        133
+      ],
+      [
+        133,
+        134
+      ],
+      [
+        134,
+        135
+      ],
+      [
+        135,
+        136
+      ],
+      [
+        136,
+        137
+      ],
+      [
+        137,
+        138
+      ],
+      [
+        138,
+        139
+      ],
+      [
+        139,
+        140
+      ],
+      [
+        140,
+        141
+      ],
+      [
+        141,
+        142
+      ],
+      [
+        37,
+        53
+      ],
+      [
+        53,
+        69
+      ],
+      [
+        69,
+        85
+      ],
+      [
+        85,
+        101
+      ],
+      [
+        101,
+        117
+      ],
+      [
+        117,
+        133
+      ],
+      [
+        133,
+        149
+      ],
+      [
+        149,
+        165
+      ],
+      [
+        42,
+        58
+      ],
+      [
+        58,
+        74
+      ],
+      [
+        74,
+        90
+      ],
+      [
+        90,
+        106
+      ],
+      [
+        106,
+        122
+      ],
+      [
+        122,
+        138
+      ],
+      [
+        138,
+        154
+      ],
+      [
+        154,
+        170
+      ],
+      [
+        49,
+        65
+      ],
+      [
+        145,
+        129
+      ],
+      [
+        62,
+        78
+      ],
+      [
+        158,
+        142
+      ]
+    ],
+    "roadPolicies": [],
+    "signals": [
+      {
+        "cell": 69,
+        "enabled": true,
+        "green": 2,
+        "yieldMode": "arrival",
+        "priority": [
+          "north",
+          "east",
+          "south",
+          "west"
+        ],
+        "automatic": true,
+        "phases": [
+          [
+            "west-straight",
+            "east-straight"
+          ],
+          [
+            "north-straight",
+            "south-straight"
+          ]
+        ],
+        "phaseGreens": [
+          2,
+          2
+        ]
+      },
+      {
+        "cell": 74,
+        "enabled": true,
+        "green": 2,
+        "yieldMode": "arrival",
+        "priority": [
+          "north",
+          "east",
+          "south",
+          "west"
+        ],
+        "automatic": true,
+        "phases": [
+          [
+            "west-straight",
+            "east-straight"
+          ],
+          [
+            "north-straight",
+            "south-straight"
+          ]
+        ],
+        "phaseGreens": [
+          2,
+          2
+        ]
+      },
+      {
+        "cell": 133,
+        "enabled": true,
+        "green": 2,
+        "yieldMode": "arrival",
+        "priority": [
+          "north",
+          "east",
+          "south",
+          "west"
+        ],
+        "automatic": true,
+        "phases": [
+          [
+            "west-straight",
+            "east-straight"
+          ],
+          [
+            "north-straight",
+            "south-straight"
+          ]
+        ],
+        "phaseGreens": [
+          2,
+          2
+        ]
+      },
+      {
+        "cell": 138,
+        "enabled": true,
+        "green": 2,
+        "yieldMode": "arrival",
+        "priority": [
+          "north",
+          "east",
+          "south",
+          "west"
+        ],
+        "automatic": true,
+        "phases": [
+          [
+            "west-straight",
+            "east-straight"
+          ],
+          [
+            "north-straight",
+            "south-straight"
+          ]
+        ],
+        "phaseGreens": [
+          2,
+          2
+        ]
+      }
+    ],
+    "busLines": [],
+    "activeBusLineId": null
+  }
+}

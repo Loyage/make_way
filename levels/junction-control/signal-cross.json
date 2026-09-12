@@ -1,0 +1,575 @@
+{
+  "id": "signal-cross",
+  "name": "四向放行",
+  "english": "SIGNAL-CROSS",
+  "difficulty": "教学三",
+  "title": "让中心十字路口按车流有序放行。",
+  "description": "四个方向同时有较大车流，无灯逐车避让会形成长队。选中中心路口开启红绿灯，自动灯序能让不冲突方向成组通过。",
+  "tip": "先尝试无灯观察队列，再停止运营，选中中心路口开启红绿灯并保持“自动设置信号灯”。",
+  "lesson": "十字路口红绿灯",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 120,
+  "duration": 110,
+  "starTargets": {
+    "satisfaction": 40,
+    "efficiency": {
+      "maxCost": 120,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "西 → 东",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 81,
+          "generationRate": 4,
+          "passengers": 42
+        }
+      ],
+      "goals": [
+        {
+          "cell": 94,
+          "label": "东岸工坊"
+        }
+      ]
+    },
+    {
+      "name": "东 → 西",
+      "color": "#d19157",
+      "light": "#f2dfbf",
+      "homes": [
+        {
+          "cell": 126,
+          "generationRate": 4,
+          "passengers": 42
+        }
+      ],
+      "goals": [
+        {
+          "cell": 113,
+          "label": "西岸市场"
+        }
+      ]
+    },
+    {
+      "name": "北 → 南",
+      "color": "#9582b4",
+      "light": "#e7dff0",
+      "homes": [
+        {
+          "cell": 23,
+          "generationRate": 4,
+          "passengers": 42
+        }
+      ],
+      "goals": [
+        {
+          "cell": 167,
+          "label": "南城学校"
+        }
+      ]
+    },
+    {
+      "name": "南 → 北",
+      "color": "#578fa4",
+      "light": "#d3e7ed",
+      "homes": [
+        {
+          "cell": 169,
+          "generationRate": 4,
+          "passengers": 42
+        }
+      ],
+      "goals": [
+        {
+          "cell": 25,
+          "label": "北园车站"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 24,
+      "grade": 2
+    },
+    {
+      "cell": 40,
+      "grade": 2
+    },
+    {
+      "cell": 56,
+      "grade": 2
+    },
+    {
+      "cell": 72,
+      "grade": 2
+    },
+    {
+      "cell": 88,
+      "grade": 2
+    },
+    {
+      "cell": 97,
+      "grade": 2
+    },
+    {
+      "cell": 98,
+      "grade": 2
+    },
+    {
+      "cell": 99,
+      "grade": 2
+    },
+    {
+      "cell": 100,
+      "grade": 2
+    },
+    {
+      "cell": 101,
+      "grade": 2
+    },
+    {
+      "cell": 102,
+      "grade": 2
+    },
+    {
+      "cell": 103,
+      "grade": 2
+    },
+    {
+      "cell": 104,
+      "grade": 2
+    },
+    {
+      "cell": 105,
+      "grade": 2
+    },
+    {
+      "cell": 106,
+      "grade": 2
+    },
+    {
+      "cell": 107,
+      "grade": 2
+    },
+    {
+      "cell": 108,
+      "grade": 2
+    },
+    {
+      "cell": 109,
+      "grade": 2
+    },
+    {
+      "cell": 110,
+      "grade": 2
+    },
+    {
+      "cell": 120,
+      "grade": 2
+    },
+    {
+      "cell": 136,
+      "grade": 2
+    },
+    {
+      "cell": 152,
+      "grade": 2
+    },
+    {
+      "cell": 168,
+      "grade": 2
+    }
+  ],
+  "initialEdges": [
+    [
+      97,
+      98
+    ],
+    [
+      98,
+      99
+    ],
+    [
+      99,
+      100
+    ],
+    [
+      100,
+      101
+    ],
+    [
+      101,
+      102
+    ],
+    [
+      102,
+      103
+    ],
+    [
+      103,
+      104
+    ],
+    [
+      104,
+      105
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      106,
+      107
+    ],
+    [
+      107,
+      108
+    ],
+    [
+      108,
+      109
+    ],
+    [
+      109,
+      110
+    ],
+    [
+      24,
+      40
+    ],
+    [
+      40,
+      56
+    ],
+    [
+      56,
+      72
+    ],
+    [
+      72,
+      88
+    ],
+    [
+      88,
+      104
+    ],
+    [
+      104,
+      120
+    ],
+    [
+      120,
+      136
+    ],
+    [
+      136,
+      152
+    ],
+    [
+      152,
+      168
+    ],
+    [
+      81,
+      97
+    ],
+    [
+      94,
+      110
+    ],
+    [
+      126,
+      110
+    ],
+    [
+      113,
+      97
+    ],
+    [
+      23,
+      24
+    ],
+    [
+      167,
+      168
+    ],
+    [
+      169,
+      168
+    ],
+    [
+      25,
+      24
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "signal-cross",
+    "roads": [
+      {
+        "cell": 24,
+        "grade": 2
+      },
+      {
+        "cell": 40,
+        "grade": 2
+      },
+      {
+        "cell": 56,
+        "grade": 2
+      },
+      {
+        "cell": 72,
+        "grade": 2
+      },
+      {
+        "cell": 88,
+        "grade": 2
+      },
+      {
+        "cell": 97,
+        "grade": 2
+      },
+      {
+        "cell": 98,
+        "grade": 2
+      },
+      {
+        "cell": 99,
+        "grade": 2
+      },
+      {
+        "cell": 100,
+        "grade": 2
+      },
+      {
+        "cell": 101,
+        "grade": 2
+      },
+      {
+        "cell": 102,
+        "grade": 2
+      },
+      {
+        "cell": 103,
+        "grade": 2
+      },
+      {
+        "cell": 104,
+        "grade": 2
+      },
+      {
+        "cell": 105,
+        "grade": 2
+      },
+      {
+        "cell": 106,
+        "grade": 2
+      },
+      {
+        "cell": 107,
+        "grade": 2
+      },
+      {
+        "cell": 108,
+        "grade": 2
+      },
+      {
+        "cell": 109,
+        "grade": 2
+      },
+      {
+        "cell": 110,
+        "grade": 2
+      },
+      {
+        "cell": 120,
+        "grade": 2
+      },
+      {
+        "cell": 136,
+        "grade": 2
+      },
+      {
+        "cell": 152,
+        "grade": 2
+      },
+      {
+        "cell": 168,
+        "grade": 2
+      }
+    ],
+    "edges": [
+      [
+        97,
+        98
+      ],
+      [
+        98,
+        99
+      ],
+      [
+        99,
+        100
+      ],
+      [
+        100,
+        101
+      ],
+      [
+        101,
+        102
+      ],
+      [
+        102,
+        103
+      ],
+      [
+        103,
+        104
+      ],
+      [
+        104,
+        105
+      ],
+      [
+        105,
+        106
+      ],
+      [
+        106,
+        107
+      ],
+      [
+        107,
+        108
+      ],
+      [
+        108,
+        109
+      ],
+      [
+        109,
+        110
+      ],
+      [
+        24,
+        40
+      ],
+      [
+        40,
+        56
+      ],
+      [
+        56,
+        72
+      ],
+      [
+        72,
+        88
+      ],
+      [
+        88,
+        104
+      ],
+      [
+        104,
+        120
+      ],
+      [
+        120,
+        136
+      ],
+      [
+        136,
+        152
+      ],
+      [
+        152,
+        168
+      ],
+      [
+        81,
+        97
+      ],
+      [
+        94,
+        110
+      ],
+      [
+        126,
+        110
+      ],
+      [
+        113,
+        97
+      ],
+      [
+        23,
+        24
+      ],
+      [
+        167,
+        168
+      ],
+      [
+        169,
+        168
+      ],
+      [
+        25,
+        24
+      ]
+    ],
+    "roadPolicies": [],
+    "signals": [
+      {
+        "cell": 104,
+        "enabled": true,
+        "green": 2,
+        "yieldMode": "arrival",
+        "priority": [
+          "north",
+          "east",
+          "south",
+          "west"
+        ],
+        "automatic": true,
+        "phases": [
+          [
+            "west-straight",
+            "east-straight"
+          ],
+          [
+            "north-straight",
+            "south-straight"
+          ]
+        ],
+        "phaseGreens": [
+          2,
+          2
+        ]
+      }
+    ],
+    "busLines": [],
+    "activeBusLineId": null
+  }
+}

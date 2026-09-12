@@ -1,0 +1,1307 @@
+{
+  "id": "transit-campaign",
+  "name": "五日公交网",
+  "english": "FIVE DAY TRANSIT",
+  "difficulty": "章节挑战",
+  "title": "经营五天，把公交从接驳线扩展成换乘网络。",
+  "description": "客流逐日从两岸内部通勤发展为跨河高峰。继承每天的道路和线路，用本章学到的单线多站、桥头换乘与汽车禁行组织公交网络。",
+  "tip": "先服务单岸，再在桥头让两线同站换乘；后期增加车辆、缩短班距，并保持跨河通道汽车禁行。",
+  "lesson": "公共交通综合多日挑战",
+  "busLineLimit": 2,
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": false,
+    "bus": true
+  },
+  "budget": 100,
+  "duration": 55,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 100,
+      "maxQueue": 80
+    }
+  },
+  "water": [
+    7,
+    8,
+    23,
+    24,
+    39,
+    40,
+    55,
+    56,
+    71,
+    72,
+    87,
+    88,
+    103,
+    104,
+    119,
+    120,
+    135,
+    136,
+    151,
+    152,
+    167,
+    168,
+    183,
+    184
+  ],
+  "bridges": [
+    103,
+    104
+  ],
+  "trees": [],
+  "routes": [
+    {
+      "name": "西岸住宅 → 西岸工坊",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 65,
+          "generationRate": 4,
+          "passengers": 24
+        }
+      ],
+      "goals": [
+        {
+          "cell": 54,
+          "label": "西岸工坊"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 66,
+      "grade": 1
+    },
+    {
+      "cell": 67,
+      "grade": 1
+    },
+    {
+      "cell": 68,
+      "grade": 1
+    },
+    {
+      "cell": 69,
+      "grade": 1
+    },
+    {
+      "cell": 70,
+      "grade": 1
+    },
+    {
+      "cell": 86,
+      "grade": 1
+    },
+    {
+      "cell": 102,
+      "grade": 1
+    },
+    {
+      "cell": 103,
+      "grade": 1
+    },
+    {
+      "cell": 104,
+      "grade": 1
+    },
+    {
+      "cell": 105,
+      "grade": 1
+    },
+    {
+      "cell": 106,
+      "grade": 1
+    },
+    {
+      "cell": 107,
+      "grade": 1
+    },
+    {
+      "cell": 108,
+      "grade": 1
+    },
+    {
+      "cell": 109,
+      "grade": 1
+    },
+    {
+      "cell": 125,
+      "grade": 1
+    },
+    {
+      "cell": 141,
+      "grade": 1
+    }
+  ],
+  "initialEdges": [
+    [
+      66,
+      67
+    ],
+    [
+      67,
+      68
+    ],
+    [
+      68,
+      69
+    ],
+    [
+      69,
+      70
+    ],
+    [
+      70,
+      86
+    ],
+    [
+      86,
+      102
+    ],
+    [
+      102,
+      103
+    ],
+    [
+      103,
+      104
+    ],
+    [
+      104,
+      105
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      106,
+      107
+    ],
+    [
+      107,
+      108
+    ],
+    [
+      108,
+      109
+    ],
+    [
+      109,
+      125
+    ],
+    [
+      125,
+      141
+    ]
+  ],
+  "campaign": {
+    "routes": [
+      {
+        "name": "西岸住宅 → 西岸工坊",
+        "color": "#638d69",
+        "light": "#dae6cb",
+        "homes": [
+          {
+            "cell": 65,
+            "generationRate": 4,
+            "passengers": 24,
+            "unlock": {
+              "day": 1
+            },
+            "upgrades": []
+          }
+        ],
+        "goals": [
+          {
+            "cell": 54,
+            "label": "西岸工坊",
+            "unlock": {
+              "day": 1
+            },
+            "upgrades": []
+          }
+        ]
+      },
+      {
+        "name": "东岸住宅 → 东岸市场",
+        "color": "#d19157",
+        "light": "#f2dfbf",
+        "homes": [
+          {
+            "cell": 142,
+            "generationRate": 4,
+            "passengers": 24,
+            "unlock": {
+              "day": 2
+            },
+            "upgrades": []
+          }
+        ],
+        "goals": [
+          {
+            "cell": 121,
+            "label": "东岸市场",
+            "unlock": {
+              "day": 2
+            },
+            "upgrades": []
+          }
+        ]
+      },
+      {
+        "name": "河西住宅 → 河东学校",
+        "color": "#9582b4",
+        "light": "#e7dff0",
+        "homes": [
+          {
+            "cell": 82,
+            "generationRate": 6,
+            "passengers": 42,
+            "unlock": {
+              "day": 3
+            },
+            "upgrades": [
+              {
+                "condition": {
+                  "day": 4
+                },
+                "passengers": 60
+              },
+              {
+                "condition": {
+                  "day": 5
+                },
+                "generationRate": 6,
+                "passengers": 72
+              }
+            ]
+          }
+        ],
+        "goals": [
+          {
+            "cell": 126,
+            "label": "河东学校",
+            "unlock": {
+              "day": 3
+            },
+            "upgrades": []
+          }
+        ]
+      }
+    ],
+    "days": [
+      {
+        "duration": 55,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 30,
+          "efficiency": {
+            "maxCost": 100,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "transit-campaign",
+          "roads": [
+            {
+              "cell": 66,
+              "grade": 1
+            },
+            {
+              "cell": 67,
+              "grade": 1
+            },
+            {
+              "cell": 68,
+              "grade": 1
+            },
+            {
+              "cell": 69,
+              "grade": 1
+            },
+            {
+              "cell": 70,
+              "grade": 1
+            },
+            {
+              "cell": 86,
+              "grade": 1
+            },
+            {
+              "cell": 102,
+              "grade": 1
+            },
+            {
+              "cell": 103,
+              "grade": 1
+            },
+            {
+              "cell": 104,
+              "grade": 1
+            },
+            {
+              "cell": 105,
+              "grade": 1
+            },
+            {
+              "cell": 106,
+              "grade": 1
+            },
+            {
+              "cell": 107,
+              "grade": 1
+            },
+            {
+              "cell": 108,
+              "grade": 1
+            },
+            {
+              "cell": 109,
+              "grade": 1
+            },
+            {
+              "cell": 125,
+              "grade": 1
+            },
+            {
+              "cell": 141,
+              "grade": 1
+            }
+          ],
+          "edges": [
+            [
+              66,
+              67
+            ],
+            [
+              67,
+              68
+            ],
+            [
+              68,
+              69
+            ],
+            [
+              69,
+              70
+            ],
+            [
+              70,
+              86
+            ],
+            [
+              86,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              125
+            ],
+            [
+              125,
+              141
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [],
+          "busLines": [
+            {
+              "id": "line-1",
+              "name": "西岸接驳",
+              "color": "#1686a0",
+              "route": [
+                66,
+                67,
+                68,
+                69,
+                70,
+                86,
+                102,
+                103
+              ],
+              "count": 2,
+              "stops": [
+                66,
+                70,
+                103
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            }
+          ],
+          "activeBusLineId": "line-1"
+        }
+      },
+      {
+        "duration": 60,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 30,
+          "efficiency": {
+            "maxCost": 100,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "transit-campaign",
+          "roads": [
+            {
+              "cell": 66,
+              "grade": 1
+            },
+            {
+              "cell": 67,
+              "grade": 1
+            },
+            {
+              "cell": 68,
+              "grade": 1
+            },
+            {
+              "cell": 69,
+              "grade": 1
+            },
+            {
+              "cell": 70,
+              "grade": 1
+            },
+            {
+              "cell": 86,
+              "grade": 1
+            },
+            {
+              "cell": 102,
+              "grade": 1
+            },
+            {
+              "cell": 103,
+              "grade": 1
+            },
+            {
+              "cell": 104,
+              "grade": 1
+            },
+            {
+              "cell": 105,
+              "grade": 1
+            },
+            {
+              "cell": 106,
+              "grade": 1
+            },
+            {
+              "cell": 107,
+              "grade": 1
+            },
+            {
+              "cell": 108,
+              "grade": 1
+            },
+            {
+              "cell": 109,
+              "grade": 1
+            },
+            {
+              "cell": 125,
+              "grade": 1
+            },
+            {
+              "cell": 141,
+              "grade": 1
+            }
+          ],
+          "edges": [
+            [
+              66,
+              67
+            ],
+            [
+              67,
+              68
+            ],
+            [
+              68,
+              69
+            ],
+            [
+              69,
+              70
+            ],
+            [
+              70,
+              86
+            ],
+            [
+              86,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              125
+            ],
+            [
+              125,
+              141
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [],
+          "busLines": [
+            {
+              "id": "line-1",
+              "name": "西岸接驳",
+              "color": "#1686a0",
+              "route": [
+                66,
+                67,
+                68,
+                69,
+                70,
+                86,
+                102,
+                103
+              ],
+              "count": 2,
+              "stops": [
+                66,
+                70,
+                103
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            },
+            {
+              "id": "line-2",
+              "name": "东岸跨河线",
+              "color": "#d06b47",
+              "route": [
+                103,
+                104,
+                105,
+                106,
+                107,
+                108,
+                109,
+                125,
+                141
+              ],
+              "count": 3,
+              "stops": [
+                103,
+                105,
+                125,
+                141
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            }
+          ],
+          "activeBusLineId": "line-1"
+        }
+      },
+      {
+        "duration": 70,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 30,
+          "efficiency": {
+            "maxCost": 100,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "transit-campaign",
+          "roads": [
+            {
+              "cell": 66,
+              "grade": 1
+            },
+            {
+              "cell": 67,
+              "grade": 1
+            },
+            {
+              "cell": 68,
+              "grade": 1
+            },
+            {
+              "cell": 69,
+              "grade": 1
+            },
+            {
+              "cell": 70,
+              "grade": 1
+            },
+            {
+              "cell": 86,
+              "grade": 1
+            },
+            {
+              "cell": 102,
+              "grade": 1
+            },
+            {
+              "cell": 103,
+              "grade": 1
+            },
+            {
+              "cell": 104,
+              "grade": 1
+            },
+            {
+              "cell": 105,
+              "grade": 1
+            },
+            {
+              "cell": 106,
+              "grade": 1
+            },
+            {
+              "cell": 107,
+              "grade": 1
+            },
+            {
+              "cell": 108,
+              "grade": 1
+            },
+            {
+              "cell": 109,
+              "grade": 1
+            },
+            {
+              "cell": 125,
+              "grade": 1
+            },
+            {
+              "cell": 141,
+              "grade": 1
+            }
+          ],
+          "edges": [
+            [
+              66,
+              67
+            ],
+            [
+              67,
+              68
+            ],
+            [
+              68,
+              69
+            ],
+            [
+              69,
+              70
+            ],
+            [
+              70,
+              86
+            ],
+            [
+              86,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              125
+            ],
+            [
+              125,
+              141
+            ]
+          ],
+          "roadPolicies": [
+            {
+              "cell": 103,
+              "policy": "avoid"
+            },
+            {
+              "cell": 104,
+              "policy": "avoid"
+            }
+          ],
+          "signals": [],
+          "busLines": [
+            {
+              "id": "line-1",
+              "name": "西岸接驳",
+              "color": "#1686a0",
+              "route": [
+                66,
+                67,
+                68,
+                69,
+                70,
+                86,
+                102,
+                103
+              ],
+              "count": 2,
+              "stops": [
+                66,
+                70,
+                103
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            },
+            {
+              "id": "line-2",
+              "name": "东岸跨河线",
+              "color": "#d06b47",
+              "route": [
+                103,
+                104,
+                105,
+                106,
+                107,
+                108,
+                109,
+                125,
+                141
+              ],
+              "count": 3,
+              "stops": [
+                103,
+                105,
+                125,
+                141
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            }
+          ],
+          "activeBusLineId": "line-1"
+        }
+      },
+      {
+        "duration": 80,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 30,
+          "efficiency": {
+            "maxCost": 100,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "transit-campaign",
+          "roads": [
+            {
+              "cell": 66,
+              "grade": 1
+            },
+            {
+              "cell": 67,
+              "grade": 1
+            },
+            {
+              "cell": 68,
+              "grade": 1
+            },
+            {
+              "cell": 69,
+              "grade": 1
+            },
+            {
+              "cell": 70,
+              "grade": 1
+            },
+            {
+              "cell": 86,
+              "grade": 1
+            },
+            {
+              "cell": 102,
+              "grade": 1
+            },
+            {
+              "cell": 103,
+              "grade": 1
+            },
+            {
+              "cell": 104,
+              "grade": 1
+            },
+            {
+              "cell": 105,
+              "grade": 1
+            },
+            {
+              "cell": 106,
+              "grade": 1
+            },
+            {
+              "cell": 107,
+              "grade": 1
+            },
+            {
+              "cell": 108,
+              "grade": 1
+            },
+            {
+              "cell": 109,
+              "grade": 1
+            },
+            {
+              "cell": 125,
+              "grade": 1
+            },
+            {
+              "cell": 141,
+              "grade": 1
+            }
+          ],
+          "edges": [
+            [
+              66,
+              67
+            ],
+            [
+              67,
+              68
+            ],
+            [
+              68,
+              69
+            ],
+            [
+              69,
+              70
+            ],
+            [
+              70,
+              86
+            ],
+            [
+              86,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              125
+            ],
+            [
+              125,
+              141
+            ]
+          ],
+          "roadPolicies": [
+            {
+              "cell": 103,
+              "policy": "avoid"
+            },
+            {
+              "cell": 104,
+              "policy": "avoid"
+            }
+          ],
+          "signals": [],
+          "busLines": [
+            {
+              "id": "line-1",
+              "name": "西岸接驳",
+              "color": "#1686a0",
+              "route": [
+                66,
+                67,
+                68,
+                69,
+                70,
+                86,
+                102,
+                103
+              ],
+              "count": 3,
+              "stops": [
+                66,
+                70,
+                103
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            },
+            {
+              "id": "line-2",
+              "name": "东岸跨河线",
+              "color": "#d06b47",
+              "route": [
+                103,
+                104,
+                105,
+                106,
+                107,
+                108,
+                109,
+                125,
+                141
+              ],
+              "count": 3,
+              "stops": [
+                103,
+                105,
+                125,
+                141
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            }
+          ],
+          "activeBusLineId": "line-1"
+        }
+      },
+      {
+        "duration": 95,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 30,
+          "efficiency": {
+            "maxCost": 100,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "transit-campaign",
+          "roads": [
+            {
+              "cell": 66,
+              "grade": 1
+            },
+            {
+              "cell": 67,
+              "grade": 1
+            },
+            {
+              "cell": 68,
+              "grade": 1
+            },
+            {
+              "cell": 69,
+              "grade": 1
+            },
+            {
+              "cell": 70,
+              "grade": 1
+            },
+            {
+              "cell": 86,
+              "grade": 1
+            },
+            {
+              "cell": 102,
+              "grade": 1
+            },
+            {
+              "cell": 103,
+              "grade": 1
+            },
+            {
+              "cell": 104,
+              "grade": 1
+            },
+            {
+              "cell": 105,
+              "grade": 1
+            },
+            {
+              "cell": 106,
+              "grade": 1
+            },
+            {
+              "cell": 107,
+              "grade": 1
+            },
+            {
+              "cell": 108,
+              "grade": 1
+            },
+            {
+              "cell": 109,
+              "grade": 1
+            },
+            {
+              "cell": 125,
+              "grade": 1
+            },
+            {
+              "cell": 141,
+              "grade": 1
+            }
+          ],
+          "edges": [
+            [
+              66,
+              67
+            ],
+            [
+              67,
+              68
+            ],
+            [
+              68,
+              69
+            ],
+            [
+              69,
+              70
+            ],
+            [
+              70,
+              86
+            ],
+            [
+              86,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              125
+            ],
+            [
+              125,
+              141
+            ]
+          ],
+          "roadPolicies": [
+            {
+              "cell": 103,
+              "policy": "avoid"
+            },
+            {
+              "cell": 104,
+              "policy": "avoid"
+            }
+          ],
+          "signals": [],
+          "busLines": [
+            {
+              "id": "line-1",
+              "name": "西岸接驳",
+              "color": "#1686a0",
+              "route": [
+                66,
+                67,
+                68,
+                69,
+                70,
+                86,
+                102,
+                103
+              ],
+              "count": 3,
+              "stops": [
+                66,
+                70,
+                103
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            },
+            {
+              "id": "line-2",
+              "name": "东岸跨河线",
+              "color": "#d06b47",
+              "route": [
+                103,
+                104,
+                105,
+                106,
+                107,
+                108,
+                109,
+                125,
+                141
+              ],
+              "count": 3,
+              "stops": [
+                103,
+                105,
+                125,
+                141
+              ],
+              "returnTrip": true,
+              "returnStops": true,
+              "headway": 2
+            }
+          ],
+          "activeBusLineId": "line-1"
+        }
+      }
+    ]
+  }
+}

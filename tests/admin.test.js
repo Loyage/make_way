@@ -22,9 +22,10 @@ function request(port, url, method = 'GET', body = null, headers = {}) {
 test('validateLevels accepts the built-in chapter catalog', () => {
   const catalog=defaultLevels();
   assert.equal(validateLevels(catalog), '');
-  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',5],['城市调度',6]]);
+  assert.deepEqual(catalog.chapters.map(chapter=>[chapter.name,chapter.levels.length]),[['道路入门',5],['路口调度',7],['公共交通',5],['设计素材库',5]]);
+  assert.equal(catalog.chapters.at(-1).hidden,true);
   const flat=catalog.chapters.flatMap(chapter=>chapter.levels),migrated=normalizeCatalog(flat);
-  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[7,4]);assert.equal(validateLevels(flat),'');
+  assert.deepEqual(migrated.chapters.map(chapter=>chapter.levels.length),[22]);assert.equal(validateLevels(flat),'');
 });
 
 test('validateLevels rejects chapter and level structural problems', () => {
@@ -114,7 +115,7 @@ test('campaign reference-chain validation rejects a structurally valid losing da
 
 test('validateLevels accepts per-level map sizes and rejects invalid dimensions', () => {
   const custom=JSON.parse(JSON.stringify(defaultLevels())),level=custom.chapters[0].levels[0];
-  level.width=20;level.height=12;
+  delete level.referenceDesign;level.width=20;level.height=12;
   assert.equal(validateLevels(custom),'');
   level.width=65;assert.match(validateLevels(custom),/地图宽高/);
   level.width=20;level.water=[20*12];assert.match(validateLevels(custom),/越界/);
@@ -169,7 +170,7 @@ test('admin server gates /api/levels behind login and writes levels.json', async
   const list = await request(port, '/api/levels', 'GET', null, { Cookie: cookie.split(';')[0] });
   assert.equal(list.status, 200);
   const catalog=JSON.parse(list.body).catalog;
-  assert.equal(catalog.chapters.length,2);
+  assert.equal(catalog.chapters.length,4);
   assert.ok(catalog.chapters.flatMap(chapter=>chapter.levels).length>=6);
   const restarted=await request(port,'/api/game-service/restart','POST',null,{Cookie:cookie.split(';')[0]});
   assert.equal(restarted.status,200);assert.equal(JSON.parse(restarted.body).state,'active');assert.equal(restartCalls,1);
@@ -228,7 +229,7 @@ test('admin server saves named presets and overwrites the default config', async
   assert.deepEqual(JSON.parse((await request(port, '/api/presets', 'GET', null, auth)).body).presets, ['my-config']);
   const loaded = await request(port, '/api/presets/my-config', 'GET', null, auth);
   assert.equal(loaded.status, 200);
-  assert.equal(JSON.parse(loaded.body).catalog.chapters.length, 2);
+  assert.equal(JSON.parse(loaded.body).catalog.chapters.length, 4);
   assert.equal((await request(port, '/api/presets/bad%2Fname', 'PUT', body, auth)).status, 400);
 
   try { assert.equal((await request(port, '/api/default', 'PUT', body, auth)).status, 200); }

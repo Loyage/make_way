@@ -1,0 +1,1633 @@
+{
+  "id": "junction-campaign",
+  "name": "五日路口值守",
+  "english": "FIVE DAYS AT THE JUNCTION",
+  "difficulty": "章节挑战",
+  "title": "经营五天，把本章的路口经验逐步用起来。",
+  "description": "第一天只有低流量，随后逐日加入反向与南北车流，最后出现潮汐高峰。保留同一路网，根据每天的实际方向从自动避让升级到自动灯序、按车流建议和手动配时。",
+  "tip": "每天运营前查看新工地和流量；无需重铺主路，重点调整中心路口。",
+  "lesson": "路口综合多日挑战",
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": true,
+    "bus": false
+  },
+  "budget": 90,
+  "duration": 45,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 90,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "西 → 东",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 81,
+          "generationRate": 4,
+          "passengers": 20
+        }
+      ],
+      "goals": [
+        {
+          "cell": 94,
+          "label": "东岸工坊"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 24,
+      "grade": 2
+    },
+    {
+      "cell": 40,
+      "grade": 2
+    },
+    {
+      "cell": 56,
+      "grade": 2
+    },
+    {
+      "cell": 72,
+      "grade": 2
+    },
+    {
+      "cell": 88,
+      "grade": 2
+    },
+    {
+      "cell": 97,
+      "grade": 2
+    },
+    {
+      "cell": 98,
+      "grade": 2
+    },
+    {
+      "cell": 99,
+      "grade": 2
+    },
+    {
+      "cell": 100,
+      "grade": 2
+    },
+    {
+      "cell": 101,
+      "grade": 2
+    },
+    {
+      "cell": 102,
+      "grade": 2
+    },
+    {
+      "cell": 103,
+      "grade": 2
+    },
+    {
+      "cell": 104,
+      "grade": 2
+    },
+    {
+      "cell": 105,
+      "grade": 2
+    },
+    {
+      "cell": 106,
+      "grade": 2
+    },
+    {
+      "cell": 107,
+      "grade": 2
+    },
+    {
+      "cell": 108,
+      "grade": 2
+    },
+    {
+      "cell": 109,
+      "grade": 2
+    },
+    {
+      "cell": 110,
+      "grade": 2
+    },
+    {
+      "cell": 120,
+      "grade": 2
+    },
+    {
+      "cell": 136,
+      "grade": 2
+    },
+    {
+      "cell": 152,
+      "grade": 2
+    },
+    {
+      "cell": 168,
+      "grade": 2
+    }
+  ],
+  "initialEdges": [
+    [
+      97,
+      98
+    ],
+    [
+      98,
+      99
+    ],
+    [
+      99,
+      100
+    ],
+    [
+      100,
+      101
+    ],
+    [
+      101,
+      102
+    ],
+    [
+      102,
+      103
+    ],
+    [
+      103,
+      104
+    ],
+    [
+      104,
+      105
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      106,
+      107
+    ],
+    [
+      107,
+      108
+    ],
+    [
+      108,
+      109
+    ],
+    [
+      109,
+      110
+    ],
+    [
+      24,
+      40
+    ],
+    [
+      40,
+      56
+    ],
+    [
+      56,
+      72
+    ],
+    [
+      72,
+      88
+    ],
+    [
+      88,
+      104
+    ],
+    [
+      104,
+      120
+    ],
+    [
+      120,
+      136
+    ],
+    [
+      136,
+      152
+    ],
+    [
+      152,
+      168
+    ],
+    [
+      81,
+      97
+    ],
+    [
+      94,
+      110
+    ]
+  ],
+  "campaign": {
+    "routes": [
+      {
+        "name": "西 → 东",
+        "color": "#638d69",
+        "light": "#dae6cb",
+        "homes": [
+          {
+            "cell": 81,
+            "generationRate": 4,
+            "passengers": 20,
+            "unlock": {
+              "day": 1
+            },
+            "upgrades": [
+              {
+                "condition": {
+                  "day": 5
+                },
+                "generationRate": 6,
+                "passengers": 40
+              }
+            ]
+          }
+        ],
+        "goals": [
+          {
+            "cell": 94,
+            "label": "东岸工坊",
+            "unlock": {
+              "day": 1
+            },
+            "upgrades": []
+          }
+        ]
+      },
+      {
+        "name": "东 → 西",
+        "color": "#d19157",
+        "light": "#f2dfbf",
+        "homes": [
+          {
+            "cell": 126,
+            "generationRate": 4,
+            "passengers": 20,
+            "unlock": {
+              "day": 2
+            },
+            "upgrades": []
+          }
+        ],
+        "goals": [
+          {
+            "cell": 113,
+            "label": "西岸市场",
+            "unlock": {
+              "day": 2
+            },
+            "upgrades": []
+          }
+        ]
+      },
+      {
+        "name": "北 → 南",
+        "color": "#9582b4",
+        "light": "#e7dff0",
+        "homes": [
+          {
+            "cell": 23,
+            "generationRate": 4,
+            "passengers": 16,
+            "unlock": {
+              "day": 3
+            },
+            "upgrades": []
+          }
+        ],
+        "goals": [
+          {
+            "cell": 167,
+            "label": "南城学校",
+            "unlock": {
+              "day": 3
+            },
+            "upgrades": []
+          }
+        ]
+      },
+      {
+        "name": "南 → 北",
+        "color": "#578fa4",
+        "light": "#d3e7ed",
+        "homes": [
+          {
+            "cell": 169,
+            "generationRate": 4,
+            "passengers": 16,
+            "unlock": {
+              "day": 4
+            },
+            "upgrades": []
+          }
+        ],
+        "goals": [
+          {
+            "cell": 25,
+            "label": "北园车站",
+            "unlock": {
+              "day": 4
+            },
+            "upgrades": []
+          }
+        ]
+      }
+    ],
+    "days": [
+      {
+        "duration": 45,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 40,
+          "efficiency": {
+            "maxCost": 90,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "junction-campaign",
+          "roads": [
+            {
+              "cell": 24,
+              "grade": 2
+            },
+            {
+              "cell": 40,
+              "grade": 2
+            },
+            {
+              "cell": 56,
+              "grade": 2
+            },
+            {
+              "cell": 72,
+              "grade": 2
+            },
+            {
+              "cell": 88,
+              "grade": 2
+            },
+            {
+              "cell": 97,
+              "grade": 2
+            },
+            {
+              "cell": 98,
+              "grade": 2
+            },
+            {
+              "cell": 99,
+              "grade": 2
+            },
+            {
+              "cell": 100,
+              "grade": 2
+            },
+            {
+              "cell": 101,
+              "grade": 2
+            },
+            {
+              "cell": 102,
+              "grade": 2
+            },
+            {
+              "cell": 103,
+              "grade": 2
+            },
+            {
+              "cell": 104,
+              "grade": 2
+            },
+            {
+              "cell": 105,
+              "grade": 2
+            },
+            {
+              "cell": 106,
+              "grade": 2
+            },
+            {
+              "cell": 107,
+              "grade": 2
+            },
+            {
+              "cell": 108,
+              "grade": 2
+            },
+            {
+              "cell": 109,
+              "grade": 2
+            },
+            {
+              "cell": 110,
+              "grade": 2
+            },
+            {
+              "cell": 120,
+              "grade": 2
+            },
+            {
+              "cell": 136,
+              "grade": 2
+            },
+            {
+              "cell": 152,
+              "grade": 2
+            },
+            {
+              "cell": 168,
+              "grade": 2
+            }
+          ],
+          "edges": [
+            [
+              97,
+              98
+            ],
+            [
+              98,
+              99
+            ],
+            [
+              99,
+              100
+            ],
+            [
+              100,
+              101
+            ],
+            [
+              101,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              110
+            ],
+            [
+              24,
+              40
+            ],
+            [
+              40,
+              56
+            ],
+            [
+              56,
+              72
+            ],
+            [
+              72,
+              88
+            ],
+            [
+              88,
+              104
+            ],
+            [
+              104,
+              120
+            ],
+            [
+              120,
+              136
+            ],
+            [
+              136,
+              152
+            ],
+            [
+              152,
+              168
+            ],
+            [
+              81,
+              97
+            ],
+            [
+              94,
+              110
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [
+            {
+              "cell": 104,
+              "enabled": false,
+              "green": 2,
+              "yieldMode": "arrival",
+              "priority": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ],
+              "automatic": true,
+              "phases": [
+                [
+                  "west-straight",
+                  "east-straight"
+                ],
+                [
+                  "north-straight",
+                  "south-straight"
+                ]
+              ],
+              "phaseGreens": [
+                2,
+                2
+              ]
+            }
+          ],
+          "busLines": [],
+          "activeBusLineId": null
+        }
+      },
+      {
+        "duration": 55,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 40,
+          "efficiency": {
+            "maxCost": 90,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "junction-campaign",
+          "roads": [
+            {
+              "cell": 24,
+              "grade": 2
+            },
+            {
+              "cell": 40,
+              "grade": 2
+            },
+            {
+              "cell": 56,
+              "grade": 2
+            },
+            {
+              "cell": 72,
+              "grade": 2
+            },
+            {
+              "cell": 88,
+              "grade": 2
+            },
+            {
+              "cell": 97,
+              "grade": 2
+            },
+            {
+              "cell": 98,
+              "grade": 2
+            },
+            {
+              "cell": 99,
+              "grade": 2
+            },
+            {
+              "cell": 100,
+              "grade": 2
+            },
+            {
+              "cell": 101,
+              "grade": 2
+            },
+            {
+              "cell": 102,
+              "grade": 2
+            },
+            {
+              "cell": 103,
+              "grade": 2
+            },
+            {
+              "cell": 104,
+              "grade": 2
+            },
+            {
+              "cell": 105,
+              "grade": 2
+            },
+            {
+              "cell": 106,
+              "grade": 2
+            },
+            {
+              "cell": 107,
+              "grade": 2
+            },
+            {
+              "cell": 108,
+              "grade": 2
+            },
+            {
+              "cell": 109,
+              "grade": 2
+            },
+            {
+              "cell": 110,
+              "grade": 2
+            },
+            {
+              "cell": 120,
+              "grade": 2
+            },
+            {
+              "cell": 136,
+              "grade": 2
+            },
+            {
+              "cell": 152,
+              "grade": 2
+            },
+            {
+              "cell": 168,
+              "grade": 2
+            }
+          ],
+          "edges": [
+            [
+              97,
+              98
+            ],
+            [
+              98,
+              99
+            ],
+            [
+              99,
+              100
+            ],
+            [
+              100,
+              101
+            ],
+            [
+              101,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              110
+            ],
+            [
+              24,
+              40
+            ],
+            [
+              40,
+              56
+            ],
+            [
+              56,
+              72
+            ],
+            [
+              72,
+              88
+            ],
+            [
+              88,
+              104
+            ],
+            [
+              104,
+              120
+            ],
+            [
+              120,
+              136
+            ],
+            [
+              136,
+              152
+            ],
+            [
+              152,
+              168
+            ],
+            [
+              81,
+              97
+            ],
+            [
+              94,
+              110
+            ],
+            [
+              126,
+              110
+            ],
+            [
+              113,
+              97
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [
+            {
+              "cell": 104,
+              "enabled": true,
+              "green": 4,
+              "yieldMode": "arrival",
+              "priority": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ],
+              "automatic": false,
+              "phases": [
+                [
+                  "west-straight",
+                  "east-straight"
+                ]
+              ],
+              "phaseGreens": [
+                4
+              ]
+            }
+          ],
+          "busLines": [],
+          "activeBusLineId": null
+        }
+      },
+      {
+        "duration": 70,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 40,
+          "efficiency": {
+            "maxCost": 90,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "junction-campaign",
+          "roads": [
+            {
+              "cell": 24,
+              "grade": 2
+            },
+            {
+              "cell": 40,
+              "grade": 2
+            },
+            {
+              "cell": 56,
+              "grade": 2
+            },
+            {
+              "cell": 72,
+              "grade": 2
+            },
+            {
+              "cell": 88,
+              "grade": 2
+            },
+            {
+              "cell": 97,
+              "grade": 2
+            },
+            {
+              "cell": 98,
+              "grade": 2
+            },
+            {
+              "cell": 99,
+              "grade": 2
+            },
+            {
+              "cell": 100,
+              "grade": 2
+            },
+            {
+              "cell": 101,
+              "grade": 2
+            },
+            {
+              "cell": 102,
+              "grade": 2
+            },
+            {
+              "cell": 103,
+              "grade": 2
+            },
+            {
+              "cell": 104,
+              "grade": 2
+            },
+            {
+              "cell": 105,
+              "grade": 2
+            },
+            {
+              "cell": 106,
+              "grade": 2
+            },
+            {
+              "cell": 107,
+              "grade": 2
+            },
+            {
+              "cell": 108,
+              "grade": 2
+            },
+            {
+              "cell": 109,
+              "grade": 2
+            },
+            {
+              "cell": 110,
+              "grade": 2
+            },
+            {
+              "cell": 120,
+              "grade": 2
+            },
+            {
+              "cell": 136,
+              "grade": 2
+            },
+            {
+              "cell": 152,
+              "grade": 2
+            },
+            {
+              "cell": 168,
+              "grade": 2
+            }
+          ],
+          "edges": [
+            [
+              97,
+              98
+            ],
+            [
+              98,
+              99
+            ],
+            [
+              99,
+              100
+            ],
+            [
+              100,
+              101
+            ],
+            [
+              101,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              110
+            ],
+            [
+              24,
+              40
+            ],
+            [
+              40,
+              56
+            ],
+            [
+              56,
+              72
+            ],
+            [
+              72,
+              88
+            ],
+            [
+              88,
+              104
+            ],
+            [
+              104,
+              120
+            ],
+            [
+              120,
+              136
+            ],
+            [
+              136,
+              152
+            ],
+            [
+              152,
+              168
+            ],
+            [
+              81,
+              97
+            ],
+            [
+              94,
+              110
+            ],
+            [
+              126,
+              110
+            ],
+            [
+              113,
+              97
+            ],
+            [
+              23,
+              24
+            ],
+            [
+              167,
+              168
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [
+            {
+              "cell": 104,
+              "enabled": true,
+              "green": 4,
+              "yieldMode": "arrival",
+              "priority": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ],
+              "automatic": false,
+              "phases": [
+                [
+                  "west-straight",
+                  "east-straight"
+                ],
+                [
+                  "north-straight",
+                  "south-straight"
+                ]
+              ],
+              "phaseGreens": [
+                4,
+                4
+              ]
+            }
+          ],
+          "busLines": [],
+          "activeBusLineId": null
+        }
+      },
+      {
+        "duration": 85,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 40,
+          "efficiency": {
+            "maxCost": 90,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "junction-campaign",
+          "roads": [
+            {
+              "cell": 24,
+              "grade": 2
+            },
+            {
+              "cell": 40,
+              "grade": 2
+            },
+            {
+              "cell": 56,
+              "grade": 2
+            },
+            {
+              "cell": 72,
+              "grade": 2
+            },
+            {
+              "cell": 88,
+              "grade": 2
+            },
+            {
+              "cell": 97,
+              "grade": 2
+            },
+            {
+              "cell": 98,
+              "grade": 2
+            },
+            {
+              "cell": 99,
+              "grade": 2
+            },
+            {
+              "cell": 100,
+              "grade": 2
+            },
+            {
+              "cell": 101,
+              "grade": 2
+            },
+            {
+              "cell": 102,
+              "grade": 2
+            },
+            {
+              "cell": 103,
+              "grade": 2
+            },
+            {
+              "cell": 104,
+              "grade": 2
+            },
+            {
+              "cell": 105,
+              "grade": 2
+            },
+            {
+              "cell": 106,
+              "grade": 2
+            },
+            {
+              "cell": 107,
+              "grade": 2
+            },
+            {
+              "cell": 108,
+              "grade": 2
+            },
+            {
+              "cell": 109,
+              "grade": 2
+            },
+            {
+              "cell": 110,
+              "grade": 2
+            },
+            {
+              "cell": 120,
+              "grade": 2
+            },
+            {
+              "cell": 136,
+              "grade": 2
+            },
+            {
+              "cell": 152,
+              "grade": 2
+            },
+            {
+              "cell": 168,
+              "grade": 2
+            }
+          ],
+          "edges": [
+            [
+              97,
+              98
+            ],
+            [
+              98,
+              99
+            ],
+            [
+              99,
+              100
+            ],
+            [
+              100,
+              101
+            ],
+            [
+              101,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              110
+            ],
+            [
+              24,
+              40
+            ],
+            [
+              40,
+              56
+            ],
+            [
+              56,
+              72
+            ],
+            [
+              72,
+              88
+            ],
+            [
+              88,
+              104
+            ],
+            [
+              104,
+              120
+            ],
+            [
+              120,
+              136
+            ],
+            [
+              136,
+              152
+            ],
+            [
+              152,
+              168
+            ],
+            [
+              81,
+              97
+            ],
+            [
+              94,
+              110
+            ],
+            [
+              126,
+              110
+            ],
+            [
+              113,
+              97
+            ],
+            [
+              23,
+              24
+            ],
+            [
+              167,
+              168
+            ],
+            [
+              169,
+              168
+            ],
+            [
+              25,
+              24
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [
+            {
+              "cell": 104,
+              "enabled": true,
+              "green": 4,
+              "yieldMode": "arrival",
+              "priority": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ],
+              "automatic": false,
+              "phases": [
+                [
+                  "west-straight",
+                  "east-straight"
+                ],
+                [
+                  "north-straight",
+                  "south-straight"
+                ]
+              ],
+              "phaseGreens": [
+                4,
+                4
+              ]
+            }
+          ],
+          "busLines": [],
+          "activeBusLineId": null
+        }
+      },
+      {
+        "duration": 105,
+        "maxIncome": 12,
+        "starTargets": {
+          "satisfaction": 40,
+          "efficiency": {
+            "maxCost": 90,
+            "maxQueue": 100
+          }
+        },
+        "referenceDesign": {
+          "version": 8,
+          "width": 16,
+          "height": 12,
+          "levelId": "junction-campaign",
+          "roads": [
+            {
+              "cell": 24,
+              "grade": 2
+            },
+            {
+              "cell": 40,
+              "grade": 2
+            },
+            {
+              "cell": 56,
+              "grade": 2
+            },
+            {
+              "cell": 72,
+              "grade": 2
+            },
+            {
+              "cell": 88,
+              "grade": 2
+            },
+            {
+              "cell": 97,
+              "grade": 2
+            },
+            {
+              "cell": 98,
+              "grade": 2
+            },
+            {
+              "cell": 99,
+              "grade": 2
+            },
+            {
+              "cell": 100,
+              "grade": 2
+            },
+            {
+              "cell": 101,
+              "grade": 2
+            },
+            {
+              "cell": 102,
+              "grade": 2
+            },
+            {
+              "cell": 103,
+              "grade": 2
+            },
+            {
+              "cell": 104,
+              "grade": 2
+            },
+            {
+              "cell": 105,
+              "grade": 2
+            },
+            {
+              "cell": 106,
+              "grade": 2
+            },
+            {
+              "cell": 107,
+              "grade": 2
+            },
+            {
+              "cell": 108,
+              "grade": 2
+            },
+            {
+              "cell": 109,
+              "grade": 2
+            },
+            {
+              "cell": 110,
+              "grade": 2
+            },
+            {
+              "cell": 120,
+              "grade": 2
+            },
+            {
+              "cell": 136,
+              "grade": 2
+            },
+            {
+              "cell": 152,
+              "grade": 2
+            },
+            {
+              "cell": 168,
+              "grade": 2
+            }
+          ],
+          "edges": [
+            [
+              97,
+              98
+            ],
+            [
+              98,
+              99
+            ],
+            [
+              99,
+              100
+            ],
+            [
+              100,
+              101
+            ],
+            [
+              101,
+              102
+            ],
+            [
+              102,
+              103
+            ],
+            [
+              103,
+              104
+            ],
+            [
+              104,
+              105
+            ],
+            [
+              105,
+              106
+            ],
+            [
+              106,
+              107
+            ],
+            [
+              107,
+              108
+            ],
+            [
+              108,
+              109
+            ],
+            [
+              109,
+              110
+            ],
+            [
+              24,
+              40
+            ],
+            [
+              40,
+              56
+            ],
+            [
+              56,
+              72
+            ],
+            [
+              72,
+              88
+            ],
+            [
+              88,
+              104
+            ],
+            [
+              104,
+              120
+            ],
+            [
+              120,
+              136
+            ],
+            [
+              136,
+              152
+            ],
+            [
+              152,
+              168
+            ],
+            [
+              81,
+              97
+            ],
+            [
+              94,
+              110
+            ],
+            [
+              126,
+              110
+            ],
+            [
+              113,
+              97
+            ],
+            [
+              23,
+              24
+            ],
+            [
+              167,
+              168
+            ],
+            [
+              169,
+              168
+            ],
+            [
+              25,
+              24
+            ]
+          ],
+          "roadPolicies": [],
+          "signals": [
+            {
+              "cell": 104,
+              "enabled": true,
+              "green": 2,
+              "yieldMode": "arrival",
+              "priority": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ],
+              "automatic": false,
+              "phases": [
+                [
+                  "west-straight",
+                  "east-straight"
+                ],
+                [
+                  "north-straight",
+                  "south-straight"
+                ]
+              ],
+              "phaseGreens": [
+                6,
+                2
+              ]
+            }
+          ],
+          "busLines": [],
+          "activeBusLineId": null
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,619 @@
+{
+  "id": "bus-pipeline",
+  "name": "环线流水",
+  "english": "LOOP PIPELINE",
+  "difficulty": "教学二",
+  "title": "一条环线连续服务多组通勤。",
+  "description": "四组住宅和目的地分布在环路四周。一条闭环线路可以沿途不断下客、上客，像流水线一样处理多组不同颜色客流。",
+  "tip": "让线路走完整环路；保留沿线自动站点，观察公交在每一站完成先下后上。",
+  "lesson": "单线多站流水运输",
+  "busLineLimit": 1,
+  "features": {
+    "grade": true,
+    "load": true,
+    "cut": true,
+    "inspect": true,
+    "signals": false,
+    "bus": true
+  },
+  "budget": 100,
+  "duration": 75,
+  "starTargets": {
+    "satisfaction": 45,
+    "efficiency": {
+      "maxCost": 100,
+      "maxQueue": 80
+    }
+  },
+  "water": [],
+  "bridges": [],
+  "trees": [],
+  "routes": [
+    {
+      "name": "西北 → 东北",
+      "color": "#638d69",
+      "light": "#dae6cb",
+      "homes": [
+        {
+          "cell": 50,
+          "generationRate": 4,
+          "passengers": 36
+        }
+      ],
+      "goals": [
+        {
+          "cell": 61,
+          "label": "东北工坊"
+        }
+      ]
+    },
+    {
+      "name": "东北 → 东南",
+      "color": "#d19157",
+      "light": "#f2dfbf",
+      "homes": [
+        {
+          "cell": 44,
+          "generationRate": 4,
+          "passengers": 36
+        }
+      ],
+      "goals": [
+        {
+          "cell": 156,
+          "label": "东南市场"
+        }
+      ]
+    },
+    {
+      "name": "东南 → 西南",
+      "color": "#9582b4",
+      "light": "#e7dff0",
+      "homes": [
+        {
+          "cell": 141,
+          "generationRate": 4,
+          "passengers": 36
+        }
+      ],
+      "goals": [
+        {
+          "cell": 130,
+          "label": "西南学校"
+        }
+      ]
+    },
+    {
+      "name": "西南 → 西北",
+      "color": "#578fa4",
+      "light": "#d3e7ed",
+      "homes": [
+        {
+          "cell": 147,
+          "generationRate": 4,
+          "passengers": 36
+        }
+      ],
+      "goals": [
+        {
+          "cell": 35,
+          "label": "西北公园"
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "initialRoads": [
+    {
+      "cell": 51,
+      "grade": 1
+    },
+    {
+      "cell": 52,
+      "grade": 1
+    },
+    {
+      "cell": 53,
+      "grade": 1
+    },
+    {
+      "cell": 54,
+      "grade": 1
+    },
+    {
+      "cell": 55,
+      "grade": 1
+    },
+    {
+      "cell": 56,
+      "grade": 1
+    },
+    {
+      "cell": 57,
+      "grade": 1
+    },
+    {
+      "cell": 58,
+      "grade": 1
+    },
+    {
+      "cell": 59,
+      "grade": 1
+    },
+    {
+      "cell": 60,
+      "grade": 1
+    },
+    {
+      "cell": 67,
+      "grade": 1
+    },
+    {
+      "cell": 76,
+      "grade": 1
+    },
+    {
+      "cell": 83,
+      "grade": 1
+    },
+    {
+      "cell": 92,
+      "grade": 1
+    },
+    {
+      "cell": 99,
+      "grade": 1
+    },
+    {
+      "cell": 108,
+      "grade": 1
+    },
+    {
+      "cell": 115,
+      "grade": 1
+    },
+    {
+      "cell": 124,
+      "grade": 1
+    },
+    {
+      "cell": 131,
+      "grade": 1
+    },
+    {
+      "cell": 132,
+      "grade": 1
+    },
+    {
+      "cell": 133,
+      "grade": 1
+    },
+    {
+      "cell": 134,
+      "grade": 1
+    },
+    {
+      "cell": 135,
+      "grade": 1
+    },
+    {
+      "cell": 136,
+      "grade": 1
+    },
+    {
+      "cell": 137,
+      "grade": 1
+    },
+    {
+      "cell": 138,
+      "grade": 1
+    },
+    {
+      "cell": 139,
+      "grade": 1
+    },
+    {
+      "cell": 140,
+      "grade": 1
+    }
+  ],
+  "initialEdges": [
+    [
+      51,
+      52
+    ],
+    [
+      52,
+      53
+    ],
+    [
+      53,
+      54
+    ],
+    [
+      54,
+      55
+    ],
+    [
+      55,
+      56
+    ],
+    [
+      56,
+      57
+    ],
+    [
+      57,
+      58
+    ],
+    [
+      58,
+      59
+    ],
+    [
+      59,
+      60
+    ],
+    [
+      60,
+      76
+    ],
+    [
+      76,
+      92
+    ],
+    [
+      92,
+      108
+    ],
+    [
+      108,
+      124
+    ],
+    [
+      124,
+      140
+    ],
+    [
+      140,
+      139
+    ],
+    [
+      139,
+      138
+    ],
+    [
+      138,
+      137
+    ],
+    [
+      137,
+      136
+    ],
+    [
+      136,
+      135
+    ],
+    [
+      135,
+      134
+    ],
+    [
+      134,
+      133
+    ],
+    [
+      133,
+      132
+    ],
+    [
+      132,
+      131
+    ],
+    [
+      131,
+      115
+    ],
+    [
+      115,
+      99
+    ],
+    [
+      99,
+      83
+    ],
+    [
+      83,
+      67
+    ],
+    [
+      67,
+      51
+    ]
+  ],
+  "referenceDesign": {
+    "version": 8,
+    "width": 16,
+    "height": 12,
+    "levelId": "bus-pipeline",
+    "roads": [
+      {
+        "cell": 51,
+        "grade": 1
+      },
+      {
+        "cell": 52,
+        "grade": 1
+      },
+      {
+        "cell": 53,
+        "grade": 1
+      },
+      {
+        "cell": 54,
+        "grade": 1
+      },
+      {
+        "cell": 55,
+        "grade": 1
+      },
+      {
+        "cell": 56,
+        "grade": 1
+      },
+      {
+        "cell": 57,
+        "grade": 1
+      },
+      {
+        "cell": 58,
+        "grade": 1
+      },
+      {
+        "cell": 59,
+        "grade": 1
+      },
+      {
+        "cell": 60,
+        "grade": 1
+      },
+      {
+        "cell": 67,
+        "grade": 1
+      },
+      {
+        "cell": 76,
+        "grade": 1
+      },
+      {
+        "cell": 83,
+        "grade": 1
+      },
+      {
+        "cell": 92,
+        "grade": 1
+      },
+      {
+        "cell": 99,
+        "grade": 1
+      },
+      {
+        "cell": 108,
+        "grade": 1
+      },
+      {
+        "cell": 115,
+        "grade": 1
+      },
+      {
+        "cell": 124,
+        "grade": 1
+      },
+      {
+        "cell": 131,
+        "grade": 1
+      },
+      {
+        "cell": 132,
+        "grade": 1
+      },
+      {
+        "cell": 133,
+        "grade": 1
+      },
+      {
+        "cell": 134,
+        "grade": 1
+      },
+      {
+        "cell": 135,
+        "grade": 1
+      },
+      {
+        "cell": 136,
+        "grade": 1
+      },
+      {
+        "cell": 137,
+        "grade": 1
+      },
+      {
+        "cell": 138,
+        "grade": 1
+      },
+      {
+        "cell": 139,
+        "grade": 1
+      },
+      {
+        "cell": 140,
+        "grade": 1
+      }
+    ],
+    "edges": [
+      [
+        51,
+        52
+      ],
+      [
+        52,
+        53
+      ],
+      [
+        53,
+        54
+      ],
+      [
+        54,
+        55
+      ],
+      [
+        55,
+        56
+      ],
+      [
+        56,
+        57
+      ],
+      [
+        57,
+        58
+      ],
+      [
+        58,
+        59
+      ],
+      [
+        59,
+        60
+      ],
+      [
+        60,
+        76
+      ],
+      [
+        76,
+        92
+      ],
+      [
+        92,
+        108
+      ],
+      [
+        108,
+        124
+      ],
+      [
+        124,
+        140
+      ],
+      [
+        140,
+        139
+      ],
+      [
+        139,
+        138
+      ],
+      [
+        138,
+        137
+      ],
+      [
+        137,
+        136
+      ],
+      [
+        136,
+        135
+      ],
+      [
+        135,
+        134
+      ],
+      [
+        134,
+        133
+      ],
+      [
+        133,
+        132
+      ],
+      [
+        132,
+        131
+      ],
+      [
+        131,
+        115
+      ],
+      [
+        115,
+        99
+      ],
+      [
+        99,
+        83
+      ],
+      [
+        83,
+        67
+      ],
+      [
+        67,
+        51
+      ]
+    ],
+    "roadPolicies": [],
+    "signals": [],
+    "busLines": [
+      {
+        "id": "line-1",
+        "name": "四站环线",
+        "color": "#1686a0",
+        "route": [
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          76,
+          92,
+          108,
+          124,
+          140,
+          139,
+          138,
+          137,
+          136,
+          135,
+          134,
+          133,
+          132,
+          131,
+          115,
+          99,
+          83,
+          67,
+          51
+        ],
+        "count": 3,
+        "stops": [
+          51,
+          60,
+          140,
+          131
+        ],
+        "returnTrip": false,
+        "returnStops": false,
+        "headway": 2
+      }
+    ],
+    "activeBusLineId": "line-1"
+  }
+}

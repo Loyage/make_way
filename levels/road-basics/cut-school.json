@@ -20,7 +20,7 @@
   "starTargets": {
     "satisfaction": 90,
     "efficiency": {
-      "maxCost": 15,
+      "maxCost": 22,
       "maxQueue": 10
     }
   },
