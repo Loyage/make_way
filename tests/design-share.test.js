@@ -20,6 +20,9 @@ test('versioned JSON and text share codes round-trip a complete design', () => {
     assert.equal(inspected.summary.busLineCount,expected.busLines.length);
     assert.equal(inspected.summary.cost,source.budget-source.remaining);
   }
+  const unlimited=new Core.City('bus-school',{sandbox:true,unlimitedBudget:true});buildReferencePlan(unlimited);
+  const unlimitedPreview=Sharing.inspect(Sharing.code(unlimited.serializeDesign()),new Core.City('bus-school',{sandbox:true,unlimitedBudget:true}),{busCost:Core.BUS_COST});
+  assert.ok(Number.isFinite(unlimitedPreview.summary.cost));assert.equal(unlimitedPreview.summary.cost,[...unlimited.roads].reduce((sum,cell)=>sum+unlimited.roadType(cell).cost,0)+unlimited.busLines.filter(line=>line.route.length).reduce((sum,line)=>sum+line.count*Core.BUS_COST,0));
 });
 
 test('legacy designs migrate inside a current version share envelope', () => {

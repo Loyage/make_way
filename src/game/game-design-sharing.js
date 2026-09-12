@@ -46,12 +46,13 @@
       || typeof saved.design.levelId!=='string' || !saved.design.levelId) throw new Error('设计文件格式或版本无效');
     return clone(saved);
   }
-  function inspect(input, verifier) {
+  function inspect(input, verifier, options = {}) {
     const saved=parse(input);
     if (!verifier || verifier.level?.id!==saved.design.levelId || typeof verifier.loadDesign!=='function') throw new Error('找不到设计所属关卡');
     const message=verifier.loadDesign(saved.design);
     if(message)throw new Error(message);
-    const design=verifier.serializeDesign(),cost=verifier.budget-verifier.fixedCost-verifier.remaining;
+    const design=verifier.serializeDesign(),busCost=Number.isFinite(options.busCost)?options.busCost:6;
+    const roadCost=design.roads.reduce((sum,road)=>sum+verifier.roadType(road.cell).cost,0),fleetCost=(design.busLines||[]).reduce((sum,line)=>sum+(line.route.length?line.count*busCost:0),0),cost=roadCost+fleetCost;
     return {
       envelope: envelope(design),
       summary: { levelId:design.levelId, roadCount:design.roads.length, busLineCount:design.busLines?.length||0, cost }

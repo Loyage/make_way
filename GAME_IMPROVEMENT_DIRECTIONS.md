@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | 推荐游玩路径 | ✅（已实现） | 项目历史实现，暂无独立待改进条目 |
 | 地图化失败复盘 | ✅ | [p1-replay.md](docs/improvements/p1-replay.md) |
-| 沙盒实验能力 | ⬜ | [p1-sandbox.md](docs/improvements/p1-sandbox.md) |
+| 沙盒实验能力 | ✅ | [p1-sandbox.md](docs/improvements/p1-sandbox.md) |
 | 设计导入、导出与分享 | ✅ | [p1-design-sharing.md](docs/improvements/p1-design-sharing.md) |
 
 ## P2：扩展长期可玩性

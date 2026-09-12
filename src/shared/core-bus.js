@@ -154,7 +154,7 @@
     busItineraryFor(homeIndex,goalIndex=null) {
       if(!this.homes[homeIndex])return null;
       const signature=this.busTopologySignature(),cache=this._busItineraryCache?.signature===signature?this._busItineraryCache:this.rebuildBusItineraryCache(signature);
-      const available=cache.candidatesByHome[homeIndex].filter(item=>(goalIndex===null||item.goalIndex===goalIndex)&&(this.goals[item.goalIndex].input==null||this.goalAssigned[item.goalIndex]<this.goals[item.goalIndex].input));
+      const available=cache.candidatesByHome[homeIndex].filter(item=>(goalIndex===null||item.goalIndex===goalIndex)&&this.goalHasCapacity(item.goalIndex));
       let candidate=available[0];
       if(candidate&&['running','paused'].includes(this.state)){
         const ranked=available.map(item=>this.busDynamicItinerary(item)).sort((a,b)=>a.expectedTime-b.expectedTime||this.busCandidateKey(a).localeCompare(this.busCandidateKey(b)));
@@ -336,7 +336,7 @@
       let selected = null, distance = Infinity;
       for (let gi = 0; gi < this.goals.length; gi++) {
         const goal = this.goals[gi];
-        if (goal.route !== home.route || goal.input != null && this.goalAssigned[gi] >= goal.input) continue;
+        if (goal.route !== home.route || !this.goalHasCapacity(gi)) continue;
         for (const position of this.busServicePositions(goal.cell, lineId)) {
           const forward = (position - routePosition + segments) % segments || segments;
           if (forward > 0 && forward < distance) { selected = gi; distance = forward; }

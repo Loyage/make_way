@@ -22,7 +22,7 @@
   const { rounded, line, circle, label, buildingBubble, busSegment, strokeBusConnector, drawBusRoute } = TrafficCanvas.createCanvasTools(ctx, point);
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, pendingMode = null, inspectedCell = null;
-  let pendingDesign = null, pendingImport = null, dimmedBusLines = new Set(), busEditMode = 'draw';
+  let pendingDesign = null, pendingImport = null, dimmedBusLines = new Set(), busEditMode = 'draw', challengeReturn = null;
   let campaign = null, pendingCampaignScore = null, pendingRegionId = null;
   let pendingRestore = null, autoSaveSuspended = true, lastAutoSaveSignature = '';
   let tutorialUsedRoad = false, tutorialInspected = false, tutorialStarted = false, tutorialForced = false, activeGuide = null, activeGuideLevelId = null, tutorialCompleted = false, tutorialSeenIds = [];
@@ -48,10 +48,10 @@
     pendingRestore=null;$('continue-game').hidden=true;autoSaveSuspended=false;
   }
   function autoSaveSignature() {
-    return JSON.stringify([gameMode,city.level.id,campaign?.dayIndex??null,city.budget,campaign?.results||[],campaign?.checkpoints||[],campaign?[...campaign.unlockedRegionIds]:[],campaign?.regionSpent||0,designHistory[designHistoryIndex]||designSnapshot()]);
+    return JSON.stringify([gameMode,city.level.id,campaign?.dayIndex??null,city.unlimitedBudget?'unlimited':city.budget,city.demandMultiplier,city.continuousDemand,campaign?.results||[],campaign?.checkpoints||[],campaign?[...campaign.unlockedRegionIds]:[],campaign?.regionSpent||0,designHistory[designHistoryIndex]||designSnapshot()]);
   }
   function saveAutoProgress() {
-    if(adminMode||autoSaveSuspended||city?.state!=='planning')return;
+    if(adminMode||autoSaveSuspended||city?.state!=='planning'||gameMode==='sandbox'&&challengeReturn)return;
     const signature=autoSaveSignature();if(signature===lastAutoSaveSignature)return;
     const snapshot=ProgressStorage.createSnapshot(city,campaign,gameMode),message=ProgressStorage.write(localStorage,snapshot);
     lastAutoSaveSignature=signature;if(message)toast(message);
@@ -106,7 +106,7 @@
     if(!level)throw new Error('找不到设计所属关卡');
     if(levelId===city.level.id){
       const lockedRegions=[...new Map([...city.lockedRegions.values()].map(region=>[region.id,region])).values()];
-      const candidate=new City(levelId,{routes:city.routes,budget:city.budget,duration:city.duration,fixedCost:city.fixedCost,deadlineMode:city.deadlineMode,sandbox:city.sandbox,pendingBuildings:[...city.pendingBuildings.values()],dormantBuildings:[...city.dormantBuildings.values()],lockedRegions});
+      const candidate=new City(levelId,{routes:city.routes,budget:city.budget,duration:city.duration,fixedCost:city.fixedCost,deadlineMode:city.deadlineMode,sandbox:city.sandbox,demandMultiplier:city.demandMultiplier,continuousDemand:city.continuousDemand,unlimitedBudget:city.unlimitedBudget,pendingBuildings:[...city.pendingBuildings.values()],dormantBuildings:[...city.dormantBuildings.values()],lockedRegions});
       return {city:candidate,campaign};
     }
     if(gameMode==='challenge'&&level.campaign){const nextCampaign=new CampaignSession(levelId);return {city:nextCampaign.city,campaign:nextCampaign};}
@@ -118,7 +118,7 @@
   function previewImport(text=$('import-design-text').value) {
     clearImportPreview();
     try {
-      const parsed=DesignSharing.parse(text),context=designVerifierContext(parsed.design.levelId),result=DesignSharing.inspect(text,context.city),level=levels().find(item=>item.id===result.summary.levelId);
+      const parsed=DesignSharing.parse(text),context=designVerifierContext(parsed.design.levelId),result=DesignSharing.inspect(text,context.city,{busCost:BUS_COST}),level=levels().find(item=>item.id===result.summary.levelId);
       pendingImport={context,result};$('import-level').textContent=`${level.name}（${result.summary.levelId}）`;$('import-roads').textContent=`${result.summary.roadCount} 格`;$('import-buses').textContent=`${result.summary.busLineCount} 条`;$('import-cost').textContent=`${result.summary.cost} 点`;
       $('import-preview').hidden=false;$('confirm-import').disabled=false;
       const notice=result.summary.levelId!==city.level.id?`导入后将切换到「${level.name}」。${level.campaign&&gameMode==='challenge'?'多日任务将从第 1 天开始。':''}`:campaign?'只替换当前日期的规划，不改写已完成日期、收入或成绩。':'确认后将原子替换当前规划。';
@@ -253,13 +253,15 @@
     const starGoals=$('star-goals'),starTargets=starTargetsFor(level,campaign?campaign.dayIndex:null),earned=storedStars(level,campaign?campaign.dayIndex:null);starGoals.replaceChildren();starGoals.hidden=sandbox||!starTargets;
     if(!starGoals.hidden)for(const goal of TrafficResults.starReport(starTargets,{}).goals){const row=document.createElement('p');row.className=earned.includes(goal.id)?'earned':'';row.textContent=`${earned.includes(goal.id)?'★':'☆'} ${goal.label}`;starGoals.append(row);}
     const demand = $('demand-list');demand.replaceChildren();
-    for (const r of city.routes) {
-      const row = document.createElement('li');
-      const homes = r.homes.map(h => `住宅 (${point(h.cell).x + 1},${point(h.cell).y + 1}) 共 ${h.passengers} 人 · 产生 ${h.generationRate} 人/s · 汽车出口由门口道路等级决定`);
+    for (const [routeIndex,r] of city.routes.entries()) {
+      const row = document.createElement('li'),routeHomes=city.homes.filter(home=>home.route===routeIndex);
+      const homes = r.homes.map((h,index) => `住宅 (${point(h.cell).x + 1},${point(h.cell).y + 1}) 共 ${h.passengers} 人 · 产生 ${routeHomes[index].generationRate} 人/s · 汽车出口由门口道路等级决定`);
       const goals = r.goals.map(g => `目的地 (${point(g.cell).x + 1},${point(g.cell).y + 1}) · ${g.label}${g.input != null ? ` 输入 ${g.input} 人` : ''}`);
       row.textContent = `${r.name}：${[...homes, ...goals].join('；')}`;
       demand.append(row);
     }
+    $('sandbox-controls').hidden=!sandbox;
+    if(sandbox){$('sandbox-budget').value=city.unlimitedBudget?'unlimited':'level';$('sandbox-demand').value=String(city.demandMultiplier);$('sandbox-speed').value=String(speed);$('sandbox-continuous').checked=city.continuousDemand;}
     $('load-setting').hidden = !level.features.load;
     $('cut-tool').hidden = !level.features.cut;
     $('bus-tool').hidden = !level.features.bus;
@@ -965,7 +967,7 @@
   }
   function updateUI() {
     updateHistoryControls();updatePlanningHints();
-    $('delivered').textContent=city.delivered;$('budget').textContent=city.remaining;
+    $('delivered').textContent=city.delivered;$('budget').textContent=city.unlimitedBudget?'∞':city.remaining;
     const deliveryTotal=city.target;
     $('progress').style.width=Math.min(100,city.delivered/deliveryTotal*100)+'%';celebrateProgress();
     const seconds=Math.ceil(Math.max(0,city.duration-city.elapsed));
@@ -986,6 +988,8 @@
     $('start').textContent=city.state==='running'?'Ⅱ 暂停运营':city.state==='paused'?'▶ 继续运营':city.state==='planning'?'▶ 开始运营':'本局已结束';
     $('start').disabled=['won','lost'].includes(city.state);
     $('stop').disabled=!['running','paused'].includes(city.state);
+    $('stop').textContent=city.sandbox?'↻ 重置交通':'■ 停止运营';
+    $('reset-traffic').disabled=!['running','paused'].includes(city.state);
     const liveEditable=city.canEditDesign();
     $('road-tool').disabled=!liveEditable;
     $('cut-tool').disabled=!liveEditable;
@@ -1131,10 +1135,33 @@
   }
   function switchGameMode(mode) {
     if(mode===gameMode||!['challenge','sandbox'].includes(mode))return;
-    pendingMode=mode;const label=mode==='sandbox'?'沙盒':'挑战';
-    $('mode-confirm-title').textContent=`切换到${label}模式？`;
-    $('mode-confirm-description').textContent=`当前设计、车辆和运营成绩会被清空。${mode==='sandbox'?'沙盒不限时间且运营中可改路；公交仍须停止后修改。':'挑战恢复关卡时限、规划锁定和胜负结算。'}`;
+    pendingMode=mode;const entering=mode==='sandbox';
+    $('mode-confirm-title').textContent=entering?'把当前方案带入沙盒？':'返回挑战模式？';
+    $('mode-confirm-description').textContent=entering?'沙盒副本不会改写当前挑战方案；可复制道路、连接、等级、信号和公交设置后继续实验。':'将恢复进入沙盒前的挑战方案；沙盒中的改动不会覆盖它。';
+    $('sandbox-entry-options').hidden=!entering;
+    $('confirm-mode').textContent=entering?'进入沙盒':'返回挑战';
     openPausedDialog($('mode-dialog'));
+  }
+  function activateModeCity(message) {
+    resetDesignHistory();speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';arrivalEffects.reset();pendingMode=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
+    focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(message);
+  }
+  function confirmModeSwitch() {
+    if(pendingMode==='sandbox') {
+      const source=city,copy=$('copy-to-sandbox').checked,unlimited=$('sandbox-entry-budget').value==='unlimited';
+      challengeReturn={city:source,campaign};
+      const options={sandbox:true,unlimitedBudget:unlimited,budget:source.budget,fixedCost:copy?source.fixedCost:0,routes:copy?source.routes:undefined};
+      if(copy&&campaign)Object.assign(options,{pendingBuildings:[...source.pendingBuildings.values()],dormantBuildings:[...source.dormantBuildings.values()],lockedRegions:[...new Map([...source.lockedRegions.values()].map(region=>[region.id,region])).values()]});
+      const sandboxCity=new City(source.level.id,options),message=copy?sandboxCity.loadDesign(source.serializeDesign()):'';
+      if(message){challengeReturn=null;toast(message);closePausedDialog($('mode-dialog'));return;}
+      delete $('mode-dialog').dataset.resumeOperation;$('mode-dialog').close();city=sandboxCity;campaign=null;gameMode='sandbox';activateModeCity(copy?'已复制当前挑战方案，可在沙盒中放心改造':'已进入空白沙盒');
+      return;
+    }
+    if(pendingMode==='challenge') {
+      delete $('mode-dialog').dataset.resumeOperation;$('mode-dialog').close();gameMode='challenge';
+      if(challengeReturn){({city,campaign}=challengeReturn);challengeReturn=null;activateModeCity('已恢复进入沙盒前的挑战方案');}
+      else reset(city.level.id);
+    }
   }
   function lockedRegionList(){return [...new Map([...city.lockedRegions.values()].map(region=>[region.id,region])).values()];}
   function regionLockPosition(region) {
@@ -1387,7 +1414,7 @@
   $('cancel-import').onclick=()=>{clearImportPreview();closePausedDialog($('import-dialog'));};
   $('confirm-import').onclick=()=>{
     if(!pendingImport||city.state!=='planning')return;
-    const previousLevelId=city.level.id,{context}=pendingImport;pendingImport=null;delete $('import-dialog').dataset.resumeOperation;$('import-dialog').close();dismissPendingRestore();lastAutoSaveSignature='';
+    const previousLevelId=city.level.id,{context}=pendingImport;pendingImport=null;if(previousLevelId!==context.city.level.id)challengeReturn=null;delete $('import-dialog').dataset.resumeOperation;$('import-dialog').close();dismissPendingRestore();lastAutoSaveSignature='';
     if(context.campaign===campaign&&campaign)campaign.city=context.city;else campaign=context.campaign;
     city=context.city;speed=1;accumulator=0;resultShown=false;resultReplay=null;$('replay-toolbar').hidden=true;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;arrivalEffects.reset();
     resetDesignHistory();markLevelStarted();buildLevelButtons();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`已导入「${city.level.name}」设计，可以继续规划或开始运营`);
@@ -1464,10 +1491,15 @@
   $('start').onclick=toggleOperation;
   $('cancel-preflight').onclick=()=>$('preflight-dialog').close();
   $('confirm-preflight').onclick=()=>{$('preflight-dialog').close();beginOperation();};
-  $('stop').onclick=()=>openPausedDialog($('stop-dialog'));
+  $('stop').onclick=()=>{$('stop-dialog').querySelector('h2').textContent=city.sandbox?'只重置沙盒交通？':'停止运营并重新规划？';$('stop-dialog').querySelector('p').textContent=city.sandbox?'道路、连接、等级、信号和公交方案会完整保留；只清空车辆、乘客、排队、统计和计时。':'当前道路、道路等级、信号和公交线路会保留；车辆、车上乘客、成绩、排队和计时会被清空。';$('confirm-stop').textContent=city.sandbox?'重置交通':'停止并规划';openPausedDialog($('stop-dialog'));};
   $('cancel-stop').onclick=()=>closePausedDialog($('stop-dialog'));
-  $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast('已停止运营，设计已保留');};
-  $('speed').onclick=()=>{const options=speedOptions();speed=options[(options.indexOf(speed)+1)%options.length];updateUI();};
+  $('confirm-stop').onclick=()=>{delete $('stop-dialog').dataset.resumeOperation;city.stop();speed=1;accumulator=0;$('stop-dialog').close();updateUI();draw();toast(city.sandbox?'已重置交通，沙盒设计保持不变':'已停止运营，设计已保留');};
+  $('speed').onclick=()=>{const options=speedOptions();speed=options[(options.indexOf(speed)+1)%options.length];if(city.sandbox)$('sandbox-speed').value=String(speed);updateUI();};
+  $('sandbox-budget').onchange=()=>{const message=city.setSandboxSettings({unlimitedBudget:$('sandbox-budget').value==='unlimited'});if(message){$('sandbox-budget').value=city.unlimitedBudget?'unlimited':'level';toast(message);}else{dismissPendingRestore();toast(city.unlimitedBudget?'已启用无限预算':'已恢复本关预算');}updateUI();};
+  $('sandbox-demand').onchange=()=>{const message=city.setSandboxSettings({demandMultiplier:Number($('sandbox-demand').value)});if(message)toast(message);else{dismissPendingRestore();configureLevel();toast(`需求倍率已调整为 ${city.demandMultiplier}×`);}updateUI();draw();};
+  $('sandbox-speed').onchange=()=>{speed=Number($('sandbox-speed').value);accumulator=0;updateUI();toast(`运营速度已调整为 ${speed}×`);};
+  $('sandbox-continuous').onchange=()=>{city.setSandboxSettings({continuousDemand:$('sandbox-continuous').checked});dismissPendingRestore();updateUI();toast(city.continuousDemand?'已开启持续饱和流量':'已恢复关卡总需求上限');};
+  $('reset-traffic').onclick=()=>{if(city.stop()){speed=1;accumulator=0;$('sandbox-speed').value='1';updateUI();draw();toast('已重置交通，所有设计保持不变');}};
   $('challenge-mode').onclick=()=>switchGameMode('challenge');
   $('sandbox-mode').onclick=()=>switchGameMode('sandbox');
   $('help').onclick=()=>openPausedDialog($('help-dialog'));
@@ -1493,7 +1525,7 @@
   $('cancel-level').onclick=()=>{pendingLevel=null;closePausedDialog($('level-dialog'));};
   $('confirm-level').onclick=()=>{delete $('level-dialog').dataset.resumeOperation;if(pendingLevel)reset(pendingLevel);};
   $('cancel-mode').onclick=()=>{pendingMode=null;closePausedDialog($('mode-dialog'));};
-  $('confirm-mode').onclick=()=>{delete $('mode-dialog').dataset.resumeOperation;if(pendingMode){gameMode=pendingMode;reset(city.level.id);}};
+  $('confirm-mode').onclick=confirmModeSwitch;
   for(const id of ['help-dialog','reset-dialog','level-dialog','mode-dialog','stop-dialog']) $(id).addEventListener('cancel',event=>{event.preventDefault();if(id==='level-dialog')pendingLevel=null;if(id==='mode-dialog')pendingMode=null;closePausedDialog($(id));});
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
