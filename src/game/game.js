@@ -28,7 +28,7 @@
   let tutorialUsedRoad = false, tutorialInspected = false, tutorialStarted = false, tutorialForced = false, activeGuide = null, activeGuideLevelId = null, tutorialCompleted = false, tutorialSeenIds = [];
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0, startedLevelIds = new Set(), recentLevelId = null;
   let celebratedDelivered = 0, connectedRoutes = new Set();
-  let hintCity = null, hintSignature = '', planningHints = [];
+  let hintCity = null, hintSignature = '', planningHints = [], resultReplay = null;
   const arrivalEffects = TrafficEffects.createArrivalEffects(),drawResidentMood=TrafficEffects.drawResidentMood;
   const STORAGE_PREFIX = 'traffic-game-design-v1:';
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
@@ -834,6 +834,12 @@
     }
     city.homes.forEach((h,i)=>drawBuilding({...h,isHome:true,index:i}));
     city.goals.forEach((g,i)=>drawBuilding({...g,isHome:false,index:i}));
+    if(resultReplay&&$('replay-toolbar')&&!$('replay-toolbar').hidden){
+      ctx.save();
+      for(const item of resultReplay.roads){const p=point(item.cell),strength=resultReplay.maxRoad?Math.min(1,(item.occupancySeconds+item.blockedSeconds)/resultReplay.maxRoad):0;if(!strength)continue;rounded(p.x*s+s*.08,p.y*s+s*.08,s*.84,s*.84,s*.14,`rgba(202,86,50,${(.18+strength*.57).toFixed(3)})`);}
+      for(const item of resultReplay.homes){const p=point(item.cell),strength=resultReplay.maxHome?Math.min(1,item.waitingSeconds/resultReplay.maxHome):0;if(!strength)continue;circle((p.x+.5)*s,(p.y+.5)*s,s*(.22+strength*.18),`rgba(112,69,151,${(.25+strength*.55).toFixed(3)})`);label(`${Math.round(item.waitingSeconds)}`,(p.x+.5)*s,(p.y+.5)*s,s*.17,'#fff','800');}
+      ctx.restore();
+    }
     // Road paint sits below vehicles, so it reads as part of the grid.
     for(const n of city.signals.keys()) drawSignalMarkings(n);
     let carMoodCount=0;
@@ -1012,6 +1018,20 @@
     renderCampaignProgress();renderContextGuide();saveAutoProgress();
     if(['won','lost'].includes(city.state)&&!resultShown) showResult();
   }
+  function openResultReplay(cell=null,message='累计瓶颈热力图已开启') {
+    if(!resultReplay)return;
+    if($('result-dialog').open)$('result-dialog').close();
+    $('replay-toolbar').hidden=false;
+    if(Number.isInteger(cell)){const p=point(cell);setTool('select');selectSingleCell(cell);keyboardCell=cell;viewTarget=null;viewX=viewportWidth/2-(p.x+.5)*cellSize;viewY=viewportHeight/2-(p.y+.5)*cellSize;snapView();}
+    updateUI();draw();canvas.scrollIntoView({block:'center'});toast(message);
+  }
+  function reviseResultDesign() {
+    if(!['won','lost'].includes(city.state))return;
+    if(campaign&&campaign.results[campaign.dayIndex])campaign.results.splice(campaign.dayIndex);
+    city.resetOperation();pendingCampaignScore=null;resultShown=false;resultReplay=null;$('replay-toolbar').hidden=true;
+    if($('result-dialog').open)$('result-dialog').close();
+    setTool('select');updateUI();draw();toast('已保留原设计并回到规划，可直接修改瓶颈后重试');
+  }
   function showResult() {
     resultShown=true;
     const won=city.state==='won', generated=city.generated.reduce((sum,count)=>sum+count,0);
@@ -1022,9 +1042,10 @@
     const resultCost=city.budget-city.remaining,resultPeak=Math.max(0,...city.maxHomeQueues),starTargets=starTargetsFor(city.level,campaign?campaign.dayIndex:null);
     const stars=TrafficResults.starReport(starTargets,{won,score:report.score,cost:resultCost,maxQueue:resultPeak}),starDay=campaign?campaign.dayIndex:null,starKey=STAR_PREFIX+city.level.id+(starDay===null?'':`:day-${starDay+1}`),previousStars=storedStars(city.level,starDay),earnedStars=[...new Set([...previousStars,...stars.earned])];
     if(earnedStars.length!==previousStars.length)try{localStorage.setItem(starKey,JSON.stringify(earnedStars));}catch{/* stars remain optional */}
-    const bestKey=`${PERSONAL_BEST_PREFIX}${city.level.id}${campaign?`:day-${campaign.dayIndex+1}`:''}`,currentResult={score:report.score,average:report.average,p95:report.p95,cost:resultCost};
+    const bestKey=`${PERSONAL_BEST_PREFIX}${city.level.id}${campaign?`:day-${campaign.dayIndex+1}`:''}`,currentResult={score:report.score,average:report.average,p95:report.p95,cost:resultCost,maxQueue:resultPeak};
     let previousBest=null;try{previousBest=JSON.parse(localStorage.getItem(bestKey)||'null');}catch{/* keep session playable without storage */}
     if(!previousBest||![previousBest.score,previousBest.average,previousBest.p95,previousBest.cost].every(Number.isFinite))previousBest=null;
+    resultReplay=city.operationHeatmap();$('replay-toolbar').hidden=true;
     const isBetter=won&&(!previousBest||currentResult.score>previousBest.score||currentResult.score===previousBest.score&&(currentResult.p95<previousBest.p95||currentResult.p95===previousBest.p95&&currentResult.cost<previousBest.cost));
     if(isBetter)try{localStorage.setItem(bestKey,JSON.stringify(currentResult));}catch{/* best comparison remains optional */}
     const personalBest=isBetter?currentResult:previousBest;
@@ -1040,13 +1061,15 @@
     const newlyEarned=stars.earned.filter(id=>!previousStars.includes(id)),starPanel=document.createElement('div');starPanel.className='star-report';starPanel.setAttribute('aria-label',`本次达成 ${stars.count} 项星级目标，新获得 ${newlyEarned.length} 星，累计 ${earnedStars.length} 星`);
     stars.goals.forEach((goal,index)=>{const obtained=earnedStars.includes(goal.id),item=document.createElement('p'),glyph=document.createElement('span'),text=document.createElement('span'),badge=document.createElement('small');item.classList.toggle('earned',obtained);item.classList.toggle('new-earned',newlyEarned.includes(goal.id));item.style.setProperty('--reward-delay',`${180+index*180}ms`);glyph.className='star-glyph';glyph.textContent=obtained?'★ ':'☆ ';text.textContent=goal.label;badge.textContent=newlyEarned.includes(goal.id)?'新获得':goal.earned?'本次达成':obtained?'已获得':'未达成';item.append(glyph,text,badge);starPanel.append(item);});
     const operations=document.createElement('div');operations.className='operation-report';
-    city.routes.forEach((route,index)=>{const total=route.homes.reduce((sum,home)=>sum+home.passengers,0),delivered=city.byRoute[index]||0,row=document.createElement('p');row.textContent=`${route.name}：送达 ${delivered} / ${total} 人（${total?Math.round(delivered/total*100):0}%）`;operations.append(row);});
-    const peak=resultPeak,peakIndex=city.maxHomeQueues.indexOf(peak);if(peakIndex>=0){const home=city.homes[peakIndex],p=point(home.cell),row=document.createElement('p');row.textContent=`住宅最大排队：${peak} 人 · ${city.routes[home.route]?.name||'路线'} (${p.x+1},${p.y+1})`;operations.append(row);}
-    for(const hotspot of city.roadHotspots()){const p=point(hotspot.cell),row=document.createElement('p');row.textContent=`道路热点 (${p.x+1},${p.y+1})：受阻 ${hotspot.blockedSeconds.toFixed(1)} 车秒 · 占用 ${hotspot.occupancySeconds.toFixed(1)} 车秒`;operations.append(row);}
+    const locateRow=(text,cell,detail=text)=>{const row=document.createElement('button');row.type='button';row.className='result-locate';row.textContent=text;row.setAttribute('aria-label',`${text}，在地图中查看`);row.onclick=()=>openResultReplay(cell,detail);operations.append(row);};
+    const routeMetrics=city.routes.map((route,index)=>{const total=route.homes.reduce((sum,home)=>sum+home.passengers,0),delivered=city.byRoute[index]||0,homeIndices=city.homes.map((home,hi)=>home.route===index?hi:-1).filter(hi=>hi>=0),worst=homeIndices.sort((a,b)=>(city.homeQueueSeconds[b]||0)-(city.homeQueueSeconds[a]||0)||a-b)[0];return {index,name:route.name,total,delivered,cell:city.homes[worst]?.cell??route.homes[0]?.cell};});
+    for(const route of routeMetrics)locateRow(`${route.name}：送达 ${route.delivered} / ${route.total} 人（${route.total?Math.round(route.delivered/route.total*100):0}%） ↗`,route.cell,`${route.name}送达率 ${route.total?Math.round(route.delivered/route.total*100):0}%`);
+    const peak=resultPeak,peakIndex=city.maxHomeQueues.indexOf(peak);if(peakIndex>=0){const home=city.homes[peakIndex],p=point(home.cell);locateRow(`住宅最大排队：${peak} 人 · ${city.routes[home.route]?.name||'路线'} (${p.x+1},${p.y+1}) ↗`,home.cell,`本轮最大排队 ${peak} 人`);}
+    const roadHotspots=city.roadHotspots();for(const hotspot of roadHotspots){const p=point(hotspot.cell);locateRow(`道路热点 (${p.x+1},${p.y+1})：受阻 ${hotspot.blockedSeconds.toFixed(1)} 车秒 · 占用 ${hotspot.occupancySeconds.toFixed(1)} 车秒 ↗`,hotspot.cell,'本轮累计道路热点');}
     for(const bus of city.busReports().filter(item=>item.boarded||item.alighted||item.rejectedFull)){const row=document.createElement('p');row.textContent=`${bus.name}：上车 ${bus.boarded} · 下车 ${bus.alighted}${bus.transfersIn||bus.transfersOut?` · 换入 ${bus.transfersIn} / 换出 ${bus.transfersOut}`:''} · 平均载客率 ${Math.round(bus.averageLoadRate*100)}% · 满载拒载 ${bus.rejectedFull} · 周转 ${bus.cycles} 圈`;operations.append(row);}
     const transfer=city.transferReport();if(transfer.transfers||transfer.waiting){const row=document.createElement('p');row.textContent=`公交换乘：完成 ${transfer.transfers} 人次 · 仍候车 ${transfer.waiting} 人 · 平均等待 ${transfer.averageWait.toFixed(1)} 秒 · 最大同时候车 ${transfer.maxWaiting} 人`;operations.append(row);}
-    for(const junction of city.junctionReports())for(const [entry,data] of Object.entries(junction.entries))if(data.maxQueue){const p=point(junction.cell),row=document.createElement('p');row.textContent=`路口 (${p.x+1},${p.y+1}) ${SIGNAL_ENTRY_NAMES[entry]}：平均等待 ${data.averageWait.toFixed(1)} 秒 · 最大队列 ${data.maxQueue} 辆`;operations.append(row);}
-    const comparison=document.createElement('div');comparison.className='personal-best';comparison.classList.toggle('new-best',isBetter);comparison.textContent=!personalBest?'尚无通关个人最佳':isBetter&&!previousBest?'✦ 首次通关，已记录为个人最佳':isBetter?'✦ 刷新个人最佳！':`个人最佳：满意度 ${personalBest.score}% · P95 ${personalBest.p95.toFixed(1)} 秒 · 建设 ${personalBest.cost} 点；本次相差 ${currentResult.score-personalBest.score>=0?'+':''}${currentResult.score-personalBest.score} 分、${(currentResult.p95-personalBest.p95).toFixed(1)} 秒、${currentResult.cost-personalBest.cost} 点`;
+    const junctionMetrics=[];for(const junction of city.junctionReports()){let queueSeconds=0,maxQueue=0;for(const [entry,data] of Object.entries(junction.entries))if(data.maxQueue){const p=point(junction.cell);queueSeconds+=data.averageWait*data.passed;maxQueue=Math.max(maxQueue,data.maxQueue);locateRow(`路口 (${p.x+1},${p.y+1}) ${SIGNAL_ENTRY_NAMES[entry]}：平均等待 ${data.averageWait.toFixed(1)} 秒 · 最大队列 ${data.maxQueue} 辆 ↗`,junction.cell,'本轮路口排队报告');}junctionMetrics.push({cell:junction.cell,queueSeconds,maxQueue});}
+    const comparison=document.createElement('div');comparison.className='personal-best comparison-grid';comparison.classList.toggle('new-best',isBetter);const comparisonTitle=document.createElement('strong');comparisonTitle.textContent=isBetter&&!previousBest?'✦ 首次通关，已记录为个人最佳':isBetter?'✦ 刷新个人最佳！':'本次与个人最佳';const comparisonTable=document.createElement('div');comparisonTable.className='comparison-table';comparisonTable.innerHTML=`<b>指标</b><b>本次</b><b>个人最佳</b><span>满意度</span><span>${currentResult.score}%</span><span>${personalBest?personalBest.score+'%':'—'}</span><span>P95</span><span>${currentResult.p95.toFixed(1)} 秒</span><span>${personalBest?personalBest.p95.toFixed(1)+' 秒':'—'}</span><span>建设点</span><span>${currentResult.cost}</span><span>${personalBest?personalBest.cost:'—'}</span><span>最大排队</span><span>${currentResult.maxQueue} 人</span><span>${personalBest&&Number.isFinite(personalBest.maxQueue)?personalBest.maxQueue+' 人':'—'}</span>`;comparison.append(comparisonTitle,comparisonTable);
     $('result-stats').replaceChildren(summary,meta,starPanel,conservation,distribution,comparison,...(operations.childNodes.length?[operations]:[]));
     showChapter(visibleChapterIndex);
     const nextLesson=levels()[levels().indexOf(city.level)+1]||null,recommendation=$('result-recommendation');
@@ -1054,10 +1077,11 @@
     if(campaign&&!finalDay){$('result-recommendation-title').textContent=`推荐下一步：第 ${campaign.dayIndex+2} 天`;$('result-recommendation-text').textContent='结算收入到账后，保留路网并应对新建筑与新区域。';}
     else if(won&&nextLesson){$('result-recommendation-title').textContent=`推荐下一课：${nextLesson.name}`;$('result-recommendation-text').textContent=Navigation.lessonSummary(city.level,nextLesson);}
     else if(won){$('result-recommendation-title').textContent='所有课程已完成';$('result-recommendation-text').textContent='可自由重玩关卡，继续补齐星级或尝试不同规划。';}
-    else{$('result-recommendation-title').textContent=`建议继续：${city.level.name}`;$('result-recommendation-text').textContent='返回当前设计，根据规划提示和运营报告调整瓶颈后再次尝试。';}
+    else{const advice=TrafficResults.bottleneckAdvice({routes:routeMetrics,homes:resultReplay.homes,roads:resultReplay.roads,junctions:junctionMetrics});$('result-recommendation-title').textContent='根据本轮数据，先尝试这些小调整';$('result-recommendation-text').textContent=advice.length?advice.map((item,index)=>`${index+1}. ${item.text}`).join(' '):'本轮没有形成明显热点；先定位未完成路线，检查道路是否显式连通及目的地容量。';}
     $('next-level').hidden = campaign?!finalDay?false:!won||!nextLesson:!won||!nextLesson;
     $('next-level').textContent=campaign&&!finalDay?'进入下一天规划 ↗':nextLesson?`推荐下一课：${nextLesson.name} ↗`:'下一座小城 ↗';
     $('view-city').hidden=Boolean(campaign&&!finalDay);
+    $('result-revise').hidden=won;
     $('play-again').textContent=campaign?'重新开始五天':'再规划一次';
     $('result-reference').hidden=won||!currentReference();
     updateDesignControls();
@@ -1073,7 +1097,7 @@
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=gameMode==='challenge'&&level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId,{sandbox:gameMode==='sandbox'});
     resetDesignHistory();
-    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';tutorialUsedRoad=false;tutorialInspected=false;tutorialStarted=false;tutorialForced=false;
+    speed=1;accumulator=0;resultShown=false;resultReplay=null;$('replay-toolbar').hidden=true;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';tutorialUsedRoad=false;tutorialInspected=false;tutorialStarted=false;tutorialForced=false;
     arrivalEffects.reset();
     pendingLevel=null;pendingMode=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
@@ -1393,7 +1417,9 @@
   $('reset').onclick=()=>openPausedDialog($('reset-dialog'));
   $('cancel-reset').onclick=()=>closePausedDialog($('reset-dialog'));
   $('confirm-reset').onclick=()=>{delete $('reset-dialog').dataset.resumeOperation;reset();};
-  $('play-again').onclick=()=>reset();$('view-city').onclick=()=> $('result-dialog').close();
+  $('play-again').onclick=()=>reset();$('view-city').onclick=()=>openResultReplay();
+  $('result-revise').onclick=reviseResultDesign;$('replay-revise').onclick=reviseResultDesign;
+  $('replay-report').onclick=()=>{$('replay-toolbar').hidden=true;draw();$('result-dialog').showModal();};
   for(const button of document.querySelectorAll('.mobile-info-tabs button')) {
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
     button.onclick=()=>{
@@ -1413,7 +1439,7 @@
   $('preflight-dialog').addEventListener('cancel',event=>{event.preventDefault();$('preflight-dialog').close();});
   $('result-dialog').addEventListener('cancel',event=>{if(campaign&&campaign.dayIndex<campaign.days.length-1)event.preventDefault();});
   $('next-level').onclick=()=>{
-    if(campaign&&campaign.dayIndex<campaign.days.length-1){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
+    if(campaign&&campaign.dayIndex<campaign.days.length-1){campaign.advance(pendingCampaignScore);city=campaign.city;pendingCampaignScore=null;resultReplay=null;$('replay-toolbar').hidden=true;$('result-dialog').close();speed=1;accumulator=0;resultShown=false;arrivalEffects.reset();resetDesignHistory();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`第 ${campaign.dayIndex+1} 天已开始规划，昨日收入已到账`);return;}
     const next=levels()[levels().indexOf(city.level)+1];if(next)reset(next.id);
   };
   document.addEventListener('keydown',e=>{

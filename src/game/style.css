@@ -303,6 +303,19 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .game-page .result-recommendation strong { color: #72501f; font-size: 13px; }
 .game-page .result-recommendation span { color: #756848; font-size: 11px; line-height: 1.5; }
 #result-dialog.rewards-visible .personal-best.new-best { animation: best-reveal .6s ease-out 760ms both; }
+.game-page .operation-report { display: grid; gap: 5px; }
+.game-page .result-locate { width: 100%; padding: 7px 9px; border: 1px solid #dfe5d9; border-radius: 7px; background: #fafcf5; color: var(--ink); text-align: left; line-height: 1.4; }
+.game-page .result-locate:hover, .game-page .result-locate:focus-visible { border-color: #8caf83; background: #f1f7ea; }
+.game-page .comparison-grid { display: grid; gap: 7px; padding: 10px; }
+.game-page .comparison-table { display: grid; grid-template-columns: minmax(82px,1fr) repeat(2,minmax(72px,1fr)); gap: 1px; overflow: hidden; border-radius: 7px; background: #dfe5d9; text-align: center; }
+.game-page .comparison-table > * { padding: 5px 4px; background: #fffef9; }
+.game-page .comparison-table > :nth-child(3n+1) { text-align: left; }
+.game-page .replay-toolbar { position: absolute; z-index: 3; left: 10px; right: 54px; top: 10px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #d7c28f; border-radius: 10px; background: #fffaf0ee; box-shadow: 0 3px 12px #253d3522; }
+.game-page .replay-toolbar[hidden] { display: none; }
+.game-page .replay-toolbar div { display: grid; flex: 1; min-width: 0; }
+.game-page .replay-toolbar span { color: #756848; font-size: 10px; }
+.game-page .replay-toolbar button { white-space: nowrap; }
+@media(max-width:760px){.game-page .replay-toolbar{right:50px;flex-wrap:wrap}.game-page .replay-toolbar div{flex-basis:100%}.game-page .replay-toolbar button{flex:1}}
 @keyframes confetti-fall { 0% { opacity: 0; transform: translateY(-20px) rotate(0); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--piece-drift), 280px) rotate(540deg); } }
 @keyframes victory-icon { 0% { opacity: 0; transform: scale(.35) rotate(-25deg); } 65% { opacity: 1; transform: scale(1.22) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
 @keyframes reward-row-in { to { opacity: 1; transform: translateY(0); } }

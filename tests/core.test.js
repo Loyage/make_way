@@ -61,8 +61,9 @@ test('operation records peak home queues and deterministic road hotspots', () =>
   const city=new City();connect(city);city.toggle();run(city,3);
   assert.ok(city.maxHomeQueues.some(count=>count>0));
   const hotspots=city.roadHotspots();assert.ok(hotspots.length>0);assert.ok(hotspots.every(item=>item.occupancySeconds>0));
+  const heatmap=city.operationHeatmap();assert.ok(heatmap.roads.length>0);assert.ok(heatmap.maxRoad>0);assert.ok(heatmap.homes.some(item=>item.waitingSeconds>0));
   assert.deepEqual(city.roadHotspots(0),[]);
-  city.stop();assert.ok(city.maxHomeQueues.every(count=>count===0));assert.deepEqual(city.roadHotspots(),[]);
+  city.stop();assert.ok(city.maxHomeQueues.every(count=>count===0));assert.ok(city.homeQueueSeconds.every(seconds=>seconds===0));assert.deepEqual(city.roadHotspots(),[]);
 });
 test('construction honors terrain, buildings, bridges, and refunds', () => {
   const city = new City();

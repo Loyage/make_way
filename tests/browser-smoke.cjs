@@ -246,6 +246,11 @@ async function main() {
     assert.ok((await text('campaign-day-title')).includes('第 1 天'));
     await evaluate(`(()=>{const catalog=${JSON.stringify(CATALOG)},level=catalog.chapters.flatMap(chapter=>chapter.levels).find(item=>item.id==='growing-city');level.duration=1;level.campaign.days[0].duration=1;TrafficGameAdmin.applyCatalog(catalog,level.id);TrafficGameAdmin.applyDesign(level.campaign.days[0].referenceDesign);})()`);
     await click('#start');await click('#speed');await click('#speed');await waitFor('document.querySelector("#result-dialog").open','campaign day should reach its deadline');
+    assert.ok(await evaluate('document.querySelectorAll(".result-locate").length>=2'),'settlement routes and hotspots expose map locators');
+    await click('.result-locate');assert.equal(await evaluate('document.querySelector("#replay-toolbar").hidden'),false,'a result locator opens the cumulative map replay');assert.ok((await evaluate('TrafficGameAdmin.selectedCells().length'))>0);
+    await click('#replay-report');assert.equal(await evaluate('document.querySelector("#result-dialog").open'),true,'map replay returns to the same settlement');
+    await click('#result-revise');assert.equal(await evaluate('document.querySelector("#phase-label").textContent.includes("规划中")'),true,'failed design can return to planning without resetting the road layout');
+    await click('#start');await click('#speed');await click('#speed');await waitFor('document.querySelector("#result-dialog").open','revised campaign day should settle again');
     assert.equal(await evaluate('document.querySelector("#result-reference").hidden'),false,'failed campaign day unlocks only its daily reference');await click('#result-reference');await click('#confirm-reference');
     assert.equal(await evaluate('TrafficGameAdmin.campaignDayIndex()'),0);assert.equal(await evaluate('document.querySelector("#phase-label").textContent.includes("规划中")'),true);assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length===TrafficCore.LEVELS.find(level=>level.id==="growing-city").campaign.days[0].referenceDesign.roads.length'),true,'daily answer loads without resetting campaign progress');
     await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
