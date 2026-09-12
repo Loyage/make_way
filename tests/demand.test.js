@@ -119,7 +119,9 @@ for(const id of ['demolition-school','avenue-school','cut-school','signal-school
   if(id==='signal-school')completeCrossing(before);
   buildReferencePlan(after);
   for(const c of [before,after])run(c);
-  assert.equal(before.state,'lost');assert.equal(after.state,'won');assert.ok(after.delivered>before.delivered);assert.ok(after.remaining>=0);
+  if(id==='demolition-school')assert.ok(after.remaining>before.remaining,'the rebuild should refund enough budget for a cheaper route');
+  else {assert.equal(before.state,'lost');assert.ok(after.delivered>before.delivered);}
+  assert.equal(after.state,'won');assert.ok(after.remaining>=0);
 });
 test('woodland starts with a complete high-grade ring and only needs feeders',()=>{
   const c=new City('woodland'),ring=[...c.roads];

@@ -3,7 +3,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const CATALOG = require('../src/shared/level-catalog.js').loadCatalogSync(require('node:path').join(__dirname, '..', 'built-in-levels.json'));
-const LEVELS = CATALOG.chapters.flatMap(chapter => chapter.levels);
+const LEVELS = CATALOG.chapters.filter(chapter=>!chapter.hidden).flatMap(chapter => chapter.levels);
 const Core = require('../src/shared/core.js');
 const { buildReferencePlan } = require('./reference-plan.cjs');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -83,7 +83,7 @@ async function main() {
     await click('#level-picker > summary');
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),true);
     await click('#level-picker > summary');
-    assert.equal(await evaluate('document.querySelectorAll(".chapter-tab").length'),2);
+    assert.equal(await evaluate('document.querySelectorAll(".chapter-tab").length'),3);
     assert.equal(await evaluate('document.querySelectorAll(".level-card").length'),CATALOG.chapters[0].levels.length);
     for(let i=0;i<LEVELS.length;i++){
       const chapterIndex=CATALOG.chapters.findIndex(chapter=>chapter.levels.some(level=>level.id===LEVELS[i].id));
@@ -108,19 +108,19 @@ async function main() {
     assert.ok(await evaluate('document.querySelector("#new-bus-line")!==null && document.querySelector("#trim-bus")!==null && document.querySelector("#redraw-bus")!==null && document.querySelector("#delete-bus")!==null'));
     assert.ok(await evaluate('document.querySelector("#bus-return-trip")!==null && document.querySelector("#bus-return-stops")!==null && document.querySelector("#bus-headway")!==null && document.querySelector("#bus-line-visibility")!==null'));
 
-    await go(LEVELS.findIndex(level=>level.id==='transfer-school'));
-    await click('#bus-tool');await dragThrough([[1,3],[2,3],[3,3],[4,3],[5,3],[5,4],[5,5],[5,6]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
-    await click('#select-tool');await drag(5,6,5,6);await evaluate('document.querySelector(".bus-line-card .tool:last-child").click()');
-    await click('#new-bus-line');await click('#bus-tool');await dragThrough([[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[13,7],[13,8]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
-    await click('#select-tool');await drag(5,6,5,6);await evaluate('document.querySelectorAll(".bus-line-card")[1].querySelector(".tool:last-child").click()');
+    await go(LEVELS.findIndex(level=>level.id==='bridge-transfer'));
+    await click('#bus-tool');await dragThrough([[2,4],[3,4],[4,4],[5,4],[6,4],[6,5],[6,6],[7,6]]);await select('bus-count','2');await click('#bus-return-trip');await click('#bus-return-stops');
+    await click('#select-tool');await drag(7,6,7,6);await evaluate('document.querySelector(".bus-line-card .tool:last-child").click()');
+    await click('#new-bus-line');await click('#bus-tool');await dragThrough([[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[13,7],[13,8]]);await select('bus-count','3');await click('#bus-return-trip');await click('#bus-return-stops');
+    await click('#select-tool');await drag(7,6,7,6);await evaluate('document.querySelectorAll(".bus-line-card")[1].querySelector(".tool:last-child").click()');
     assert.equal(await evaluate('TrafficGameAdmin.captureDesign().busLines.length'),2,'transfer lesson creates two lines through player controls');
-    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().busLines.every(line=>line.stops.includes(101))'),true,'both lines enable the shared road stop');
+    assert.equal(await evaluate('TrafficGameAdmin.captureDesign().busLines.every(line=>line.stops.includes(103))'),true,'both lines enable the shared road stop');
     assert.ok((await text('bus-line-inspector')).includes('可换乘'),'shared stop inspector names the transfer connection');
     await click('#start');if(await evaluate('document.querySelector("#preflight-dialog").open')){assert.equal(await evaluate('document.querySelector("#confirm-preflight").hidden'),false,`${await text('preflight-list')}\n${await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())')}`);await click('#confirm-preflight');}assert.ok((await text('board-status')).includes('运营中'));await click('#speed');await click('#speed');
     await waitFor('document.querySelector("#waiting").textContent.includes("换乘站等待")','transfer passengers should appear in the station queue');
     await waitFor('document.querySelector("#result-dialog").open','transfer lesson should finish through the browser UI');
-    assert.ok((await text('result-stats')).includes('公交换乘：完成 24 人次'),'result report includes completed transfers');
-    assert.ok((await text('result-stats')).includes('换入 24 / 换出 0'),'line report includes transfer direction totals');
+    assert.ok((await text('result-stats')).includes('公交换乘：完成 48 人次'),'result report includes completed transfers');
+    assert.ok((await text('result-stats')).includes('换入 48 / 换出 0'),'line report includes transfer direction totals');
     await click('#play-again');
 
     await go(0);
@@ -229,7 +229,7 @@ async function main() {
     assert.equal(await evaluate('TrafficGameAdmin.campaignDayIndex()'),0);assert.equal(await evaluate('document.querySelector("#phase-label").textContent.includes("规划中")'),true);assert.equal(await evaluate('TrafficGameAdmin.captureDesign().roads.length===TrafficCore.LEVELS.find(level=>level.id==="growing-city").campaign.days[0].referenceDesign.roads.length'),true,'daily answer loads without resetting campaign progress');
     await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
 
-    await go(5);
+    await go(LEVELS.findIndex(level=>level.id==='woodland'));
     assert.equal(await evaluate('document.querySelector("#select-tool").hidden'),false);
     await evaluate('TrafficGameAdmin.selectCell(TrafficGameAdmin.captureDesign().roads[0].cell)');
     assert.ok((await text('road-detail')).includes('每方向'));
@@ -268,7 +268,7 @@ async function main() {
       if(width<=760)assert.equal(await evaluate('Array.from(document.querySelectorAll(".toolbar button:not([hidden]), .zoom-controls button")).every(button=>button.getBoundingClientRect().height>=44)'),true,'touch targets must be at least 44px');
     }
     assert.deepEqual(errors,[]);
-    console.log('Browser smoke passed: 11 progressive levels, transfer planning and reporting, daily campaign references, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
+    console.log('Browser smoke passed: 17 progressive levels, transfer planning and reporting, daily campaign references, keyboard-only and touch planning, operation-safe dialogs, five-day progress, scissors, bus controls, selection, endpoint retract, transactional drag, road grades, signals, save/load, commute report and responsive layout.');
   } finally {
     await fetch(`${endpoint}/json/close/${tab.id}`).catch(()=>{});ws.close();
   }
