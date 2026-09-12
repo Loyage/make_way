@@ -199,6 +199,48 @@
       this.city = this.createCity(dayIndex, checkpoint.budget, checkpoint.design);
       return '';
     }
+    serializeProgress() {
+      if (this.city.state !== 'planning') throw new Error('只能保存规划阶段的多日进度');
+      return {
+        version: 1, levelId: this.level.id, dayIndex: this.dayIndex, budget: this.city.budget,
+        design: this.city.serializeDesign(), results: clone(this.results),
+        checkpoints: this.checkpoints.map(checkpoint=>checkpoint?clone(checkpoint):null),
+        unlockedRegionIds: [...this.unlockedRegionIds], regionSpent: this.regionSpent,
+        referenceDivergenceDay: this.referenceDivergenceDay
+      };
+    }
+    static restoreProgress(saved) {
+      if (!saved || saved.version !== 1 || typeof saved.levelId !== 'string') throw new Error('多日进度格式无效');
+      const restored = new CampaignSession(saved.levelId), regions=restored.level.campaign.regions||[];
+      if (!Number.isInteger(saved.dayIndex) || saved.dayIndex < 0 || saved.dayIndex >= restored.days.length
+        || !Number.isInteger(saved.budget) || saved.budget < 0 || !Array.isArray(saved.results)
+        || saved.results.length !== saved.dayIndex || !Array.isArray(saved.checkpoints)
+        || saved.checkpoints.length < saved.dayIndex || saved.checkpoints.length > saved.dayIndex + 1
+        || saved.checkpoints.slice(0,saved.dayIndex).some(checkpoint=>!checkpoint) || !Array.isArray(saved.unlockedRegionIds)
+        || new Set(saved.unlockedRegionIds).size !== saved.unlockedRegionIds.length
+        || saved.unlockedRegionIds.some(id=>typeof id!=='string'||!regions.some(region=>region.id===id))
+        || !Number.isInteger(saved.regionSpent) || saved.regionSpent < 0
+        || regions.filter(region=>saved.unlockedRegionIds.includes(region.id)).reduce((sum,region)=>sum+region.cost,0)!==saved.regionSpent
+        || saved.referenceDivergenceDay!==null&&(!Number.isInteger(saved.referenceDivergenceDay)||saved.referenceDivergenceDay<0||saved.referenceDivergenceDay>saved.dayIndex)) throw new Error('多日进度数据无效');
+      const validResult=(result,index)=>result&&result.day===index+1&&['delivered','population','target','income'].every(field=>Number.isInteger(result[field])&&result[field]>=0)
+        &&result.target===result.population&&result.delivered<=result.target&&Number.isFinite(result.satisfaction)&&result.satisfaction>=0&&result.satisfaction<=100
+        &&result.income===campaignIncome(result.delivered,result.population,result.satisfaction,restored.days[index].maxIncome);
+      if(saved.results.some((result,index)=>!validResult(result,index))||saved.budget!==restored.level.budget+saved.results.reduce((sum,result)=>sum+result.income,0))throw new Error('多日结算记录无效');
+      const validRegions=(ids,spent)=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(id=>saved.unlockedRegionIds.includes(id))
+        &&Number.isInteger(spent)&&regions.filter(region=>ids.includes(region.id)).reduce((sum,region)=>sum+region.cost,0)===spent;
+      for(let index=0;index<saved.checkpoints.length;index++){
+        const checkpoint=saved.checkpoints[index];if(checkpoint===null)continue;
+        if(!checkpoint||!Number.isInteger(checkpoint.budget)||checkpoint.budget!==restored.level.budget+checkpoint.results?.reduce?.((sum,result)=>sum+result.income,0)||!Array.isArray(checkpoint.results)||checkpoint.results.length!==index
+          ||checkpoint.results.some((result,resultIndex)=>!validResult(result,resultIndex))||!validRegions(checkpoint.unlockedRegionIds,checkpoint.regionSpent)
+          ||checkpoint.referenceDivergenceDay!==null&&checkpoint.referenceDivergenceDay!==undefined&&(!Number.isInteger(checkpoint.referenceDivergenceDay)||checkpoint.referenceDivergenceDay<0||checkpoint.referenceDivergenceDay>index))throw new Error('多日检查点无效');
+        const verifier=new CampaignSession(saved.levelId);verifier.dayIndex=index;verifier.results=clone(checkpoint.results);verifier.unlockedRegionIds=new Set(checkpoint.unlockedRegionIds);verifier.regionSpent=checkpoint.regionSpent;
+        verifier.createCity(index,checkpoint.budget,checkpoint.design);
+      }
+      restored.dayIndex=saved.dayIndex;restored.results=clone(saved.results);restored.checkpoints=clone(saved.checkpoints);
+      restored.unlockedRegionIds=new Set(saved.unlockedRegionIds);restored.regionSpent=saved.regionSpent;restored.referenceDivergenceDay=saved.referenceDivergenceDay;
+      restored.city=restored.createCity(saved.dayIndex,saved.budget,saved.design);
+      return restored;
+    }
   }
 
   function verifyCampaignReferenceChain(levelId, step = 0.05) {

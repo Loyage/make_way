@@ -25,6 +25,8 @@ const PUBLIC_FILES = {
   '/game-effects.js': asset(GAME_ROOT, 'game-effects.js', 'text/javascript; charset=utf-8'),
   '/game-canvas.js': asset(GAME_ROOT, 'game-canvas.js', 'text/javascript; charset=utf-8'),
   '/game-bootstrap.js': asset(GAME_ROOT, 'game-bootstrap.js', 'text/javascript; charset=utf-8'),
+  '/game-storage.js': asset(GAME_ROOT, 'game-storage.js', 'text/javascript; charset=utf-8'),
+  '/game-tutorial.js': asset(GAME_ROOT, 'game-tutorial.js', 'text/javascript; charset=utf-8'),
   '/game.js': asset(GAME_ROOT, 'game.js', 'text/javascript; charset=utf-8')
 };
 const OPTIONAL_FILES = new Set(['/levels.json']);

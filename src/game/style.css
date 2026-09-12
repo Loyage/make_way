@@ -143,6 +143,7 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .game-page [hidden] { display: none !important; }
 .game-page .header { height: 64px; }
 .game-page .header-actions { gap: 14px; }
+.game-page #continue-game { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
 .game-page .brand { font-size: 20px; }
 .game-page .brand-icon { width: 34px; height: 34px; font-size: 28px; }
 .game-page .intro { padding: 16px 0 12px; }
@@ -201,6 +202,14 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .game-page .pressure-help a { color: var(--green); font-size: 12px; }
 .game-page .footer { padding: 16px 0; }
 .game-page .campaign-progress { margin: 0 0 14px; }
+.game-page .context-guide { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 16px 12px; padding: 12px 14px; border: 1px solid #cbd9bd; border-left: 4px solid var(--green); border-radius: 10px; background: #f1f6e9; }
+.game-page .context-guide[hidden] { display: none; }
+.game-page .context-guide > div:first-child { min-width: 0; }
+.game-page .context-guide small { display: block; color: #688164; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.game-page .context-guide strong { display: block; margin-top: 3px; font-size: 13px; }
+.game-page .context-guide p { margin: 3px 0 0; color: #657568; font-size: 11px; line-height: 1.55; }
+.game-page .context-guide-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+.game-page .context-guide-actions .tool { white-space: nowrap; }
 @media (min-width: 761px) {
   .game-page .canvas-wrap { width: calc(100% - 32px); margin-inline: auto; }
 }
@@ -218,6 +227,10 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
   .game-page .header { height: 56px; }
   .game-page .header .manual-link { display: inline; font-size: 12px; padding: 12px 0; }
   .game-page .icon-button { width: 44px; height: 44px; }
+  .game-page #continue-game { max-width: 132px; padding-inline: 10px; }
+  .game-page .header-actions:has(#continue-game:not([hidden])) .mode-switch,
+  .game-page .header-actions:has(#continue-game:not([hidden])) .manual-link,
+  .game-page .header-actions:has(#continue-game:not([hidden])) .icon-button { display: none; }
   .game-page .intro { padding: 12px 0 6px; }
   .game-page .intro h1 { font-size: 16px; }
   .game-page .level-selector-heading small { font-size: 10px; }
@@ -239,6 +252,9 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
   .game-page .workspace { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .game-page .signal-phase-list { grid-template-columns: minmax(0, 1fr); }
   .game-page .canvas-wrap { margin: 0 6px; }
+  .game-page .context-guide { align-items: stretch; margin: 0 6px 8px; padding: 10px; }
+  .game-page .context-guide-actions { flex-direction: column; justify-content: center; }
+  .game-page .context-guide-actions .tool { min-height: 36px; padding: 5px 7px; }
   .game-page .board-heading { padding: 10px; gap: 8px; }
   .game-page .map-size, .game-page .map-footer > span { display: none; }
   .game-page .toolbar { position: static; padding: 8px; }

@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
+  const ProgressStorage = TrafficGameStorage, Tutorial = TrafficGameTutorial;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
   const PLAYER_SPEED_OPTIONS=[.5,1,2,4],ADMIN_SPEED_OPTIONS=[.5,1,2,4,Infinity],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
@@ -23,6 +24,8 @@
   let connectionRows = [], pendingLevel = null, pendingMode = null, inspectedCell = null;
   let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null, pendingRegionId = null;
+  let pendingRestore = null, autoSaveSuspended = true, lastAutoSaveSignature = '';
+  let tutorialUsedRoad = false, tutorialInspected = false, tutorialStarted = false, tutorialForced = false, activeGuide = null, activeGuideLevelId = null, tutorialCompleted = false, tutorialSeenIds = [];
   let designHistory = [], designHistoryIndex = -1, previewSignalPhaseIndex = 0;
   let celebratedDelivered = 0, connectedRoutes = new Set();
   let hintCity = null, hintSignature = '', planningHints = [];
@@ -31,12 +34,48 @@
   const REFERENCE_UNLOCK_PREFIX = 'traffic-game-reference-unlocked-v1:';
   const PERSONAL_BEST_PREFIX = 'traffic-game-personal-best-v1:';
   const STAR_PREFIX = 'traffic-game-stars-v1:';
+  const TUTORIAL_DONE_KEY='traffic-game-tutorial-v1',TUTORIAL_SEEN_KEY='traffic-game-tutorial-seen-v1';
   const failedLevels = new Set();
   const speedOptions=()=>adminMode&&!city?.sandbox?ADMIN_SPEED_OPTIONS:PLAYER_SPEED_OPTIONS;
   const speedLabel=value=>value===Infinity?'∞':String(value);
   function storedDesign(levelId = city.level.id) {
     try { return localStorage.getItem(STORAGE_PREFIX + levelId); }
     catch { return null; }
+  }
+  function dismissPendingRestore() {
+    pendingRestore=null;$('continue-game').hidden=true;autoSaveSuspended=false;
+  }
+  function autoSaveSignature() {
+    return JSON.stringify([gameMode,city.level.id,campaign?.dayIndex??null,city.budget,campaign?.results||[],campaign?.checkpoints||[],campaign?[...campaign.unlockedRegionIds]:[],campaign?.regionSpent||0,designHistory[designHistoryIndex]||designSnapshot()]);
+  }
+  function saveAutoProgress() {
+    if(adminMode||autoSaveSuspended||city?.state!=='planning')return;
+    const signature=autoSaveSignature();if(signature===lastAutoSaveSignature)return;
+    const snapshot=ProgressStorage.createSnapshot(city,campaign,gameMode),message=ProgressStorage.write(localStorage,snapshot);
+    lastAutoSaveSignature=signature;if(message)toast(message);
+  }
+  function loadTutorialState(){
+    try{tutorialCompleted=localStorage.getItem(TUTORIAL_DONE_KEY)==='1';const seen=JSON.parse(localStorage.getItem(TUTORIAL_SEEN_KEY)||'[]');tutorialSeenIds=Array.isArray(seen)?[...new Set(seen.filter(id=>Tutorial.mechanic(id)))]:[];}
+    catch{tutorialCompleted=false;tutorialSeenIds=[];}
+  }
+  function tutorialDone(){return tutorialCompleted;}
+  function tutorialSeen(){return tutorialSeenIds;}
+  function storeTutorialDone(){tutorialCompleted=true;try{localStorage.setItem(TUTORIAL_DONE_KEY,'1');}catch{/* onboarding remains optional */}}
+  function storeMechanicSeen(id){tutorialSeenIds=[...new Set([...tutorialSeenIds,id])];try{localStorage.setItem(TUTORIAL_SEEN_KEY,JSON.stringify(tutorialSeenIds));}catch{/* onboarding remains optional */}}
+  function renderContextGuide(){
+    const panel=$('context-guide');if(adminMode||!city){panel.hidden=true;return;}
+    let guide=!tutorialForced&&!activeGuide?.number&&activeGuideLevelId===city.level.id?activeGuide:null;
+    if(!guide&&(tutorialForced||!tutorialDone())&&city.level.id===Tutorial.FIRST_LEVEL_ID){
+      guide=Tutorial.firstStep({levelId:city.level.id,usedRoad:tutorialUsedRoad,connected:city.routes.every((route,index)=>city.routeConnected(index)),inspected:tutorialInspected,started:tutorialStarted});
+      if(!guide){storeTutorialDone();tutorialForced=false;}
+    }
+    if(!guide){
+      const mechanic=tutorialForced?Tutorial.currentMechanic(city.level):Tutorial.unseenMechanic(city.level,tutorialSeen());
+      if(mechanic){if(!tutorialForced)storeMechanicSeen(mechanic.id);guide={...mechanic,number:null,total:null,action:mechanic.id,actionLabel:mechanic.id==='bus'?'定位公交工具':mechanic.id==='cut'?'定位剪刀工具':'定位选择工具'};}
+    }
+    activeGuide=guide;activeGuideLevelId=guide?city.level.id:null;panel.hidden=!guide;if(!guide)return;
+    $('context-guide-step').textContent=guide.number?`操作引导 ${guide.number} / ${guide.total}`:'新机制提示';
+    $('context-guide-title').textContent=guide.title;$('context-guide-text').textContent=guide.text;$('context-guide-action').textContent=guide.actionLabel;
   }
   function referenceKey(levelId=city.level.id,dayIndex=campaign?.dayIndex??null){return levelId+(dayIndex===null?'':`:day-${dayIndex+1}`);}
   function currentReference(){return campaign?campaign.days[campaign.dayIndex]?.referenceDesign:city.level.referenceDesign;}
@@ -69,6 +108,7 @@
   }
   function recordDesignChange(before) {
     const after=designSnapshot();if(before===after){updateHistoryControls();return false;}
+    dismissPendingRestore();
     if(designHistory[designHistoryIndex]!==before)designHistory[designHistoryIndex]=before;
     designHistory=designHistory.slice(0,designHistoryIndex+1);designHistory.push(after);
     if(designHistory.length>61)designHistory.shift();
@@ -213,7 +253,7 @@
       return { row, status, routeIndex: ri };
     });
     celebratedDelivered=city.delivered;connectedRoutes=new Set(city.routes.map((route,index)=>city.routeConnected(index)?index:null).filter(index=>index!==null));
-    updateDesignControls();renderCampaignProgress();buildAccessibleMap();
+    updateDesignControls();renderCampaignProgress();buildAccessibleMap();renderContextGuide();
   }
   function accessibleCellLabel(cell) {
     const p=point(cell),homeIndex=city.homes.findIndex(home=>home.cell===cell),goalIndex=city.goals.findIndex(goal=>goal.cell===cell),site=city.pendingBuildings.get(cell),dormant=city.dormantBuildings.get(cell),region=city.lockedRegions.get(cell),directions={[-city.width]:'北',[1]:'东',[city.width]:'南',[-1]:'西'};
@@ -276,13 +316,13 @@
     if (value === 'bus' && !city.level.features.bus) {
       toast('公交线路在本关未开放'); return;
     }
-    tool = value;if(value!=='bus')busEditMode='draw';if(value!=='select')routeSelection=null;keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;panLast=null;
+    tool = value;if(value==='road')tutorialUsedRoad=true;if(value!=='bus')busEditMode='draw';if(value!=='select')routeSelection=null;keyboardAnchor=null;dragging=false;lastCell=null;dragDraft=null;selectionAnchor=null;panLast=null;
     $('road-inspector').hidden=tool!=='select';$('bus-controls').classList.toggle('drawer-open',tool==='bus');
     for (const name of ['view', 'select', 'road', 'cut', 'bus']) {
       $(name + '-tool').classList.toggle('active', name === tool);
       $(name + '-tool').setAttribute('aria-pressed', String(name === tool));
     }
-    canvas.classList.toggle('view-mode',tool==='view');
+    canvas.classList.toggle('view-mode',tool==='view');renderContextGuide();
     draw();
   }
   function selectedCells() {
@@ -309,7 +349,7 @@
     }
     return [...segment];
   }
-  function selectSingleCell(cell) { routeSelection=null;selection={start:cell,end:cell}; }
+  function selectSingleCell(cell) { routeSelection=null;selection={start:cell,end:cell};if(city.level.id===Tutorial.FIRST_LEVEL_ID&&city.homes.some(home=>home.cell===cell)){tutorialInspected=true;renderContextGuide();} }
   function operationRoads(kind,cells=selectedCells()) {
     return cells.filter(cell=>city.roads.has(cell)&&(kind==='upgrade'?(city.roadGrades.get(cell)||0)<ROAD_TYPES.length-1:kind==='downgrade'?(city.roadGrades.get(cell)||0)>0:true));
   }
@@ -964,7 +1004,7 @@
     });
     updateInspector();
     updateAccessibleMap();
-    renderCampaignProgress();
+    renderCampaignProgress();renderContextGuide();saveAutoProgress();
     if(['won','lost'].includes(city.state)&&!resultShown) showResult();
   }
   function showResult() {
@@ -1018,11 +1058,11 @@
     resultDialog.showModal();requestAnimationFrame(()=>resultDialog.classList.add('rewards-visible'));
   }
   function reset(levelId = city.level.id) {
-    const switching=Boolean(city&&levelId!==city.level.id);
+    const switching=Boolean(city&&levelId!==city.level.id);dismissPendingRestore();lastAutoSaveSignature='';
     for(const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     const level=levels().find(item=>item.id===levelId);campaign=gameMode==='challenge'&&level?.campaign?new CampaignSession(levelId):null;city=campaign?campaign.city:new City(levelId,{sandbox:gameMode==='sandbox'});
     resetDesignHistory();
-    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';
+    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';tutorialUsedRoad=false;tutorialInspected=false;tutorialStarted=false;tutorialForced=false;
     arrivalEffects.reset();
     pendingLevel=null;pendingMode=null;hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;
     focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(switching?city.level.description:`已重新规划「${city.level.name}」`);
@@ -1097,7 +1137,8 @@
     draw();
   }
   function commitDrag() {
-    if(!dragDraft||dragDraft.path.length<2)return;
+    if(!dragDraft)return;
+    if(dragDraft.path.length<2){if(tool==='road')toast('请按住并拖到相邻格；单击不会铺路或建立连接');return;}
     const before=designSnapshot(),{path,kind}=dragDraft,gradeChanges=dragGradeChanges(),newRoads=dragNewRoads();let actions=[];
     if(kind==='bus-trim') {
       const message=city.trimBusRoute(path),line=city.activeBusLine;
@@ -1229,6 +1270,30 @@
   $('road-operation-dialog').addEventListener('cancel',event=>{event.preventDefault();pendingRoadOperation=null;$('road-operation-dialog').close();});
   $('undo-design').onclick=()=>restoreDesign(designHistoryIndex-1);
   $('redo-design').onclick=()=>restoreDesign(designHistoryIndex+1);
+  $('context-guide-action').onclick=()=>{
+    if(!activeGuide)return;let target=canvas;
+    if(activeGuide.action==='road')target=$('road-tool');
+    else if(activeGuide.action==='select'||activeGuide.action==='grade'||activeGuide.action==='signals')target=$('select-tool');
+    else if(activeGuide.action==='cut')target=$('cut-tool');
+    else if(activeGuide.action==='bus')target=$('bus-tool');
+    else if(activeGuide.action==='start')target=$('start');
+    target.scrollIntoView({block:'center'});target.focus();
+  };
+  $('skip-context-guide').onclick=()=>{if(activeGuide?.number)storeTutorialDone();else if(activeGuide?.id)storeMechanicSeen(activeGuide.id);tutorialForced=false;activeGuide=null;activeGuideLevelId=null;renderContextGuide();};
+  $('reopen-tutorial').onclick=()=>{if(city.state!=='planning'){closePausedDialog($('help-dialog'));toast('请先停止运营，再重新打开操作引导');return;}closePausedDialog($('help-dialog'),false);tutorialForced=true;tutorialUsedRoad=false;tutorialStarted=false;tutorialInspected=false;renderContextGuide();$('context-guide').scrollIntoView({block:'center'});};
+  $('continue-game').onclick=()=>{
+    if(!pendingRestore)return;
+    ({city,campaign}=pendingRestore);gameMode=pendingRestore.mode;pendingRestore=null;$('continue-game').hidden=true;autoSaveSuspended=false;lastAutoSaveSignature='';
+    speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;arrivalEffects.reset();resetDesignHistory();buildLevelButtons();focusInitialView();configureLevel();setTool('view');updateUI();draw();
+    toast(`已继续「${city.level.name}」${campaign?`第 ${campaign.dayIndex+1} 天`:''}的规划`);
+  };
+  $('clear-progress').onclick=()=>openPausedDialog($('clear-progress-dialog'));
+  $('cancel-clear-progress').onclick=()=>closePausedDialog($('clear-progress-dialog'));
+  $('confirm-clear-progress').onclick=()=>{
+    const message=ProgressStorage.clear(localStorage);closePausedDialog($('clear-progress-dialog'));
+    if(message){toast(message);return;}pendingRestore=null;$('continue-game').hidden=true;autoSaveSuspended=false;lastAutoSaveSignature=autoSaveSignature();toast('已清除自动进度；手动设计和成绩仍保留');
+  };
+  $('clear-progress-dialog').addEventListener('cancel',event=>{event.preventDefault();closePausedDialog($('clear-progress-dialog'));});
   $('save-design').onclick=()=>{
     try {
       localStorage.setItem(STORAGE_PREFIX+city.level.id,JSON.stringify(city.serializeDesign()));
@@ -1279,9 +1344,10 @@
     speed=1;accumulator=0;resultShown=false;inspectedCell=null;resetDesignHistory();updateUI();draw();toast(`已载入${referenceDay===null?'':`第 ${referenceDay+1} 天`}参考答案，可以继续修改或开始运营`);
   };
   function beginOperation() {
+    dismissPendingRestore();saveAutoProgress();
     const planning=city.state==='planning',message=campaign?campaign.beginDay():city.toggle();
     if(message){toast(message);updateUI();return;}
-    if(planning)setTool('view');
+    if(planning){tutorialStarted=true;storeTutorialDone();setTool('view');}
     accumulator=0;updateUI();
   }
   function toggleOperation() {
@@ -1442,10 +1508,20 @@
         if(message)throw new Error(message);
         TrafficGameBootstrap.validateRuntimeCatalog(TrafficCore);
       } else await TrafficGameBootstrap.loadActiveCatalog({ core: TrafficCore, catalogLoader: TrafficLevelCatalog });
-      city = new City(TrafficCore.LEVELS[0].id);
+      city = new City(TrafficCore.LEVELS[0].id);loadTutorialState();
+      let restoreProblem='';
+      if(!adminMode){
+        const stored=ProgressStorage.read(localStorage);restoreProblem=stored.error;
+        if(stored.snapshot)try{pendingRestore=ProgressStorage.restoreSnapshot(stored.snapshot,TrafficCore);}
+        catch(error){restoreProblem=error.message;ProgressStorage.clear(localStorage);}
+      }
       resetDesignHistory();
       buildLevelButtons();
-      configureLevel();resize();setTool('view');updateUI();requestAnimationFrame(frame);
+      configureLevel();resize();setTool('view');updateUI();
+      if(pendingRestore){const day=pendingRestore.campaign?` · 第 ${pendingRestore.campaign.dayIndex+1} 天`:'';$('continue-game').textContent=`继续「${pendingRestore.city.level.name}」${day}`;$('continue-game').hidden=false;}
+      else{autoSaveSuspended=false;lastAutoSaveSignature=autoSaveSignature();}
+      if(restoreProblem)toast(`${restoreProblem}，已安全回到新游戏`);
+      requestAnimationFrame(frame);
       window.dispatchEvent(new CustomEvent('traffic-game-ready',{detail:{levelId:city.level.id}}));
     } catch (error) {
       console.error(error);

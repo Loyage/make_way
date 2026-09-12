@@ -80,6 +80,13 @@ async function main() {
     await evaluate(`TrafficGameAdmin.applyCatalog(${JSON.stringify(CATALOG)},${JSON.stringify(LEVELS[0].id)})`);
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),false);
     assert.equal(await evaluate('document.querySelector(".design-menu").open'),false);
+    assert.equal(await evaluate('document.querySelector("#context-guide").hidden'),false,'first visit shows contextual onboarding');
+    assert.ok((await text('context-guide-title')).includes('拖拽模式'));await click('#context-guide-action');
+    assert.equal(await evaluate('document.activeElement.id'),'road-tool','guide action locates the required control without building for the player');
+    await click('#road-tool');assert.ok((await text('context-guide-title')).includes('连接同色建筑'));
+    await click('#skip-context-guide');assert.equal(await evaluate('document.querySelector("#context-guide").hidden'),true,'onboarding can be skipped');
+    await click('#help');await click('#reopen-tutorial');assert.equal(await evaluate('document.querySelector("#context-guide").hidden'),false,'onboarding can be reopened from help');
+    await click('#skip-context-guide');
     await click('#level-picker > summary');
     assert.equal(await evaluate('document.querySelector("#level-picker").open'),true);
     await click('#level-picker > summary');
@@ -177,6 +184,14 @@ async function main() {
     await click('#select-tool');await drag(8,4,8,4);await click('#remove-road');assert.equal(await text('budget'),'34','explicit removal refunds the selected road');
     await click('#save-design');await evaluate('TrafficGameAdmin.selectCell(72)');await click('#build-road');await evaluate('TrafficGameAdmin.selectCell(88)');await click('#build-road');assert.equal(await text('budget'),'33');
     await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'34');
+    const refreshDraft=await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())');
+    assert.ok(await evaluate('localStorage.getItem("traffic-game-progress-v1")'),'planning edits create an automatic progress snapshot');
+    await send('Page.reload');await delay(400);await waitFor('window.TrafficGameAdmin?.currentLevelId()','game should reload after saving progress');
+    assert.equal(await evaluate('document.querySelector("#continue-game").hidden'),false,'refresh offers one-click continuation');
+    await click('#continue-game');assert.equal(await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())'),refreshDraft,'continue restores the automatic planning draft');
+    await click('#clear-progress');await click('#confirm-clear-progress');
+    assert.equal(await evaluate('localStorage.getItem("traffic-game-progress-v1")'),null,'clear removes only automatic progress');
+    assert.ok(await evaluate('localStorage.getItem("traffic-game-design-v1:neighborhood")'),'manual per-level design remains after clearing progress');
 
     await click('.level-card:nth-child(2)');
     assert.equal(await evaluate('document.querySelector("#level-dialog").open'),true,'modified design should require confirmation');

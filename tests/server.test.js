@@ -24,7 +24,7 @@ function request(port, url, method='GET', headers={}) {
 }
 test('serves only game assets with appropriate MIME types and security headers', async t => {
   const port=await setup(t);
-  for(const [url,type] of [['/','text/html'],['/index.html','text/html'],['/manual.html','text/html'],['/style.css','text/css'],['/built-in-levels.json','application/json'],['/levels/road-basics/chapter.json','application/json'],['/levels/junction-control/signal-cross.json','application/json'],['/levels/public-transit/bridge-transfer.json','application/json'],['/levels/design-archive/bus-school.json','application/json'],['/level-catalog.js','text/javascript'],['/core-geometry.js','text/javascript'],['/core-bus.js','text/javascript'],['/core.js','text/javascript'],['/core-campaign.js','text/javascript'],['/level-validation.js','text/javascript'],['/game-results.js','text/javascript'],['/game-effects.js','text/javascript'],['/game-canvas.js','text/javascript'],['/game-bootstrap.js','text/javascript'],['/game.js?v=2','text/javascript']]) {
+  for(const [url,type] of [['/','text/html'],['/index.html','text/html'],['/manual.html','text/html'],['/style.css','text/css'],['/built-in-levels.json','application/json'],['/levels/road-basics/chapter.json','application/json'],['/levels/junction-control/signal-cross.json','application/json'],['/levels/public-transit/bridge-transfer.json','application/json'],['/levels/design-archive/bus-school.json','application/json'],['/level-catalog.js','text/javascript'],['/core-geometry.js','text/javascript'],['/core-bus.js','text/javascript'],['/core.js','text/javascript'],['/core-campaign.js','text/javascript'],['/level-validation.js','text/javascript'],['/game-results.js','text/javascript'],['/game-effects.js','text/javascript'],['/game-canvas.js','text/javascript'],['/game-bootstrap.js','text/javascript'],['/game-storage.js','text/javascript'],['/game-tutorial.js','text/javascript'],['/game.js?v=2','text/javascript']]) {
     const res=await request(port,url);assert.equal(res.status,200);assert.ok(res.headers['content-type'].startsWith(type));
     assert.equal(res.headers['x-content-type-options'],'nosniff');assert.ok(res.headers['content-security-policy']);assert.ok(res.body.length>100);
   }
@@ -40,6 +40,7 @@ test('index contains no embedded level metadata', async t => {
   assert.match(html,/id="level-summary"><\/small>/);
   assert.match(html,/id="mission-title"><\/h2>/);
   assert.match(html,/id="undo-design"/);assert.match(html,/id="redo-design"/);
+  assert.match(html,/id="continue-game"/);assert.match(html,/id="clear-progress"/);assert.match(html,/src="game-storage.js"/);assert.match(html,/src="game-tutorial.js"/);
   const manual=(await request(port,'/manual.html')).body;
   assert.match(manual,/慢行小城游戏指南/);
   assert.match(manual,/拖拽模式：智能建设、连接与改造/);
