@@ -185,8 +185,12 @@ async function main() {
     await dragThrough([[8,4],[8,5],[8,4],[7,4]]);
     assert.equal(await text('budget'),'33','returning along the preview cancels new construction');
     await click('#select-tool');await drag(8,4,8,4);await click('#remove-road');assert.equal(await text('budget'),'34','explicit removal refunds the selected road');
-    await click('#save-design');await evaluate('TrafficGameAdmin.selectCell(72)');await click('#build-road');await evaluate('TrafficGameAdmin.selectCell(88)');await click('#build-road');assert.equal(await text('budget'),'33');
-    await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'34');
+    await click('#save-design');await click('#share-design');
+    const shareCode=await evaluate('document.querySelector("#share-code").value');assert.ok(shareCode.startsWith('MWD1.'),'share dialog exposes a versioned text code');await click('#close-share');
+    await evaluate('TrafficGameAdmin.selectCell(72)');await click('#build-road');await evaluate('TrafficGameAdmin.selectCell(88)');await click('#build-road');assert.equal(await text('budget'),'33');
+    await click('#import-design');await evaluate(`(()=>{const input=document.querySelector('#import-design-text');input.value=${JSON.stringify(shareCode)};input.dispatchEvent(new Event('input'));})()`);await click('#preview-import');
+    assert.equal(await evaluate('document.querySelector("#import-preview").hidden'),false,'valid share code receives a preview before import');assert.ok((await text('import-level')).includes('neighborhood'));assert.equal(await text('import-cost'),'2 点');await click('#confirm-import');assert.equal(await text('budget'),'34','confirmed share import atomically restores the previewed design');
+    await evaluate('TrafficGameAdmin.selectCell(72)');await click('#build-road');assert.equal(await text('budget'),'33');await click('#load-design');await click('#confirm-load');assert.equal(await text('budget'),'34');
     const refreshDraft=await evaluate('JSON.stringify(TrafficGameAdmin.captureDesign())');
     assert.ok(await evaluate('localStorage.getItem("traffic-game-progress-v1")'),'planning edits create an automatic progress snapshot');
     await send('Page.reload');await delay(400);await waitFor('window.TrafficGameAdmin?.currentLevelId()','game should reload after saving progress');

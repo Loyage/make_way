@@ -25,7 +25,7 @@
 .road-settings label, .road-inspector label { font-size: 12px; display: flex; align-items: center; gap: 8px; }
 select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid #cbd6c2; border-radius: 6px; padding: 8px; max-width: 100%; }
 input { accent-color: var(--green); }
-input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #e0ac58; outline-offset: 2px; }
 .signal-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; flex-basis: 100%; font-size: 11px; color: #64725c; }
 .signal-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .signal-legend i { font-style: normal; font-size: 16px; font-weight: 800; border-radius: 4px; padding: 0 4px; }
@@ -189,6 +189,18 @@ input:focus-visible, select:focus-visible { outline: 3px solid #e0ac58; outline-
 .game-page .design-menu summary { width: fit-content; padding: 5px 0; }
 .game-page .design-menu > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; }
 .game-page .design-menu small { flex: 1 1 160px; }
+#share-dialog, #import-dialog { max-width: 620px; }
+.share-code-label { display: block; margin: 14px 0 6px; color: var(--ink); font-size: 12px; font-weight: 700; }
+.design-text { width: 100%; resize: vertical; padding: 11px 12px; border: 1px solid #cbd6c2; border-radius: 9px; background: #f8faf3; color: var(--ink); font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.import-actions { display: flex; gap: 8px; margin: 10px 0; }
+.import-actions .tool, #share-dialog .tool { border-color: var(--line); background: #fafaf5; }
+.import-error { margin: 10px 0; padding: 9px 11px; border-radius: 8px; background: #fff2ee; color: #963f34; }
+.import-preview { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin: 14px 0; }
+.import-preview div { padding: 10px; border: 1px solid #d8e1d2; border-radius: 9px; background: #f4f8ef; }
+.import-preview dt { color: var(--muted); font-size: 10px; }
+.import-preview dd { margin: 4px 0 0; color: var(--green); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.import-notice { color: #7a6035; }
+@media(max-width:560px){.import-preview{grid-template-columns:1fr 1fr}.dialog-actions{flex-wrap:wrap}.dialog-actions .primary{margin-top:0}}
 .game-page .sidebar { display: flex; gap: 12px; min-width: 0; }
 .game-page .mobile-info-tabs { display: flex; gap: 4px; }
 .game-page .mobile-info-tabs button { flex: 1; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--muted); }

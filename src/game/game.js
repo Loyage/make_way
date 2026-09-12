@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const { City, CampaignSession, ROAD_TYPES, VEHICLE_WIDTH, VEHICLE_LENGTH, BUS_WIDTH, BUS_LENGTH, BUS_CAPACITY, BUS_COST, LANE_WIDTH, SIGNAL_ACTIONS, WIDTH, HEIGHT } = TrafficCore;
-  const ProgressStorage = TrafficGameStorage, Tutorial = TrafficGameTutorial, Navigation = TrafficGameNavigation;
+  const ProgressStorage = TrafficGameStorage, DesignSharing = TrafficGameDesignSharing, Tutorial = TrafficGameTutorial, Navigation = TrafficGameNavigation;
   const SIGNAL_ENTRY_NAMES={north:'北侧入口',east:'东侧入口',south:'南侧入口',west:'西侧入口'};
   const SIGNAL_TURN_NAMES={straight:'直行',left:'左转'};
   const PLAYER_SPEED_OPTIONS=[.5,1,2,4],ADMIN_SPEED_OPTIONS=[.5,1,2,4,Infinity],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
@@ -22,7 +22,7 @@
   const { rounded, line, circle, label, buildingBubble, busSegment, strokeBusConnector, drawBusRoute } = TrafficCanvas.createCanvasTools(ctx, point);
   let toastTimer, resultShown = false, keyboardCell = key(1, 2), keyboardMode = false;
   let connectionRows = [], pendingLevel = null, pendingMode = null, inspectedCell = null;
-  let pendingDesign = null, dimmedBusLines = new Set(), busEditMode = 'draw';
+  let pendingDesign = null, pendingImport = null, dimmedBusLines = new Set(), busEditMode = 'draw';
   let campaign = null, pendingCampaignScore = null, pendingRegionId = null;
   let pendingRestore = null, autoSaveSuspended = true, lastAutoSaveSignature = '';
   let tutorialUsedRoad = false, tutorialInspected = false, tutorialStarted = false, tutorialForced = false, activeGuide = null, activeGuideLevelId = null, tutorialCompleted = false, tutorialSeenIds = [];
@@ -95,11 +95,36 @@
   function updateDesignControls() {
     designAvailable=storedDesign()!==null;
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
+    $('import-design').disabled=city.state!=='planning';
     const available=Boolean(currentReference())&&referenceUnlocked();
     $('reference-design').hidden=!available;
     $('reference-design').disabled=city.state!=='planning';
   }
   function designSnapshot() { return JSON.stringify(city.serializeDesign()); }
+  function designVerifierContext(levelId) {
+    const level=levels().find(item=>item.id===levelId);
+    if(!level)throw new Error('找不到设计所属关卡');
+    if(levelId===city.level.id){
+      const lockedRegions=[...new Map([...city.lockedRegions.values()].map(region=>[region.id,region])).values()];
+      const candidate=new City(levelId,{routes:city.routes,budget:city.budget,duration:city.duration,fixedCost:city.fixedCost,deadlineMode:city.deadlineMode,sandbox:city.sandbox,pendingBuildings:[...city.pendingBuildings.values()],dormantBuildings:[...city.dormantBuildings.values()],lockedRegions});
+      return {city:candidate,campaign};
+    }
+    if(gameMode==='challenge'&&level.campaign){const nextCampaign=new CampaignSession(levelId);return {city:nextCampaign.city,campaign:nextCampaign};}
+    return {city:new City(levelId,{sandbox:gameMode==='sandbox'}),campaign:null};
+  }
+  function clearImportPreview() {
+    pendingImport=null;$('confirm-import').disabled=true;$('import-preview').hidden=true;$('import-notice').hidden=true;$('import-error').hidden=true;
+  }
+  function previewImport(text=$('import-design-text').value) {
+    clearImportPreview();
+    try {
+      const parsed=DesignSharing.parse(text),context=designVerifierContext(parsed.design.levelId),result=DesignSharing.inspect(text,context.city),level=levels().find(item=>item.id===result.summary.levelId);
+      pendingImport={context,result};$('import-level').textContent=`${level.name}（${result.summary.levelId}）`;$('import-roads').textContent=`${result.summary.roadCount} 格`;$('import-buses').textContent=`${result.summary.busLineCount} 条`;$('import-cost').textContent=`${result.summary.cost} 点`;
+      $('import-preview').hidden=false;$('confirm-import').disabled=false;
+      const notice=result.summary.levelId!==city.level.id?`导入后将切换到「${level.name}」。${level.campaign&&gameMode==='challenge'?'多日任务将从第 1 天开始。':''}`:campaign?'只替换当前日期的规划，不改写已完成日期、收入或成绩。':'确认后将原子替换当前规划。';
+      $('import-notice').textContent=notice;$('import-notice').hidden=false;
+    } catch(error){$('import-error').textContent=error.message||'设计无法导入';$('import-error').hidden=false;}
+  }
   function updateHistoryControls() {
     const planning=city?.state==='planning';
     $('undo-design').disabled=!planning||designHistoryIndex<=0;
@@ -997,6 +1022,7 @@
     if(planned.length>1) $('bus-status').textContent+=` · 已规划 ${planned.length}/${city.busLineLimit} 条`;
     updateBusVisibilityControls();
     $('load-design').disabled=city.state!=='planning'||!designAvailable;
+    $('import-design').disabled=city.state!=='planning';
     const availableSpeeds=speedOptions(),nextSpeed=availableSpeeds[(availableSpeeds.indexOf(speed)+1)%availableSpeeds.length];
     $('speed').textContent=speedLabel(speed)+'×';
     $('speed').setAttribute('aria-label',speed===Infinity?'切换运营倍速，当前无限速':`切换运营倍速，当前 ${speed} 倍`);
@@ -1311,6 +1337,39 @@
       updateDesignControls();toast(`已保存「${city.level.name}」的设计`);
     } catch { toast('无法保存设计，请检查浏览器存储权限'); }
   };
+  function downloadCurrentDesign(){
+    const blob=new Blob([DesignSharing.json(city.serializeDesign())],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download=`${city.level.id}-design-v1.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);toast('已导出版本化设计 JSON');
+  }
+  $('share-design').onclick=()=>{$('share-code').value=DesignSharing.code(city.serializeDesign());openPausedDialog($('share-dialog'));};
+  $('close-share').onclick=()=>closePausedDialog($('share-dialog'));
+  $('download-design').onclick=downloadCurrentDesign;
+  $('copy-share-code').onclick=async()=>{
+    const value=$('share-code').value;let copied=false;
+    try{await navigator.clipboard.writeText(value);copied=true;}catch{/* use the local selection fallback below */}
+    if(!copied){$('share-code').focus();$('share-code').select();try{copied=document.execCommand('copy');}catch{/* leave the code selected for manual copying */}}
+    toast(copied?'分享码已复制':'无法自动复制，已选中分享码，请手动复制');
+  };
+  $('share-dialog').addEventListener('cancel',event=>{event.preventDefault();closePausedDialog($('share-dialog'));});
+  $('import-design').onclick=()=>{if(city.state!=='planning'){toast('请先停止运营，再导入设计');return;}$('import-design-text').value='';$('import-design-file').value='';clearImportPreview();openPausedDialog($('import-dialog'));};
+  $('import-design-text').oninput=clearImportPreview;
+  $('choose-design-file').onclick=()=>$('import-design-file').click();
+  $('import-design-file').onchange=async()=>{
+    clearImportPreview();const file=$('import-design-file').files[0];if(!file)return;
+    if(file.size>DesignSharing.MAX_INPUT_LENGTH){$('import-error').textContent='设计文件过大，无法导入';$('import-error').hidden=false;return;}
+    try{$('import-design-text').value=await file.text();previewImport();}catch{$('import-error').textContent='无法读取所选文件';$('import-error').hidden=false;}
+  };
+  $('preview-import').onclick=()=>previewImport();
+  $('cancel-import').onclick=()=>{clearImportPreview();closePausedDialog($('import-dialog'));};
+  $('confirm-import').onclick=()=>{
+    if(!pendingImport||city.state!=='planning')return;
+    const previousLevelId=city.level.id,{context}=pendingImport;pendingImport=null;delete $('import-dialog').dataset.resumeOperation;$('import-dialog').close();dismissPendingRestore();lastAutoSaveSignature='';
+    if(context.campaign===campaign&&campaign)campaign.city=context.city;else campaign=context.campaign;
+    city=context.city;speed=1;accumulator=0;resultShown=false;pendingCampaignScore=null;pendingRoadOperation=null;dragging=false;lastCell=null;dragDraft=null;selection=null;routeSelection=null;selectionAnchor=null;dimmedBusLines.clear();busEditMode='draw';hover=null;keyboardMode=false;keyboardCell=key(1,2);inspectedCell=null;arrivalEffects.reset();
+    resetDesignHistory();markLevelStarted();buildLevelButtons();focusInitialView();configureLevel();setTool('view');updateUI();draw();toast(`已导入「${city.level.name}」设计，可以继续规划或开始运营`);
+    if(previousLevelId!==city.level.id)window.dispatchEvent(new CustomEvent('traffic-game-levelchange',{detail:{levelId:city.level.id}}));
+  };
+  $('import-dialog').addEventListener('cancel',event=>{event.preventDefault();clearImportPreview();closePausedDialog($('import-dialog'));});
   $('load-design').onclick=()=>{
     if(city.state!=='planning'){toast('请先停止运营，再读取设计');return;}
     const saved=storedDesign();

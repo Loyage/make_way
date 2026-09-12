@@ -24,7 +24,7 @@
 | 推荐游玩路径 | ✅（已实现） | 项目历史实现，暂无独立待改进条目 |
 | 地图化失败复盘 | ⬜ | [p1-replay.md](docs/improvements/p1-replay.md) |
 | 沙盒实验能力 | ⬜ | [p1-sandbox.md](docs/improvements/p1-sandbox.md) |
-| 设计导入、导出与分享 | ⬜ | [p1-design-sharing.md](docs/improvements/p1-design-sharing.md) |
+| 设计导入、导出与分享 | ✅ | [p1-design-sharing.md](docs/improvements/p1-design-sharing.md) |
 
 ## P2：扩展长期可玩性
 
@@ -87,7 +87,7 @@
 | SIM-4 | P2 | ⬜ | [公交缺少运营成本与专用道](docs/improvements/audit/sim-4.md) |
 | SIM-5 | P2 | ⬜ | [「慢行」主题缺失](docs/improvements/audit/sim-5.md) |
 | SIM-6 | P2 | ⬜ | [没有进度持久化，玩家体验割裂](docs/improvements/audit/sim-6.md) |
-| SIM-7 | P2 | ⬜ | [存档无法导出、导入或分享](docs/improvements/audit/sim-7.md) |
+| SIM-7 | P2 | ✅ | [存档无法导出、导入或分享](docs/improvements/audit/sim-7.md) |
 | SIM-8 | P2 | ⬜ | [没有声音与暗色主题](docs/improvements/audit/sim-8.md) |
 | A11Y-1 | P1 | ⬜ | [键盘光标移出视口后地图不跟随](docs/improvements/audit/a11y-1.md) |
 | A11Y-2 | P1 | ⬜ | [ARIA 网格不可达且结构无效](docs/improvements/audit/a11y-2.md) |
