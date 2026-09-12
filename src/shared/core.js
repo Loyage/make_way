@@ -169,6 +169,7 @@
       this.arrivals = [];
       this.junctionStats = new Map();
       this.maxHomeQueues = this.routes.flatMap(route=>route.homes).map(()=>0);
+      this.homeQueueSeconds = this.routes.flatMap(route=>route.homes).map(()=>0);
       this.roadStats = new Map();
       this.rerouteCount = 0;
       this.state = 'planning';
@@ -268,6 +269,7 @@
       this.byGoal = goals.map(() => 0);
       this.goalAssigned = goals.map(() => 0);
       this.departedByHome = homes.map(() => 0);
+      this.homeQueueSeconds = homes.map(() => 0);
       this.refreshPaths();
     }
     setRoutes(routes) {
@@ -430,6 +432,11 @@
     roadHotspots(limit=3) {
       if(!Number.isInteger(limit)||limit<1)return [];
       return [...this.roadStats].map(([cell,stats])=>({cell,...stats})).sort((a,b)=>b.blockedSeconds-a.blockedSeconds||b.occupancySeconds-a.occupancySeconds||a.cell-b.cell).slice(0,limit);
+    }
+    operationHeatmap() {
+      const roads=[...this.roadStats].map(([cell,stats])=>({cell,occupancySeconds:stats.occupancySeconds,blockedSeconds:stats.blockedSeconds})).sort((a,b)=>a.cell-b.cell);
+      const homes=this.homes.map((home,index)=>({cell:home.cell,waitingSeconds:this.homeQueueSeconds[index]||0,maxQueue:this.maxHomeQueues[index]||0}));
+      return { roads, homes, maxRoad:Math.max(0,...roads.map(item=>item.occupancySeconds+item.blockedSeconds)), maxHome:Math.max(0,...homes.map(item=>item.waitingSeconds)) };
     }
     setSignal(n, enabled, green = 2) {
       if (!this.canEditDesign()) return ['won','lost'].includes(this.state) ? '本局已结束' : '运营期间不能修改规划，请先停止运营';
@@ -622,6 +629,7 @@
       this.arrivals = [];
       this.junctionStats = new Map();
       this.maxHomeQueues = this.homes.map(()=>0);
+      this.homeQueueSeconds = this.homes.map(()=>0);
       this.roadStats = new Map();
       this.rerouteCount = 0;
       this.resetBusStats();
@@ -882,6 +890,7 @@
           this.spawnTimers[hi] += 1 / home.generationRate;
         }
         this.maxHomeQueues[hi]=Math.max(this.maxHomeQueues[hi]||0,this.queues[hi]);
+        this.homeQueueSeconds[hi]=(this.homeQueueSeconds[hi]||0)+this.queues[hi]*dt;
         if (this.queues[hi]) {
           const { goalIndex, path } = this.bestGoalPath(hi);
           if (goalIndex !== null && path) {

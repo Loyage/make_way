@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { satisfactionBand, commuteReport, liveCommuteReport, starReport } = require('../src/game/game-results.js');
+const { satisfactionBand, commuteReport, liveCommuteReport, starReport, bottleneckAdvice } = require('../src/game/game-results.js');
 const { crossedProgressMilestones } = require('../src/game/game-effects.js');
 
 test('commute satisfaction groups residents by travel time and weights their score', () => {
@@ -43,6 +43,20 @@ test('delivery celebrations report each newly crossed quarter milestone once', (
 
 test('levels without star targets keep star reporting disabled', () => {
   assert.deepEqual(starReport(null,{won:true,score:100,cost:0,maxQueue:0}),{count:0,earned:[],goals:[]});
+});
+
+test('bottleneck advice is limited, deterministic, and explains measured evidence', () => {
+  const advice=bottleneckAdvice({
+    routes:[{index:1,name:'蓝线',delivered:8,total:10,cell:20},{index:0,name:'红线',delivered:2,total:10,cell:10}],
+    homes:[{cell:10,waitingSeconds:18.5,maxQueue:4}],
+    roads:[{cell:11,blockedSeconds:30,occupancySeconds:50}],
+    junctions:[{cell:12,queueSeconds:40,maxQueue:5}]
+  });
+  assert.equal(advice.length,2);
+  assert.deepEqual(advice.map(item=>item.kind),['route','home']);
+  assert.match(advice[0].text,/红线仅送达 2\/10/);
+  assert.match(advice[1].text,/累计等待 18\.5 人秒/);
+  assert.deepEqual(bottleneckAdvice(),[]);
 });
 
 test('empty and malformed commute samples produce a stable empty report', () => {

@@ -36,7 +36,19 @@
     ];
     return { count:goals.filter(goal=>goal.earned).length,earned:goals.filter(goal=>goal.earned).map(goal=>goal.id),goals };
   }
-  const api = { BANDS, satisfactionBand, commuteReport, liveCommuteReport, starReport };
+  function bottleneckAdvice({ routes=[],homes=[],roads=[],junctions=[] }={}) {
+    const advice=[];
+    const route=[...routes].filter(item=>item&&item.total>0&&item.delivered<item.total).sort((a,b)=>(a.delivered/a.total)-(b.delivered/b.total)||a.index-b.index)[0];
+    if(route)advice.push({kind:'route',cell:route.cell,text:`${route.name}仅送达 ${route.delivered}/${route.total} 人；先检查该路线排队最久住宅的出口与下游是否连通。`});
+    const home=[...homes].filter(item=>item&&item.waitingSeconds>0).sort((a,b)=>b.waitingSeconds-a.waitingSeconds||b.maxQueue-a.maxQueue||a.cell-b.cell)[0];
+    if(home&&advice.length<2)advice.push({kind:'home',cell:home.cell,text:`该住宅累计等待 ${home.waitingSeconds.toFixed(1)} 人秒、峰值 ${home.maxQueue} 人；优先检查门口道路容量与合流。`});
+    const road=[...roads].filter(item=>item&&item.blockedSeconds>0).sort((a,b)=>b.blockedSeconds-a.blockedSeconds||b.occupancySeconds-a.occupancySeconds||a.cell-b.cell)[0];
+    if(road&&advice.length<2)advice.push({kind:'road',cell:road.cell,text:`该路段累计受阻 ${road.blockedSeconds.toFixed(1)} 车秒；可比较升级瓶颈段、减少合流或提供绕行。`});
+    const junction=[...junctions].filter(item=>item&&item.queueSeconds>0).sort((a,b)=>b.queueSeconds-a.queueSeconds||b.maxQueue-a.maxQueue||a.cell-b.cell)[0];
+    if(junction&&advice.length<2)advice.push({kind:'junction',cell:junction.cell,text:`该路口累计排队 ${junction.queueSeconds.toFixed(1)} 车秒、峰值 ${junction.maxQueue} 辆；检查入口优先级或信号阶段。`});
+    return advice.slice(0,2);
+  }
+  const api = { BANDS, satisfactionBand, commuteReport, liveCommuteReport, starReport, bottleneckAdvice };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrafficResults = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
