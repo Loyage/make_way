@@ -116,7 +116,7 @@ test('full downstream road causes waiting; releasing space restores flow',()=>{
 test('junctions are automatically added/removed and surviving signal settings persist',()=>{
   const city=street(),n=key(5,5);
   assert.equal(city.signals.has(n),false);city.connect(n,n-WIDTH);assert.equal(city.signals.has(n),true);
-  const defaults={enabled:false,green:2,yieldMode:'arrival',priority:['north','east','south','west'],automatic:true,phases:[['west-straight','east-straight'],['west-left','east-left'],['north-straight','south-straight'],['north-left','south-left']]};
+  const defaults={enabled:false,green:2,yieldMode:'arrival',priority:['north','east','south','west'],automatic:true,phases:[['west-straight','east-straight'],['west-left','east-left'],['north-straight','south-straight'],['north-left','south-left']],phaseGreens:[2,2,2,2]};
   assert.equal(city.setSignal(n,false,6),'');city.edit(key(2,4));assert.deepEqual(city.signals.get(n),{...defaults,green:6});
   city.edit(n-WIDTH,true);assert.equal(city.signals.has(n),false);
   city.connect(n,n-WIDTH);assert.deepEqual(city.signals.get(n),defaults);
@@ -141,9 +141,9 @@ test('junction control permits editing conflicts but blocks operation until cust
   assert.equal(conflictIssue.blocking,true);assert.deepEqual(conflictIssue.cells,[n]);assert.match(conflictIssue.detail,/阶段 1/);
   assert.match(city.toggle(),/地图设计有问题/);assert.equal(city.state,'planning');
   assert.ok(city.setSignal(n,{automatic:false,phases:[]}));assert.ok(city.setSignal(n,{automatic:false,phases:Array.from({length:9},()=>['north-straight'])}));
-  assert.equal(city.setSignal(n,{enabled:true,automatic:false,green:4,phases:[['north-straight'],['west-left','east-left']]}),'');
+  assert.equal(city.setSignal(n,{enabled:true,automatic:false,green:4,phases:[['north-straight'],['west-left','east-left']],phaseGreens:[6,2]}),'');
   city.elapsed=0;assert.equal(city.signalPhase(n).stage,'custom');assert.equal(city.canEnter(n,WIDTH,WIDTH),true);assert.equal(city.canEnter(n,1,1),false);
-  city.elapsed=4.25;assert.equal(city.signalPhase(n).index,1);assert.equal(city.canEnter(n,1,-WIDTH),true);
+  city.elapsed=6.25;assert.equal(city.signalPhase(n).index,1);assert.equal(city.canEnter(n,1,-WIDTH),true);
   assert.equal(city.canEnter(n,1,WIDTH),true,'right turns continue to yield independently of the signal sequence');
 });
 test('green phases alternate with an all-red clearance and freeze while paused',()=>{

@@ -6,8 +6,9 @@
   const SPEED_OPTIONS=[.5,1,2,4],ROUTE_SYMBOLS=['●','◆','▲','■','✦','⬟'];
   const $ = id => document.getElementById(id);
   const canvas = $('map'), ctx = canvas.getContext('2d');
-  const levels = () => TrafficCore.LEVELS;
-  const chapters = () => TrafficCore.CHAPTERS;
+  const adminMode=document.body.classList.contains('admin-page');
+  const chapters=()=>TrafficCore.CHAPTERS.filter(chapter=>adminMode||!chapter.hidden);
+  const levels=()=>chapters().flatMap(chapter=>chapter.levels);
   let city = null, tool = 'view', speed = 1, hover = null, dragging = false, gameMode = 'challenge';
   let keyboardAnchor = null;
   let lastCell = null, dragGrade = 0, dragDraft = null, selection = null, routeSelection = null, selectionAnchor = null;
@@ -408,7 +409,7 @@
     $('signal-yield-mode').value=signal?.yieldMode||'arrival';
     $('signal-priority-editor').hidden=signal?.yieldMode!=='priority';
     $('signal-automatic').disabled=!editable;$('signal-automatic').checked=signal?.automatic!==false;
-    $('signal-cycle').disabled=!editable||!signal?.enabled;
+    $('signal-cycle').disabled=!editable||!signal?.enabled||signal?.automatic===false;
     if(document.activeElement!==$('signal-cycle'))$('signal-cycle').value=String(signal?.green||2);
     $('signal-custom-editor').hidden=!signal?.enabled||signal?.automatic!==false;
     if(!signal){$('signal-conflict').textContent='';return;}
@@ -428,21 +429,24 @@
         up.onclick=()=>move(-1);down.onclick=()=>move(1);row.append(name,up,down);priorityList.append(row);
       });
     }
-    const phaseList=$('signal-phase-list'),phaseSignature=`${editable}:${JSON.stringify(signal.phases)}`;
+    const phaseList=$('signal-phase-list'),phaseSignature=`${editable}:${JSON.stringify(signal.phases)}:${signal.phaseGreens.join(',')}`;
     if(phaseList.dataset.signature!==phaseSignature) {
       phaseList.dataset.signature=phaseSignature;phaseList.replaceChildren();
       signal.phases.forEach((phase,index)=>{
         const card=document.createElement('section');card.className='signal-phase-card';card.classList.toggle('previewing',index===previewSignalPhaseIndex);card.classList.toggle('conflicted',Boolean(phaseConflicts[index].length));card.setAttribute('aria-invalid',String(Boolean(phaseConflicts[index].length)));card.onclick=event=>{if(event.target.closest('button,input'))return;previewSignalPhaseIndex=index;phaseList.dataset.signature='';updateUI();draw();};
         const heading=document.createElement('div');heading.className='signal-phase-heading';
         const title=document.createElement('strong');title.textContent=`阶段 ${index+1}${phaseConflicts[index].length?' · 动作冲突':''}`;
+        const duration=document.createElement('select');duration.setAttribute('aria-label',`阶段 ${index+1} 绿灯时长`);duration.disabled=!editable;
+        for(const seconds of [2,4,6]){const option=document.createElement('option');option.value=String(seconds);option.textContent=`${seconds} 秒`;duration.append(option);}duration.value=String(signal.phaseGreens[index]);
+        duration.onchange=()=>{const phaseGreens=[...signal.phaseGreens];phaseGreens[index]=Number(duration.value);applySignalSettings({phaseGreens},'阶段绿灯时长已更新');};
         const up=document.createElement('button'),down=document.createElement('button'),remove=document.createElement('button');
         for(const button of [up,down,remove]){button.type='button';button.className='tool';button.disabled=!editable;}
         up.textContent='↑';up.title='阶段提前';up.disabled||=index===0;down.textContent='↓';down.title='阶段后移';down.disabled||=index===signal.phases.length-1;
         remove.textContent='删除';remove.classList.add('danger-button');remove.disabled||=signal.phases.length===1;
-        const reorder=offset=>{const phases=signal.phases.map(actions=>[...actions]),target=index+offset;[phases[index],phases[target]]=[phases[target],phases[index]];applySignalSettings({phases},'手动灯序已更新');};
+        const reorder=offset=>{const phases=signal.phases.map(actions=>[...actions]),phaseGreens=[...signal.phaseGreens],target=index+offset;[phases[index],phases[target]]=[phases[target],phases[index]];[phaseGreens[index],phaseGreens[target]]=[phaseGreens[target],phaseGreens[index]];applySignalSettings({phases,phaseGreens},'手动灯序已更新');};
         up.onclick=()=>reorder(-1);down.onclick=()=>reorder(1);
-        remove.onclick=()=>{const phases=signal.phases.filter((_,phaseIndex)=>phaseIndex!==index).map(actions=>[...actions]);applySignalSettings({phases},'已删除信号阶段');};
-        heading.append(title,up,down,remove);card.append(heading);
+        remove.onclick=()=>{const phases=signal.phases.filter((_,phaseIndex)=>phaseIndex!==index).map(actions=>[...actions]),phaseGreens=signal.phaseGreens.filter((_,phaseIndex)=>phaseIndex!==index);applySignalSettings({phases,phaseGreens},'已删除信号阶段');};
+        heading.append(title,duration,up,down,remove);card.append(heading);
         const actions=document.createElement('div');actions.className='signal-action-grid';
         for(const action of SIGNAL_ACTIONS) {
           const [entry,turn]=action.split('-'),label=document.createElement('label'),input=document.createElement('input');
@@ -1135,10 +1139,10 @@
   $('signal-yield-mode').onchange=()=>applySignalSettings({yieldMode:$('signal-yield-mode').value},$('signal-yield-mode').value==='priority'?'已启用入口方向优先':'已启用自动让行');
   $('signal-automatic').onchange=()=>applySignalSettings({automatic:$('signal-automatic').checked},$('signal-automatic').checked?'已启用自动信号调度':'已启用手动信号调度');
   $('signal-cycle').onchange=()=>applySignalSettings({green:Number($('signal-cycle').value)},'绿灯周期已更新');
-  $('suggest-signal-phases').onclick=()=>{const phases=city.suggestSignalPhases(inspectedCell);previewSignalPhaseIndex=0;applySignalSettings({enabled:true,automatic:false,phases},'已按当前预计车流生成无冲突灯序');};
+  $('suggest-signal-phases').onclick=()=>{const phases=city.suggestSignalPhases(inspectedCell);previewSignalPhaseIndex=0;applySignalSettings({enabled:true,automatic:false,phases,phaseGreens:phases.map(()=>2)},'已按当前预计车流生成无冲突灯序');};
   $('add-signal-phase').onclick=()=>{
     const signal=city.signals.get(inspectedCell);if(!signal)return;
-    applySignalSettings({phases:[...signal.phases.map(actions=>[...actions]),['north-straight']]},'已添加信号阶段');
+    applySignalSettings({phases:[...signal.phases.map(actions=>[...actions]),['north-straight']],phaseGreens:[...signal.phaseGreens,2]},'已添加信号阶段');
   };
   $('build-road').onclick=()=>{
     const cells=selectedCells();if(cells.length!==1)return;

@@ -30,7 +30,7 @@
         if (!Number.isInteger(width) || !Number.isInteger(height) || width < MIN_MAP_SIZE || width > MAX_MAP_SIZE || height < MIN_MAP_SIZE || height > MAX_MAP_SIZE) return `关卡「${level.id}」的地图宽高必须是 ${MIN_MAP_SIZE} 至 ${MAX_MAP_SIZE} 的整数`;
         levelIds.add(level.id);levels.push(level);
       }
-      chapters.push({ id: chapter.id, name: chapter.name.trim(), english: chapter.english.trim(), levels });
+      chapters.push({ id: chapter.id, name: chapter.name.trim(), english: chapter.english.trim(), hidden: chapter.hidden === true, levels });
     }
     if (!levelIds.size) return '至少需要一个关卡';
     CHAPTERS = chapters.map(deepFreeze);LEVELS = CHAPTERS.flatMap(chapter => chapter.levels);
@@ -111,15 +111,19 @@
     return entry && move.turn !== 'right' ? `${entry}-${move.turn}` : '';
   }
   function defaultSignal() {
-    return { enabled: false, green: 2, yieldMode: 'arrival', priority: [...SIGNAL_ENTRY_ORDER], automatic: true, phases: DEFAULT_CUSTOM_PHASES.map(phase => [...phase]) };
+    return { enabled: false, green: 2, yieldMode: 'arrival', priority: [...SIGNAL_ENTRY_ORDER], automatic: true, phases: DEFAULT_CUSTOM_PHASES.map(phase => [...phase]), phaseGreens: DEFAULT_CUSTOM_PHASES.map(() => 2) };
   }
-  function cloneSignal(signal) { return { ...signal, priority: [...signal.priority], phases: signal.phases.map(phase => [...phase]) }; }
+  function cloneSignal(signal) {
+    const phases=signal.phases.map(phase=>[...phase]);
+    return { ...signal, priority: [...signal.priority], phases, phaseGreens: Array.isArray(signal.phaseGreens) ? [...signal.phaseGreens] : phases.map(() => signal.green) };
+  }
   function signalProblem(signal, width = WIDTH) {
     if (typeof signal.enabled !== 'boolean' || ![2,4,6].includes(signal.green)
       || !['arrival','priority'].includes(signal.yieldMode) || typeof signal.automatic !== 'boolean') return '无效的路口控制设置';
     if (!Array.isArray(signal.priority) || signal.priority.length !== SIGNAL_ENTRY_ORDER.length
       || new Set(signal.priority).size !== SIGNAL_ENTRY_ORDER.length || signal.priority.some(name => !SIGNAL_ENTRY_ORDER.includes(name))) return '路口方向优先顺序无效';
     if (!Array.isArray(signal.phases) || signal.phases.length < 1 || signal.phases.length > 8) return '手动灯序须包含 1 至 8 个阶段';
+    if (signal.phaseGreens !== undefined && (!Array.isArray(signal.phaseGreens) || signal.phaseGreens.length !== signal.phases.length || signal.phaseGreens.some(value => ![2,4,6].includes(value)))) return '每个手动阶段须设置 2、4 或 6 秒绿灯';
     for (const phase of signal.phases) {
       if (!Array.isArray(phase) || !phase.length || new Set(phase).size !== phase.length || phase.some(action => !SIGNAL_ACTIONS.includes(action))) return '每个手动阶段至少需要一个有效放行动作';
     }
@@ -430,6 +434,8 @@
         for (const field of ['enabled','green','yieldMode','automatic']) if (enabled[field] !== undefined) candidate[field] = enabled[field];
         if (enabled.priority !== undefined) candidate.priority = Array.isArray(enabled.priority) ? [...enabled.priority] : enabled.priority;
         if (enabled.phases !== undefined) candidate.phases = Array.isArray(enabled.phases) ? enabled.phases.map(phase => Array.isArray(phase) ? [...phase] : phase) : enabled.phases;
+        if (enabled.phaseGreens !== undefined) candidate.phaseGreens = Array.isArray(enabled.phaseGreens) ? [...enabled.phaseGreens] : enabled.phaseGreens;
+        else if (enabled.phases !== undefined) candidate.phaseGreens = candidate.phases.map((_,index) => enabled.green !== undefined ? candidate.green : candidate.phaseGreens[index] || candidate.green);
       } else { candidate.enabled = enabled; candidate.green = green; }
       const problem = signalProblem(candidate, this.width);
       if (problem) return problem;
@@ -461,11 +467,13 @@
       const signal = this.signals.get(n);
       if (!signal || !signal.enabled) return { axis: 'off', turn: 'off', stage: 'off', remaining: 0, actions: [] };
       const phases = signal.automatic ? this.automaticSignalPhases(n) : signal.phases;
-      const span = signal.green + SIGNAL_CLEARANCE;
-      const t = this.elapsed % (span * phases.length), local = t % span, index = Math.floor(t / span);
-      if (local >= signal.green) return { axis: 'clearance', turn: 'clearance', stage: 'clearance', remaining: span - local, actions: [], index };
-      if (!signal.automatic) return { axis: 'custom', turn: 'custom', stage: 'custom', remaining: signal.green - local, actions: phases[index], index };
-      return { ...phases[index], remaining: signal.green - local, index };
+      const greens = signal.automatic ? phases.map(() => signal.green) : signal.phaseGreens;
+      const spans = greens.map(value => value + SIGNAL_CLEARANCE), cycle = spans.reduce((sum,value) => sum + value, 0);
+      let t = this.elapsed % cycle, index = 0;
+      while (index < spans.length - 1 && t >= spans[index]) { t -= spans[index];index++; }
+      if (t >= greens[index]) return { axis: 'clearance', turn: 'clearance', stage: 'clearance', remaining: spans[index] - t, actions: [], index };
+      if (!signal.automatic) return { axis: 'custom', turn: 'custom', stage: 'custom', remaining: greens[index] - t, actions: phases[index], index };
+      return { ...phases[index], remaining: greens[index] - t, index };
     }
     canEnter(n, heading, exitHeading = heading) {
       const signal = this.signals.get(n), phase = this.signalPhase(n), move = this.movement(heading, exitHeading);
@@ -681,7 +689,7 @@
           || !candidate.signals.has(saved.cell)
           || design.version >= 6 && signalProblem(saved, this.width)) return '存档中的信号灯数据无效';
         const settings = design.version >= 6
-          ? { enabled: saved.enabled, green: saved.green, yieldMode: saved.yieldMode, priority: saved.priority, automatic: saved.automatic, phases: saved.phases }
+          ? { enabled: saved.enabled, green: saved.green, yieldMode: saved.yieldMode, priority: saved.priority, automatic: saved.automatic, phases: saved.phases, phaseGreens: saved.phaseGreens || saved.phases?.map(() => saved.green) }
           : { enabled: saved.enabled, green: saved.green };
         const message = candidate.setSignal(saved.cell, settings);
         if (message) return '存档中的信号灯数据无效';
